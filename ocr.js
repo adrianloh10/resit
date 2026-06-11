@@ -113,15 +113,23 @@ async function getOcrWorker() {
   return ocrWorker;
 }
 
+/* A usable read has real length AND money amounts in it. Binarization can
+   shred small digits on noisy phone photos even when big text survives —
+   if that happens, retry with the gentler contrast pass. */
+function textUsable(t) {
+  return t.trim().length >= 40 && /\d+\.\d{2}/.test(t);
+}
+
 async function ocrImage(file, onProgress) {
   if (onProgress) onProgress("Reading text…");
   const worker = await getOcrWorker();
   const sharp = adaptiveThreshold(await loadCanvas(file));
   const first = (await worker.recognize(sharp)).data.text || "";
-  if (first.trim().length >= 40) return first;
+  if (textUsable(first)) return first;
   if (onProgress) onProgress("Trying harder…");
   const soft = contrastStretch(await loadCanvas(file));
   const second = (await worker.recognize(soft)).data.text || "";
+  if (textUsable(second)) return second;
   return second.trim().length > first.trim().length ? second : first;
 }
 
@@ -151,9 +159,12 @@ const CATEGORY_KEYWORDS = {
 };
 
 const AMOUNT_RE = /(\d{1,3}(?:[,\s]\d{3})*\.\d{2})(?!\d)/g;
-/* OCR often reads a decimal point as a comma ("100,20"). Only trusted on
-   lines that already talk about totals/cash/change. */
-const COMMA_AMOUNT_RE = /(\d{1,4}),(\d{2})(?!\d)/;
+/* OCR often reads a decimal point as a comma or adds stray spaces
+   ("100,20", "43 . 50"). Only trusted on lines that already talk about
+   totals/cash/change. */
+const LOOSE_AMOUNT_RE = /(\d{1,4})\s*[.,]\s*(\d{2})(?!\d)/;
+/* Mamak and stall receipts often print whole ringgit: "TOTAL RM 43". */
+const RM_INT_RE = /\brm\b\s*:?\s*(\d{1,5})(?!\s*[.,]?\d)/i;
 
 const EXCLUDE_TOTAL_RE = /\b(change|chg|baki|tunai|cash|credit|visa|master|debit|tendered|payment|bayaran|balance|point|rounding|item count|qty|gst|sst|tax|cukai|saving|diskaun|discount)\b/i;
 const NOISE_LINE_RE = /\b(tax\s*invoice|invoice|resit|receipt|cashier|juruwang|terminal|trans|ref\s*no|reg\s*no|gst\s*(id|no)|co\.?\s*no|tel[:\s]|fax[:\s]|www\.|http|welcome|thank|terima kasih|sila|please|open daily|operating|licensee|franchis)\b/i;
@@ -290,10 +301,10 @@ function totalLineScore(line) {
   return 0;
 }
 
-function lineAmounts(line, allowComma) {
+function lineAmounts(line, allowLoose) {
   const amounts = [...line.matchAll(AMOUNT_RE)].map(m => parseAmount(m[1]));
-  if (!amounts.length && allowComma) {
-    const m = line.match(COMMA_AMOUNT_RE);
+  if (!amounts.length && allowLoose) {
+    const m = line.match(LOOSE_AMOUNT_RE);
     if (m) amounts.push(parseFloat(m[1] + "." + m[2]));
   }
   return amounts.filter(a => a > 0 && a < 100000);
@@ -305,6 +316,10 @@ function extractTotal(lines) {
     const score = totalLineScore(line);
     if (EXCLUDE_TOTAL_RE.test(line) && score < 10) continue;
     const amounts = lineAmounts(line, score >= 10);
+    if (!amounts.length && score >= 10) {
+      const m = line.match(RM_INT_RE);
+      if (m && +m[1] > 0) amounts.push(+m[1]);
+    }
     if (!amounts.length) continue;
     const amt = Math.max(...amounts);
     if (score === 10 && plainTotal === null) plainTotal = amt;
@@ -331,7 +346,7 @@ function cashChangeTotal(lines) {
     } else if (change === null && /\b(change|chg|baki|kembali)\b/i.test(line)) {
       const a = [...line.matchAll(AMOUNT_RE)].map(m => parseAmount(m[1]));
       if (!a.length) {
-        const m = line.match(COMMA_AMOUNT_RE);
+        const m = line.match(LOOSE_AMOUNT_RE);
         if (m) a.push(parseFloat(m[1] + "." + m[2]));
       }
       const valid = a.filter(x => x >= 0 && x < 100000);
