@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Resit</title>
+<meta name="description" content="Snap receipts, track spending. Everything stays on your phone.">
+<meta name="theme-color" content="#F7F3EC">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Resit">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<main id="view-home" class="view">
+  <header class="home-header">
+    <div class="month-row">
+      <button class="icon-btn" id="month-prev" aria-label="Previous month">&#8249;</button>
+      <p class="month-label" id="month-label">June</p>
+      <button class="icon-btn" id="month-next" aria-label="Next month">&#8250;</button>
+    </div>
+    <p class="big-amount" id="month-total">0<span class="cents">.00</span></p>
+    <p class="budget-line" id="budget-line">of RM 3,000 budget</p>
+    <div class="budget-track"><div class="budget-fill" id="budget-fill"></div></div>
+  </header>
+  <section class="ledger" id="ledger"></section>
+  <p class="empty-note" id="empty-note">No expenses yet.<br>Tap the camera to snap your first receipt.</p>
+</main>
+
+<main id="view-insights" class="view" hidden>
+  <header class="home-header">
+    <div class="month-row">
+      <button class="icon-btn" id="ins-month-prev" aria-label="Previous month">&#8249;</button>
+      <p class="month-label" id="ins-month-label">June</p>
+      <button class="icon-btn" id="ins-month-next" aria-label="Next month">&#8250;</button>
+    </div>
+  </header>
+  <section class="insights-body" id="insights-body"></section>
+</main>
+
+<main id="view-settings" class="view" hidden>
+  <header class="sheet-header">
+    <button class="icon-btn" id="settings-back" aria-label="Back">&#8249;</button>
+    <p class="sheet-title">Settings</p>
+    <span class="spacer"></span>
+  </header>
+  <section class="settings-body">
+    <label class="field">
+      <span class="field-label">Monthly budget (RM)</span>
+      <input type="number" id="budget-input" inputmode="decimal" min="0" step="50">
+    </label>
+    <button class="ghost-btn" id="export-csv">Export all expenses (CSV)</button>
+    <button class="ghost-btn danger" id="erase-data">Erase all data</button>
+    <p class="settings-note">Resit keeps everything on this phone. Nothing is uploaded anywhere.</p>
+  </section>
+</main>
+
+<nav class="bottom-nav" id="bottom-nav">
+  <button class="nav-btn active" id="nav-home" aria-label="Expenses">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 6h14M5 12h14M5 18h9"/></svg>
+  </button>
+  <button class="fab" id="fab-camera" aria-label="Snap receipt">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h2l1.5-2h7L17 7h2a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.2"/></svg>
+  </button>
+  <button class="nav-btn" id="nav-insights" aria-label="Insights">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 19V11M12 19V5M19 19v-6"/></svg>
+  </button>
+</nav>
+
+<input type="file" id="camera-input" accept="image/*" capture="environment" hidden>
+<input type="file" id="gallery-input" accept="image/*" hidden>
+
+<div class="overlay sheet-overlay" id="chooser-overlay" hidden>
+  <div class="confirm-sheet chooser-sheet">
+    <p class="sheet-title" style="margin: 6px 0 14px;">Add expense</p>
+    <button class="chooser-btn" id="choose-camera">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h2l1.5-2h7L17 7h2a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.2"/></svg>
+      <span>Snap receipt with camera</span>
+    </button>
+    <button class="chooser-btn" id="choose-gallery">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="M4 17l5-5 4 4 3-3 4 4"/></svg>
+      <span>Upload a receipt photo</span>
+    </button>
+    <button class="chooser-btn" id="choose-manual">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      <span>Enter manually</span>
+    </button>
+  </div>
+</div>
+
+<div class="overlay" id="processing-overlay" hidden>
+  <div class="processing-card">
+    <div class="receipt-anim">
+      <div class="scan-line"></div>
+    </div>
+    <p class="processing-text" id="processing-text">Reading receipt&hellip;</p>
+    <p class="processing-sub" id="processing-sub">This happens on your phone</p>
+    <button class="ghost-btn small" id="cancel-ocr">Cancel</button>
+  </div>
+</div>
+
+<div class="overlay sheet-overlay" id="confirm-overlay" hidden>
+  <div class="confirm-sheet" id="confirm-sheet">
+    <header class="sheet-header">
+      <button class="icon-btn" id="confirm-back" aria-label="Discard">&#10005;</button>
+      <p class="sheet-title" id="confirm-title">Check &amp; save</p>
+      <span class="spacer"></span>
+    </header>
+    <div class="confirm-amount-wrap">
+      <span class="rm-prefix">RM</span>
+      <input class="confirm-amount" id="confirm-amount" inputmode="decimal" type="text" placeholder="0.00">
+    </div>
+    <input class="confirm-merchant" id="confirm-merchant" type="text" placeholder="Merchant">
+    <div class="confirm-datetime">
+      <input type="date" id="confirm-date">
+      <input type="time" id="confirm-time">
+    </div>
+    <div class="chip-row" id="category-chips"></div>
+    <div class="items-block" id="items-block"></div>
+    <textarea class="confirm-note" id="confirm-note" rows="1" placeholder="Note (optional)"></textarea>
+    <button class="save-btn" id="save-btn">Save</button>
+    <p class="edit-hint">Tap anything to edit</p>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="db.js"></script>
+<script src="ocr.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
