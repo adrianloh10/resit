@@ -1,5 +1,7 @@
 /* Resit — snap receipts, track spending. All data stays on-device. */
 
+const APP_VERSION = "v6"; /* keep in step with CACHE in sw.js */
+
 const $ = id => document.getElementById(id);
 const CATS = window.ReceiptOCR.CATEGORIES;
 const CAT_COLOR = Object.fromEntries(CATS.map(c => [c.name, c.color]));
@@ -218,10 +220,10 @@ async function handleImage(file) {
   $("processing-overlay").hidden = false;
   $("processing-text").textContent = "Reading receipt…";
   try {
-    const text = await window.ReceiptOCR.ocrImage(file, msg => { $("processing-text").textContent = msg; });
+    const parsed = await window.ReceiptOCR.scanReceipt(file, msg => { $("processing-text").textContent = msg; });
     if (state.ocrCancelled) return;
     $("processing-overlay").hidden = true;
-    const parsed = window.ReceiptOCR.parseReceiptText(text);
+    DB.setSetting("lastScan", parsed.rawText || "");
     if (!parsed.total && !parsed.merchant && !parsed.items.length) {
       toast("Couldn't read that — try better lighting, or enter manually");
       openConfirmSheet(null);
@@ -449,6 +451,17 @@ async function init() {
     toast("Budget saved");
   });
   $("export-csv").addEventListener("click", exportCSV);
+  $("app-version").textContent = "Resit " + APP_VERSION + " · ";
+  $("copy-scan").addEventListener("click", async () => {
+    const t = await DB.getSetting("lastScan", "");
+    if (!t) { toast("No scan yet"); return; }
+    try {
+      await navigator.clipboard.writeText(t);
+      toast("Copied — paste it to Claude to improve reading");
+    } catch (e) {
+      toast("Couldn't copy on this browser");
+    }
+  });
   $("erase-data").addEventListener("click", async () => {
     if (!confirm("Erase all expenses and settings? This cannot be undone.")) return;
     await DB.eraseAll();

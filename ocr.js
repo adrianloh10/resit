@@ -120,17 +120,101 @@ function textUsable(t) {
   return t.trim().length >= 40 && /\d+\.\d{2}/.test(t);
 }
 
+async function recognizeWithBoxes(worker, canvas) {
+  const res = await worker.recognize(canvas, {}, { text: true, blocks: true });
+  const lines = [];
+  for (const b of (res.data.blocks || [])) {
+    for (const par of (b.paragraphs || [])) {
+      for (const ln of (par.lines || [])) {
+        const words = ln.words || [];
+        lines.push({ text: ln.text || words.map(w => w.text).join(" "), words, bbox: ln.bbox });
+      }
+    }
+  }
+  return { text: res.data.text || "", lines };
+}
+
 async function ocrImage(file, onProgress) {
   if (onProgress) onProgress("Reading text…");
   const worker = await getOcrWorker();
-  const sharp = adaptiveThreshold(await loadCanvas(file));
-  const first = (await worker.recognize(sharp)).data.text || "";
-  if (textUsable(first)) return first;
-  if (onProgress) onProgress("Trying harder…");
-  const soft = contrastStretch(await loadCanvas(file));
-  const second = (await worker.recognize(soft)).data.text || "";
-  if (textUsable(second)) return second;
-  return second.trim().length > first.trim().length ? second : first;
+  const r = await ocrBest(worker, file, onProgress);
+  return r.text;
+}
+
+async function ocrBest(worker, file, onProgress) {
+  const sharpCanvas = adaptiveThreshold(await loadCanvas(file));
+  let r = await recognizeWithBoxes(worker, sharpCanvas);
+  let canvas = sharpCanvas;
+  if (!textUsable(r.text)) {
+    if (onProgress) onProgress("Trying harder…");
+    const softCanvas = contrastStretch(await loadCanvas(file));
+    const r2 = await recognizeWithBoxes(worker, softCanvas);
+    if (textUsable(r2.text) || r2.text.trim().length > r.text.trim().length) {
+      r = r2; canvas = softCanvas;
+    }
+  }
+  return { ...r, canvas };
+}
+
+/* When no amount was found in the full read, zoom into the region to the
+   right of the "TOTAL" label and re-read it in digits-only mode. Enlarged,
+   isolated digits read far better — including most handwriting. */
+async function sniperTotal(worker, canvas, lines) {
+  const totalLines = lines.filter(l => /total|jumlah/i.test(l.text || "") && l.bbox);
+  if (!totalLines.length) return null;
+  const strong = totalLines.filter(l => /amount|amt|rm|payable|inclu/i.test(l.text));
+  const target = strong.length ? strong[strong.length - 1] : totalLines[totalLines.length - 1];
+  let cropX = target.bbox.x0;
+  for (const w of target.words) {
+    if (w.bbox && /total|amount|amt|jumlah|rm|payable|[:]/i.test(w.text || "")) {
+      cropX = Math.max(cropX, w.bbox.x1);
+    }
+  }
+  const lh = Math.max(8, target.bbox.y1 - target.bbox.y0);
+  const y0 = Math.max(0, target.bbox.y0 - lh * 0.8);
+  const y1 = Math.min(canvas.height, target.bbox.y1 + lh * 0.8);
+  const x0 = Math.min(cropX + 4, canvas.width - 20);
+  const w = canvas.width - x0 - 2;
+  const h = y1 - y0;
+  if (w < 20 || h < 8) return null;
+  const scale = Math.max(1, Math.min(4, 120 / h));
+  const crop = document.createElement("canvas");
+  crop.width = Math.round(w * scale);
+  crop.height = Math.round(h * scale);
+  crop.getContext("2d").drawImage(canvas, x0, y0, w, h, 0, 0, crop.width, crop.height);
+  await worker.setParameters({ tessedit_char_whitelist: "0123456789.,|/- ", tessedit_pageseg_mode: "7" });
+  let text = "";
+  try {
+    text = (await worker.recognize(crop)).data.text || "";
+  } finally {
+    await worker.setParameters({ tessedit_char_whitelist: "", tessedit_pageseg_mode: "3" });
+  }
+  const groups = text.match(/\d+/g);
+  if (!groups) return null;
+  let amt;
+  if (groups.length >= 2 && groups[groups.length - 1].length === 2) {
+    amt = parseFloat(groups.slice(0, -1).join("") + "." + groups[groups.length - 1]);
+  } else {
+    amt = parseInt(groups.join(""), 10);
+  }
+  return amt > 0 && amt < 100000 ? amt : null;
+}
+
+/* Full scan pipeline: OCR (with retry), parse, then the digit-zoom rescue
+   pass if the total is still missing. */
+async function scanReceipt(file, onProgress) {
+  if (onProgress) onProgress("Reading text…");
+  const worker = await getOcrWorker();
+  const r = await ocrBest(worker, file, onProgress);
+  const parsed = parseReceiptText(r.text);
+  if (parsed.total === null && r.lines.length) {
+    if (onProgress) onProgress("Zooming into the total…");
+    try {
+      const t = await sniperTotal(worker, r.canvas, r.lines);
+      if (t) parsed.total = t;
+    } catch (e) { /* rescue pass is best-effort */ }
+  }
+  return parsed;
 }
 
 /* ---------- Parsing ---------- */
@@ -189,7 +273,7 @@ function parseAmount(str) {
   return parseFloat(str.replace(/[,\s]/g, ""));
 }
 
-function extractDate(text) {
+function dateFromString(text) {
   for (const p of DATE_PATTERNS) {
     const re = new RegExp(p.re.source, "gi");
     for (const m of text.matchAll(re)) {
@@ -199,13 +283,25 @@ function extractDate(text) {
       else if (p.order === "dmy2") { d = +m[1]; mo = +m[2] - 1; y = 2000 + (+m[3]); }
       else { d = +m[1]; mo = MONTHS[m[2].slice(0, 3).toLowerCase()]; y = +m[3]; }
       if (mo > 11 && p.order !== "dMonY" && d >= 1 && d <= 12) { const t = d; d = mo + 1; mo = t - 1; }
-      if (y >= 2000 && y <= 2100 && mo >= 0 && mo <= 11 && d >= 1 && d <= 31) {
+      if (y >= 2015 && y <= 2100 && mo >= 0 && mo <= 11 && d >= 1 && d <= 31) {
         const date = new Date(y, mo, d);
         if (date <= new Date()) return date;
       }
     }
   }
   return null;
+}
+
+/* Prefer a date sitting on a "Date:"-style line — random digit runs in
+   item rows otherwise masquerade as dates. */
+function extractDate(lines, joined) {
+  for (const line of lines) {
+    if (/\b[dp]ate\b|tarikh/i.test(line)) {
+      const d = dateFromString(line);
+      if (d) return d;
+    }
+  }
+  return dateFromString(joined);
 }
 
 function extractTime(text) {
@@ -328,10 +424,22 @@ function extractTotal(lines) {
   for (const line of lines) {
     const score = totalLineScore(line);
     if (EXCLUDE_TOTAL_RE.test(line) && score < 10) continue;
-    const amounts = lineAmounts(line, score >= 10);
+    let amounts = lineAmounts(line, score >= 10);
     if (!amounts.length && score >= 10) {
       const m = line.match(RM_INT_RE);
       if (m && +m[1] > 0) amounts.push(+m[1]);
+    }
+    /* Column invoices ("TOTAL AMOUNT RM | 2269 | 00") often OCR with fake
+       dots in the ringgit part: "22.69 00". A lone trailing 2-digit sen
+       group means the real amount is all the digits joined. */
+    if (score >= 10 && /\brm\b|amount/i.test(line)) {
+      const m = line.match(/(\d[\d.,]*)\s+(\d{2})\s*\|?\s*$/);
+      if (m) {
+        const digits = m[1].replace(/\D/g, "") + m[2];
+        if (digits.length >= 3 && digits.length <= 7) {
+          amounts = [parseFloat(digits.slice(0, -2) + "." + digits.slice(-2))];
+        }
+      }
     }
     if (!amounts.length) continue;
     const amt = Math.max(...amounts);
@@ -402,7 +510,7 @@ function parseReceiptText(text) {
   let total = extractTotal(lines);
   const cc = cashChangeTotal(lines);
   if (cc !== null && cc < 50000) total = cc;
-  const date = extractDate(joined);
+  const date = extractDate(lines, joined);
   const time = extractTime(joined);
   const merchant = guessMerchant(lines);
   const category = guessCategory(joined, merchant);
@@ -410,4 +518,4 @@ function parseReceiptText(text) {
   return { total, date, time, merchant, category, items, rawText: text };
 }
 
-window.ReceiptOCR = { ocrImage, parseReceiptText, guessCategory, CATEGORIES };
+window.ReceiptOCR = { ocrImage, scanReceipt, parseReceiptText, guessCategory, CATEGORIES };

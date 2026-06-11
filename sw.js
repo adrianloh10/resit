@@ -1,4 +1,4 @@
-const CACHE = "resit-v5";
+const CACHE = "resit-v6";
 const SHELL = [
   "./",
   "./index.html",
@@ -32,7 +32,9 @@ self.addEventListener("fetch", e => {
   if (url.origin === location.origin) {
     e.respondWith((async () => {
       const cached = await caches.match(e.request);
-      const network = fetch(e.request).then(res => {
+      /* no-cache: revalidate with the server, not the HTTP cache, so app
+         updates actually reach installed phones. */
+      const network = fetch(e.request, { cache: "no-cache" }).then(res => {
         if (res.ok) {
           const copy = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, copy));
