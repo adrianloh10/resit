@@ -17,42 +17,91 @@ function loadTesseract() {
   return tesseractLoading;
 }
 
-/* Downscale + grayscale + contrast stretch for better OCR. */
-function preprocessImage(file) {
+/* Load image onto a canvas, upscaling small photos (helps Tesseract) and
+   capping huge ones. */
+function loadCanvas(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
       URL.revokeObjectURL(url);
-      const MAX = 1800;
+      const MAX = 2200;
       let { width, height } = img;
-      const scale = Math.min(1, MAX / Math.max(width, height));
+      const scale = Math.min(2, MAX / Math.max(width, height));
       width = Math.round(width * scale);
       height = Math.round(height * scale);
       const canvas = document.createElement("canvas");
       canvas.width = width; canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, width, height);
-      const data = ctx.getImageData(0, 0, width, height);
-      const px = data.data;
-      let min = 255, max = 0;
-      for (let i = 0; i < px.length; i += 4) {
-        const g = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-        px[i] = px[i + 1] = px[i + 2] = g;
-        if (g < min) min = g;
-        if (g > max) max = g;
-      }
-      const range = Math.max(1, max - min);
-      for (let i = 0; i < px.length; i += 4) {
-        const v = Math.max(0, Math.min(255, ((px[i] - min) / range) * 255));
-        px[i] = px[i + 1] = px[i + 2] = v;
-      }
-      ctx.putImageData(data, 0, 0);
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
       resolve(canvas);
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Could not read that image.")); };
     img.src = url;
   });
+}
+
+function grayscale(px) {
+  const gray = new Float64Array(px.length / 4);
+  for (let i = 0, j = 0; i < px.length; i += 4, j++) {
+    gray[j] = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+  }
+  return gray;
+}
+
+/* Local adaptive threshold (integral-image mean): handles faded dot-matrix
+   print, shadows and crumpled paper far better than global contrast. */
+function adaptiveThreshold(canvas) {
+  const ctx = canvas.getContext("2d");
+  const { width: w, height: h } = canvas;
+  const data = ctx.getImageData(0, 0, w, h);
+  const px = data.data;
+  const gray = grayscale(px);
+  const integ = new Float64Array((w + 1) * (h + 1));
+  for (let y = 0; y < h; y++) {
+    let rowSum = 0;
+    for (let x = 0; x < w; x++) {
+      rowSum += gray[y * w + x];
+      integ[(y + 1) * (w + 1) + (x + 1)] = integ[y * (w + 1) + (x + 1)] + rowSum;
+    }
+  }
+  const half = (Math.max(15, Math.round(w / 12)) | 1) >> 1;
+  const C = 12;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const x1 = Math.max(0, x - half), y1 = Math.max(0, y - half);
+      const x2 = Math.min(w - 1, x + half), y2 = Math.min(h - 1, y + half);
+      const count = (x2 - x1 + 1) * (y2 - y1 + 1);
+      const sum = integ[(y2 + 1) * (w + 1) + (x2 + 1)] - integ[y1 * (w + 1) + (x2 + 1)]
+                - integ[(y2 + 1) * (w + 1) + x1] + integ[y1 * (w + 1) + x1];
+      const v = gray[y * w + x] < (sum / count) - C ? 0 : 255;
+      const i = (y * w + x) * 4;
+      px[i] = px[i + 1] = px[i + 2] = v;
+    }
+  }
+  ctx.putImageData(data, 0, 0);
+  return canvas;
+}
+
+/* Fallback: global grayscale + contrast stretch (the old approach) for the
+   rare image where binarization eats the text. */
+function contrastStretch(canvas) {
+  const ctx = canvas.getContext("2d");
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = data.data;
+  let min = 255, max = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    const g = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+    px[i] = px[i + 1] = px[i + 2] = g;
+    if (g < min) min = g;
+    if (g > max) max = g;
+  }
+  const range = Math.max(1, max - min);
+  for (let i = 0; i < px.length; i += 4) {
+    const v = Math.max(0, Math.min(255, ((px[i] - min) / range) * 255));
+    px[i] = px[i + 1] = px[i + 2] = v;
+  }
+  ctx.putImageData(data, 0, 0);
+  return canvas;
 }
 
 let ocrWorker = null;
@@ -65,11 +114,15 @@ async function getOcrWorker() {
 }
 
 async function ocrImage(file, onProgress) {
-  const canvas = await preprocessImage(file);
   if (onProgress) onProgress("Reading text…");
   const worker = await getOcrWorker();
-  const { data } = await worker.recognize(canvas);
-  return data.text || "";
+  const sharp = adaptiveThreshold(await loadCanvas(file));
+  const first = (await worker.recognize(sharp)).data.text || "";
+  if (first.trim().length >= 40) return first;
+  if (onProgress) onProgress("Trying harder…");
+  const soft = contrastStretch(await loadCanvas(file));
+  const second = (await worker.recognize(soft)).data.text || "";
+  return second.trim().length > first.trim().length ? second : first;
 }
 
 /* ---------- Parsing ---------- */
@@ -98,13 +151,16 @@ const CATEGORY_KEYWORDS = {
 };
 
 const AMOUNT_RE = /(\d{1,3}(?:[,\s]\d{3})*\.\d{2})(?!\d)/g;
+/* OCR often reads a decimal point as a comma ("100,20"). Only trusted on
+   lines that already talk about totals/cash/change. */
+const COMMA_AMOUNT_RE = /(\d{1,4}),(\d{2})(?!\d)/;
 
-const TOTAL_KEYWORDS = [
-  { re: /\b(grand\s*total|jumlah\s*(besar|keseluruhan)?|net\s*total|total\s*(amount|due|payable|sales)?|amount\s*(due|payable)|jum\.?)\b/i, score: 10 },
-  { re: /\bsub\s*-?\s*total\b/i, score: 4 }
-];
 const EXCLUDE_TOTAL_RE = /\b(change|chg|baki|tunai|cash|credit|visa|master|debit|tendered|payment|bayaran|balance|point|rounding|item count|qty|gst|sst|tax|cukai|saving|diskaun|discount)\b/i;
-const NOISE_LINE_RE = /\b(tax\s*invoice|invoice|resit|receipt|cashier|juruwang|terminal|trans|ref\s*no|reg\s*no|gst\s*(id|no)|sst|co\.?\s*no|sdn\.?\s*bhd|tel[:\s]|fax[:\s]|www\.|http|welcome|thank|terima kasih|sila|please|open daily|operating)\b/i;
+const NOISE_LINE_RE = /\b(tax\s*invoice|invoice|resit|receipt|cashier|juruwang|terminal|trans|ref\s*no|reg\s*no|gst\s*(id|no)|co\.?\s*no|tel[:\s]|fax[:\s]|www\.|http|welcome|thank|terima kasih|sila|please|open daily|operating|licensee|franchis)\b/i;
+
+/* Lines that identify the business — including OCR manglings of "SDN BHD". */
+const COMPANY_HINT_RE = /(s[do0]n\.?\s*[b8]h[do0]|berhad|\bbhd\b|\bs\/b\b|enterprise|trading|holdings?|syarikat|perniagaan|stationery|restoran|restaurant|cafe|kafe|bakery|kitchenette|\bmart\b|store|shop|pharmacy|farmasi|hardware|craft|tailor|book|retail|company|corporation|\bgroup\b)/i;
+const ADDRESS_RE = /\b(no[.\s]*\d|lot\s+\d|jalan|jln|taman|tmn|lorong|lrg|persiaran|lebuh|kampung|bandar|seksyen|kawasan|floor|flr\b|wisma|plaza\s+\d|\d{5})\b/i;
 
 const DATE_PATTERNS = [
   { re: /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/, order: "dmy" },
@@ -121,17 +177,18 @@ function parseAmount(str) {
 
 function extractDate(text) {
   for (const p of DATE_PATTERNS) {
-    const m = text.match(p.re);
-    if (!m) continue;
-    let d, mo, y;
-    if (p.order === "dmy") { d = +m[1]; mo = +m[2] - 1; y = +m[3]; }
-    else if (p.order === "ymd") { y = +m[1]; mo = +m[2] - 1; d = +m[3]; }
-    else if (p.order === "dmy2") { d = +m[1]; mo = +m[2] - 1; y = 2000 + (+m[3]); }
-    else { d = +m[1]; mo = MONTHS[m[2].slice(0, 3).toLowerCase()]; y = +m[3]; }
-    if (mo > 11 && p.order !== "dMonY") { const t = d; d = mo + 1 - 1; mo = t - 1; }
-    if (y >= 2000 && y <= 2100 && mo >= 0 && mo <= 11 && d >= 1 && d <= 31) {
-      const date = new Date(y, mo, d);
-      if (date <= new Date()) return date;
+    const re = new RegExp(p.re.source, "gi");
+    for (const m of text.matchAll(re)) {
+      let d, mo, y;
+      if (p.order === "dmy") { d = +m[1]; mo = +m[2] - 1; y = +m[3]; }
+      else if (p.order === "ymd") { y = +m[1]; mo = +m[2] - 1; d = +m[3]; }
+      else if (p.order === "dmy2") { d = +m[1]; mo = +m[2] - 1; y = 2000 + (+m[3]); }
+      else { d = +m[1]; mo = MONTHS[m[2].slice(0, 3).toLowerCase()]; y = +m[3]; }
+      if (mo > 11 && p.order !== "dMonY" && d >= 1 && d <= 12) { const t = d; d = mo + 1; mo = t - 1; }
+      if (y >= 2000 && y <= 2100 && mo >= 0 && mo <= 11 && d >= 1 && d <= 31) {
+        const date = new Date(y, mo, d);
+        if (date <= new Date()) return date;
+      }
     }
   }
   return null;
@@ -149,15 +206,38 @@ function extractTime(text) {
   return { h, min };
 }
 
+function cleanMerchantLine(line) {
+  let clean = line.replace(/\(\s*[A-Z0-9]{4,}\s*-\s*[A-Z0-9]\s*\)/gi, " ")
+    .replace(/[^a-zA-Z0-9&'’.\- ]/g, " ")
+    .replace(/\s+/g, " ").trim();
+  const words = clean.split(" ");
+  while (words.length > 1 && words[0].length <= 2 && /[a-z]/.test(words[0])) words.shift();
+  clean = words.join(" ");
+  const display = clean.replace(/\b(s[do0]n\.?\s*[b8]h[do0]\.?|berhad)\b/gi, "").replace(/\s+/g, " ").trim();
+  return display || clean;
+}
+
+function lineQuality(line) {
+  const letters = (line.match(/[a-zA-Z]/g) || []).length;
+  const longestWord = Math.max(0, ...line.split(/\s+/).map(w => (w.match(/[a-zA-Z]/g) || []).length));
+  return letters >= 6 && longestWord >= 4;
+}
+
 function guessMerchant(lines) {
-  for (const line of lines.slice(0, 6)) {
-    const clean = line.replace(/[^a-zA-Z0-9&'’.\- ]/g, " ").replace(/\s+/g, " ").trim();
-    if (clean.length < 3) continue;
-    const letters = (clean.match(/[a-zA-Z]/g) || []).length;
-    if (letters < 3) continue;
-    if (NOISE_LINE_RE.test(clean)) continue;
-    if (/^\d/.test(clean) && letters < 5) continue;
-    return clean.replace(/\b(sdn\.?\s*bhd\.?|berhad|enterprise|trading)\b/gi, "").replace(/\s+/g, " ").trim() || clean;
+  const head = lines.slice(0, 10);
+  for (const line of head) {
+    if (NOISE_LINE_RE.test(line)) continue;
+    if (COMPANY_HINT_RE.test(line) && (line.match(/[a-zA-Z]/g) || []).length >= 5) {
+      return cleanMerchantLine(line);
+    }
+  }
+  for (const line of head) {
+    if (NOISE_LINE_RE.test(line)) continue;
+    if (!lineQuality(line)) continue;
+    if (ADDRESS_RE.test(line)) continue;
+    if (/\d{4,}/.test(line)) continue;
+    if (totalLineScore(line) > 0 || /\d+\.\d{2}/.test(line)) continue;
+    return cleanMerchantLine(line);
   }
   return "";
 }
@@ -198,27 +278,75 @@ function guessCategory(text, merchant) {
   return best;
 }
 
+function totalLineScore(line) {
+  if (/\bsub\s*-?\s*total\b/i.test(line)) return 4;
+  /* "GST @6% included in total RM 2.43" is a tax breakdown, not a total. */
+  if (/\b(gst|sst)\b.*inclu/i.test(line) && !/^\s*total/i.test(line)) return 0;
+  if (/\b(total|jumlah|jum\.?)\b/i.test(line) || /\bamount\s*(due|payable)\b/i.test(line)) {
+    if (/exclu/i.test(line)) return 3;
+    if (/payable|due|inclu|round|grand|net|bersih|keseluruhan/i.test(line)) return 12;
+    return 10;
+  }
+  return 0;
+}
+
+function lineAmounts(line, allowComma) {
+  const amounts = [...line.matchAll(AMOUNT_RE)].map(m => parseAmount(m[1]));
+  if (!amounts.length && allowComma) {
+    const m = line.match(COMMA_AMOUNT_RE);
+    if (m) amounts.push(parseFloat(m[1] + "." + m[2]));
+  }
+  return amounts.filter(a => a > 0 && a < 100000);
+}
+
 function extractTotal(lines) {
-  let best = null, bestScore = -1;
+  let best = null, bestScore = -1, bestIsRound = false, plainTotal = null;
   for (const line of lines) {
-    const amounts = [...line.matchAll(AMOUNT_RE)].map(m => parseAmount(m[1]));
+    const score = totalLineScore(line);
+    if (EXCLUDE_TOTAL_RE.test(line) && score < 10) continue;
+    const amounts = lineAmounts(line, score >= 10);
     if (!amounts.length) continue;
     const amt = Math.max(...amounts);
-    if (!(amt > 0) || amt > 100000) continue;
-    let score = 0;
-    for (const k of TOTAL_KEYWORDS) if (k.re.test(line)) score = Math.max(score, k.score);
-    if (EXCLUDE_TOTAL_RE.test(line) && score < 10) continue;
+    if (score === 10 && plainTotal === null) plainTotal = amt;
     if (score > bestScore || (score === bestScore && best !== null && amt > best)) {
-      best = amt; bestScore = score;
+      best = amt; bestScore = score; bestIsRound = /round/i.test(line);
     }
   }
+  /* A rounded total can only differ from the plain total by a few sen;
+     a bigger gap means OCR mangled the rounded line — trust the plain one. */
+  if (bestIsRound && plainTotal !== null && Math.abs(best - plainTotal) > 0.05) {
+    return plainTotal;
+  }
   return best;
+}
+
+/* Malaysian receipts print Cash and Change: cash - change IS the amount paid.
+   Two independent numbers beat one possibly-misread total line. */
+function cashChangeTotal(lines) {
+  let cash = null, change = null;
+  for (const line of lines) {
+    if (cash === null && /\b(cash|tunai|paid|payment|tender\w*)\b/i.test(line) && !/refund/i.test(line)) {
+      const a = lineAmounts(line, true);
+      if (a.length) cash = Math.max(...a);
+    } else if (change === null && /\b(change|chg|baki|kembali)\b/i.test(line)) {
+      const a = [...line.matchAll(AMOUNT_RE)].map(m => parseAmount(m[1]));
+      if (!a.length) {
+        const m = line.match(COMMA_AMOUNT_RE);
+        if (m) a.push(parseFloat(m[1] + "." + m[2]));
+      }
+      const valid = a.filter(x => x >= 0 && x < 100000);
+      if (valid.length) change = valid[valid.length - 1];
+    }
+  }
+  if (cash === null || change === null) return null;
+  const cc = Math.round((cash - change) * 100) / 100;
+  return cc > 0 && change < cash ? cc : null;
 }
 
 function extractItems(lines, total) {
   const items = [];
   for (const line of lines) {
-    if (TOTAL_KEYWORDS.some(k => k.re.test(line))) continue;
+    if (totalLineScore(line) > 0) continue;
     if (EXCLUDE_TOTAL_RE.test(line)) continue;
     const matches = [...line.matchAll(AMOUNT_RE)];
     if (!matches.length) continue;
@@ -240,7 +368,12 @@ function extractItems(lines, total) {
 function parseReceiptText(text) {
   const lines = text.split(/\n/).map(l => l.trim()).filter(l => l.length > 1);
   const joined = lines.join("\n");
-  const total = extractTotal(lines);
+  /* When cash and change both parsed, cash - change is the paid total by
+     arithmetic — on real receipts this beat the printed-total line every
+     time the two disagreed, so it wins outright. */
+  let total = extractTotal(lines);
+  const cc = cashChangeTotal(lines);
+  if (cc !== null && cc < 50000) total = cc;
   const date = extractDate(joined);
   const time = extractTime(joined);
   const merchant = guessMerchant(lines);
