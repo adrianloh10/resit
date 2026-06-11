@@ -165,6 +165,9 @@ const AMOUNT_RE = /(\d{1,3}(?:[,\s]\d{3})*\.\d{2})(?!\d)/g;
 const LOOSE_AMOUNT_RE = /(\d{1,4})\s*[.,]\s*(\d{2})(?!\d)/;
 /* Mamak and stall receipts often print whole ringgit: "TOTAL RM 43". */
 const RM_INT_RE = /\brm\b\s*:?\s*(\d{1,5})(?!\s*[.,]?\d)/i;
+/* Invoice books write ringgit and sen in separate columns: "2269 | 00"
+   OCRs as "2269 00" (sometimes with a stray | or l between). */
+const COLUMN_AMOUNT_RE = /\b(\d{1,5})\s*[|/lI!]?\s+(\d{2})\b(?!\s*[.,]?\d)/;
 
 const EXCLUDE_TOTAL_RE = /\b(change|chg|baki|tunai|cash|credit|visa|master|debit|tendered|payment|bayaran|balance|point|rounding|item count|qty|gst|sst|tax|cukai|saving|diskaun|discount)\b/i;
 const NOISE_LINE_RE = /\b(tax\s*invoice|invoice|resit|receipt|cashier|juruwang|terminal|trans|ref\s*no|reg\s*no|gst\s*(id|no)|co\.?\s*no|tel[:\s]|fax[:\s]|www\.|http|welcome|thank|terima kasih|sila|please|open daily|operating|licensee|franchis)\b/i;
@@ -224,7 +227,8 @@ function cleanMerchantLine(line) {
   const words = clean.split(" ");
   while (words.length > 1 && words[0].length <= 2 && /[a-z]/.test(words[0])) words.shift();
   clean = words.join(" ");
-  const display = clean.replace(/\b(s[do0]n\.?\s*[b8]h[do0]\.?|berhad)\b/gi, "").replace(/\s+/g, " ").trim();
+  const display = clean.replace(/\b(s[do0]n\.?\s*[b8]h[do0]\.?|berhad)\b/gi, "")
+    .replace(/\s+/g, " ").replace(/[\s.\-&']+$/, "").trim();
   return display || clean;
 }
 
@@ -236,10 +240,19 @@ function lineQuality(line) {
 
 function guessMerchant(lines) {
   const head = lines.slice(0, 10);
-  for (const line of head) {
+  for (let i = 0; i < head.length; i++) {
+    const line = head[i];
     if (NOISE_LINE_RE.test(line)) continue;
     if (COMPANY_HINT_RE.test(line) && (line.match(/[a-zA-Z]/g) || []).length >= 5) {
-      return cleanMerchantLine(line);
+      let name = cleanMerchantLine(line);
+      /* "ELECTRICAL TRADING" with the brand on the logo line above it —
+         pull a short all-caps brand word down when the company line
+         starts with a generic trade word. */
+      if (i > 0 && /^(electrical|electronic|hardware|trading|enterprise|marketing|furniture|motor|machinery|engineering|construction|stationery|services)\b/i.test(name)) {
+        const prevTok = ((head[i - 1].trim().split(/\s+/)[0]) || "").replace(/[^A-Za-z]/g, "");
+        if (/^[A-Z]{2,8}$/.test(prevTok)) name = prevTok + " " + name;
+      }
+      return name;
     }
   }
   for (const line of head) {
@@ -295,7 +308,7 @@ function totalLineScore(line) {
   if (/\b(gst|sst)\b.*inclu/i.test(line) && !/^\s*total/i.test(line)) return 0;
   if (/\b(total|jumlah|jum\.?)\b/i.test(line) || /\bamount\s*(due|payable)\b/i.test(line)) {
     if (/exclu/i.test(line)) return 3;
-    if (/payable|due|inclu|round|grand|net|bersih|keseluruhan/i.test(line)) return 12;
+    if (/payable|due|inclu|round|grand|net|bersih|keseluruhan|total\s*amount/i.test(line)) return 12;
     return 10;
   }
   return 0;
@@ -304,7 +317,7 @@ function totalLineScore(line) {
 function lineAmounts(line, allowLoose) {
   const amounts = [...line.matchAll(AMOUNT_RE)].map(m => parseAmount(m[1]));
   if (!amounts.length && allowLoose) {
-    const m = line.match(LOOSE_AMOUNT_RE);
+    const m = line.match(LOOSE_AMOUNT_RE) || line.match(COLUMN_AMOUNT_RE);
     if (m) amounts.push(parseFloat(m[1] + "." + m[2]));
   }
   return amounts.filter(a => a > 0 && a < 100000);
@@ -346,7 +359,7 @@ function cashChangeTotal(lines) {
     } else if (change === null && /\b(change|chg|baki|kembali)\b/i.test(line)) {
       const a = [...line.matchAll(AMOUNT_RE)].map(m => parseAmount(m[1]));
       if (!a.length) {
-        const m = line.match(LOOSE_AMOUNT_RE);
+        const m = line.match(LOOSE_AMOUNT_RE) || line.match(COLUMN_AMOUNT_RE);
         if (m) a.push(parseFloat(m[1] + "." + m[2]));
       }
       const valid = a.filter(x => x >= 0 && x < 100000);

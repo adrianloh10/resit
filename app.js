@@ -305,7 +305,7 @@ function openConfirmSheet(expense) {
   }
 
   $("confirm-overlay").hidden = false;
-  if (!e.amount && !e.fromReceipt) setTimeout(() => $("confirm-amount").focus(), 50);
+  if (!e.amount) setTimeout(() => $("confirm-amount").focus(), 50);
 }
 
 function renderCategoryChips() {
