@@ -379,9 +379,9 @@ function cleanMerchantLine(line) {
     .replace(/\s+/g, " ").trim();
   const words = clean.split(" ");
   while (words.length > 1 && words[0].length <= 2 && /[a-z]/.test(words[0])) words.shift();
-  /* OCR debris after the name ("... TRADING . see") — drop short trailing
-     lowercase tokens. */
-  while (words.length > 2 && /^[a-z]{1,4}\.?$/.test(words[words.length - 1])) words.pop();
+  /* OCR debris after the name ("... TRADING . see", "... TRADING . 5") —
+     drop short trailing lowercase or digit tokens. */
+  while (words.length > 2 && /^([a-z]{1,4}|\d{1,2})\.?$/.test(words[words.length - 1])) words.pop();
   clean = words.join(" ");
   const display = clean.replace(/\b(s[do0]n\.?\s*[b8]h[do0]\.?|berhad|bhd\.?)\b/gi, "")
     .replace(/\s+/g, " ").replace(/[\s.\-&']+$/, "").trim();
