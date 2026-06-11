@@ -19,20 +19,30 @@ function loadTesseract() {
 
 /* Load image onto a canvas, upscaling small photos (helps Tesseract) and
    capping huge ones. */
-function loadCanvas(file) {
+function loadCanvas(file, boost) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
       URL.revokeObjectURL(url);
-      const MAX = 2200;
       let { width, height } = img;
-      const scale = Math.min(2, MAX / Math.max(width, height));
+      /* Normal pass: proven scaling. Boost pass (only when no amount was
+         found): heavy magnification so low-res photos and handwriting
+         resolve — hurts clean scans, which is why it's not the default. */
+      const maxDim = Math.max(width, height), minDim = Math.min(width, height);
+      let scale;
+      if (boost) {
+        scale = Math.min(4, Math.max(2, 1400 / minDim));
+        if (maxDim * scale > 3200) scale = 3200 / maxDim;
+      } else {
+        scale = Math.min(2, 2200 / maxDim);
+      }
       width = Math.round(width * scale);
       height = Math.round(height * scale);
       const canvas = document.createElement("canvas");
       canvas.width = width; canvas.height = height;
       canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      canvas.srcMinDim = minDim;
       resolve(canvas);
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Could not read that image.")); };
@@ -189,15 +199,19 @@ async function sniperTotal(worker, canvas, lines) {
   } finally {
     await worker.setParameters({ tessedit_char_whitelist: "", tessedit_pageseg_mode: "3" });
   }
+  /* Conservative read: a wrong amount is worse than an empty field. */
   const groups = text.match(/\d+/g);
   if (!groups) return null;
-  let amt;
+  let amt = null;
   if (groups.length >= 2 && groups[groups.length - 1].length === 2) {
-    amt = parseFloat(groups.slice(0, -1).join("") + "." + groups[groups.length - 1]);
-  } else {
-    amt = parseInt(groups.join(""), 10);
+    const rm = groups.slice(0, -1).join("");
+    if (rm.length >= 1 && rm.length <= 5) amt = parseFloat(rm + "." + groups[groups.length - 1]);
+  } else if (groups.length === 1) {
+    const g = groups[0];
+    if (g.length >= 3 && g.length <= 6 && g.endsWith("00")) amt = parseInt(g.slice(0, -2), 10);
+    else if (g.length <= 2) amt = parseInt(g, 10);
   }
-  return amt > 0 && amt < 100000 ? amt : null;
+  return amt !== null && amt > 0 && amt < 100000 ? amt : null;
 }
 
 /* Full scan pipeline: OCR (with retry), parse, then the digit-zoom rescue
@@ -205,8 +219,23 @@ async function sniperTotal(worker, canvas, lines) {
 async function scanReceipt(file, onProgress) {
   if (onProgress) onProgress("Reading text…");
   const worker = await getOcrWorker();
-  const r = await ocrBest(worker, file, onProgress);
-  const parsed = parseReceiptText(r.text);
+  let r = await ocrBest(worker, file, onProgress);
+  let parsed = parseReceiptText(r.text);
+  /* Retry magnified when the total is missing, weakly evidenced, or the
+     photo is low-res (where the normal pass misreads small digits). */
+  const small = r.canvas.srcMinDim && r.canvas.srcMinDim < 700;
+  if (parsed.total === null || parsed.totalConf <= 1 || (small && parsed.totalConf < 3)) {
+    if (onProgress) onProgress("Looking closer…");
+    try {
+      const big = adaptiveThreshold(await loadCanvas(file, true));
+      const r2 = await recognizeWithBoxes(worker, big);
+      const p2 = parseReceiptText(r2.text);
+      if (p2.total !== null && (parsed.total === null || p2.totalConf > parsed.totalConf || (small && p2.totalConf >= parsed.totalConf))) {
+        r = { ...r2, canvas: big };
+        parsed = p2;
+      }
+    } catch (e) { /* magnified retry is best-effort */ }
+  }
   if (parsed.total === null && r.lines.length) {
     if (onProgress) onProgress("Zooming into the total…");
     try {
@@ -350,10 +379,18 @@ function cleanMerchantLine(line) {
     .replace(/\s+/g, " ").trim();
   const words = clean.split(" ");
   while (words.length > 1 && words[0].length <= 2 && /[a-z]/.test(words[0])) words.shift();
+  /* OCR debris after the name ("... TRADING . see") — drop short trailing
+     lowercase tokens. */
+  while (words.length > 2 && /^[a-z]{1,4}\.?$/.test(words[words.length - 1])) words.pop();
   clean = words.join(" ");
-  const display = clean.replace(/\b(s[do0]n\.?\s*[b8]h[do0]\.?|berhad)\b/gi, "")
+  const display = clean.replace(/\b(s[do0]n\.?\s*[b8]h[do0]\.?|berhad|bhd\.?)\b/gi, "")
     .replace(/\s+/g, " ").replace(/[\s.\-&']+$/, "").trim();
-  return display || clean;
+  /* "AEON CO. (M) BHD" should read as just "AEON" — drop trailing
+     corporate fluff tokens. */
+  const toks = display.split(" ");
+  while (toks.length > 1 && /^(co\.?|m\.?|my|malaysia|corp\.?|holdings?)$/i.test(toks[toks.length - 1])) toks.pop();
+  const slim = toks.join(" ").replace(/[\s.\-&']+$/, "").trim();
+  return slim || display || clean;
 }
 
 function lineQuality(line) {
@@ -377,7 +414,7 @@ function guessMerchant(lines) {
         if (!NOISE_LINE_RE.test(prev) && !ADDRESS_RE.test(prev)) {
           const toks = prev.trim().split(/\s+/)
             .map(t => t.replace(/[^A-Za-z]/g, ""))
-            .filter(t => /^[A-Z]{2,12}$/.test(t))
+            .filter(t => /^[A-Z]{3,12}$/.test(t))
             .slice(0, 2);
           if (toks.length) name = toks.join(" ") + " " + name;
         }
@@ -528,24 +565,26 @@ function extractTotal(lines, ccInfo) {
   const roundConfirmed = c.boosted !== null && c.plain !== null && !c.boostedIsRound
     && Math.abs(r2(c.boosted + c.rounding) - c.plain) <= 0.015;
 
-  if (close(cc, kt, 0.06)) return kt;
-  if (roundConfirmed) return c.plain;
-  if (close(st, kt, 0.02) && kt !== null) return kt;
+  /* conf: 3 = arithmetic-confirmed by two independent sources,
+     2 = strong single source, 1 = lone printed line, 0 = guesswork. */
+  if (close(cc, kt, 0.06)) return { value: kt, conf: 3 };
+  if (roundConfirmed) return { value: c.plain, conf: 3 };
+  if (close(st, kt, 0.02) && kt !== null) return { value: kt, conf: 3 };
   /* The "total" line the parser found is just the subtotal echoed (GST
      summary rows do this) — the real total is subtotal + tax. */
-  if (st !== null && kt !== null && c.sub !== null && Math.abs(kt - c.sub) < 0.01) return st;
+  if (st !== null && kt !== null && c.sub !== null && Math.abs(kt - c.sub) < 0.01) return { value: st, conf: 2 };
   /* Two independent printed total lines agreeing beat a cash/change pair
      that might itself be misread. */
-  if (c.boosted !== null && c.plain !== null && Math.abs(c.boosted - c.plain) <= 0.015) return kt;
-  if (close(st, cc, 0.06)) return cc;
-  if (cc !== null && !ccWeak) return cc;
-  if (st !== null && kt === null) return st;
-  if (ccWeak && cc !== null && kt !== null && c.tax !== null && close(cc, r2(kt + c.tax), 0.06)) return cc;
-  if (kt !== null) return kt;
-  if (cc !== null) return cc;
-  if (st !== null) return st;
-  if (c.sub !== null) return c.sub;
-  return c.fallbackMax;
+  if (c.boosted !== null && c.plain !== null && Math.abs(c.boosted - c.plain) <= 0.015) return { value: kt, conf: 2 };
+  if (close(st, cc, 0.06)) return { value: cc, conf: 2 };
+  if (cc !== null && !ccWeak) return { value: cc, conf: 2 };
+  if (st !== null && kt === null) return { value: st, conf: 2 };
+  if (ccWeak && cc !== null && kt !== null && c.tax !== null && close(cc, r2(kt + c.tax), 0.06)) return { value: cc, conf: 2 };
+  if (kt !== null) return { value: kt, conf: 1 };
+  if (cc !== null) return { value: cc, conf: 1 };
+  if (st !== null) return { value: st, conf: 1 };
+  if (c.sub !== null) return { value: c.sub, conf: 0 };
+  return { value: c.fallbackMax, conf: 0 };
 }
 
 /* Malaysian receipts print Cash and Change: cash - change IS the amount paid.
@@ -603,13 +642,21 @@ function extractItems(lines, total) {
 function parseReceiptText(text) {
   const lines = text.split(/\n/).map(l => l.trim()).filter(l => l.length > 1);
   const joined = lines.join("\n");
-  const total = extractTotal(lines, cashChangeTotal(lines));
+  const tt = extractTotal(lines, cashChangeTotal(lines));
+  let total = tt.value;
+  let totalConf = total !== null ? tt.conf : 0;
   const date = extractDate(lines, joined);
   const time = extractTime(joined);
   const merchant = guessMerchant(lines);
   const category = guessCategory(joined, merchant);
   const items = extractItems(lines, total);
-  return { total, date, time, merchant, category, items, rawText: text };
+  /* Last resort: a receipt with readable item prices but no readable
+     total — the items sum is better than an empty field. */
+  if (total === null && items.length >= 1 && items.length <= 15) {
+    const sum = Math.round(items.reduce((s, i) => s + i.price, 0) * 100) / 100;
+    if (sum > 0 && sum < 100000) { total = sum; totalConf = 0; }
+  }
+  return { total, totalConf, date, time, merchant, category, items, rawText: text };
 }
 
 window.ReceiptOCR = { ocrImage, scanReceipt, parseReceiptText, guessCategory, CATEGORIES };
