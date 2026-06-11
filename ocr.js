@@ -257,20 +257,35 @@ const EXCLUDE_TOTAL_RE = /\b(change|chg|baki|tunai|cash|credit|visa|master|debit
 const NOISE_LINE_RE = /\b(tax\s*invoice|invoice|resit|receipt|cashier|juruwang|terminal|trans|ref\s*no|reg\s*no|gst\s*(id|no)|co\.?\s*no|tel[:\s]|fax[:\s]|www\.|http|welcome|thank|terima kasih|sila|please|open daily|operating|licensee|franchis)\b/i;
 
 /* Lines that identify the business — including OCR manglings of "SDN BHD". */
-const COMPANY_HINT_RE = /(s[do0]n\.?\s*[b8]h[do0]|berhad|\bbhd\b|\bs\/b\b|enterprise|trading|holdings?|syarikat|perniagaan|stationery|restoran|restaurant|cafe|kafe|bakery|kitchenette|\bmart\b|store|shop|pharmacy|farmasi|hardware|craft|tailor|book|retail|company|corporation|\bgroup\b)/i;
+const COMPANY_HINT_RE = /(s[do0]n\.?\s*[b8]h[do0]|berhad|\bbhd\b|\bs\/b\b|enterprise|trading|holdings?|syarikat|perniagaan|stationery|restoran|restaurant|cafe|kafe|bakery|kitchenette|\bmart\b|store|shop|pharmacy|farmasi|hardware|craft|tailor|book|retail|company|corporation|\bgroup\b|\bgift\b|\bdeco\b|boutique|florist|bistro)/i;
 const ADDRESS_RE = /\b(no[.\s]*\d|lot\s+\d|jalan|jln|taman|tmn|lorong|lrg|persiaran|lebuh|kampung|bandar|seksyen|kawasan|floor|flr\b|wisma|plaza\s+\d|\d{5})\b/i;
 
 const DATE_PATTERNS = [
-  { re: /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/, order: "dmy" },
-  { re: /(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/, order: "ymd" },
-  { re: /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2})(?!\d)/, order: "dmy2" },
-  { re: /(\d{1,2})\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*[,.]?\s*(\d{4})/i, order: "dMonY" }
+  { re: /(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{4})/, order: "dmy" },
+  { re: /(\d{4})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})/, order: "ymd" },
+  { re: /(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2})(?!\d)/, order: "dmy2" },
+  { re: /(\d{1,2})[\s\-.,]*(jan|feb|ma[rx]|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\-.,]*(\d{4})/i, order: "dMonY" },
+  { re: /(\d{1,2})[\s\-.,]*(jan|feb|ma[rx]|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\-.,]*(\d{2})(?!\d)/i, order: "dMonY2" }
 ];
-const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+const MONTHS = { jan: 0, feb: 1, mar: 2, max: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
 const TIME_RE = /(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)?/i;
 
 function parseAmount(str) {
   return parseFloat(str.replace(/[,\s]/g, ""));
+}
+
+function validDate(d, mo, y) {
+  /* OCR fixes: "2618" is 2018 with 0 read as 6; month "61" is "01" with a
+     phantom tens digit. */
+  if (y > 2100 && y < 3000) y = 2000 + (y % 100);
+  if (mo > 11 && (mo % 10) >= 0 && (mo % 10) <= 11 && mo >= 12) {
+    if ((mo + 1) % 10 >= 1) mo = ((mo + 1) % 10) - 1;
+  }
+  if (y >= 2015 && y <= 2100 && mo >= 0 && mo <= 11 && d >= 1 && d <= 31) {
+    const date = new Date(y, mo, d);
+    if (date <= new Date()) return date;
+  }
+  return null;
 }
 
 function dateFromString(text) {
@@ -281,23 +296,36 @@ function dateFromString(text) {
       if (p.order === "dmy") { d = +m[1]; mo = +m[2] - 1; y = +m[3]; }
       else if (p.order === "ymd") { y = +m[1]; mo = +m[2] - 1; d = +m[3]; }
       else if (p.order === "dmy2") { d = +m[1]; mo = +m[2] - 1; y = 2000 + (+m[3]); }
+      else if (p.order === "dMonY2") { d = +m[1]; mo = MONTHS[m[2].slice(0, 3).toLowerCase()]; y = 2000 + (+m[3]); }
       else { d = +m[1]; mo = MONTHS[m[2].slice(0, 3).toLowerCase()]; y = +m[3]; }
-      if (mo > 11 && p.order !== "dMonY" && d >= 1 && d <= 12) { const t = d; d = mo + 1; mo = t - 1; }
-      if (y >= 2015 && y <= 2100 && mo >= 0 && mo <= 11 && d >= 1 && d <= 31) {
-        const date = new Date(y, mo, d);
-        if (date <= new Date()) return date;
-      }
+      if (mo > 11 && p.order.startsWith("dmy") === false && p.order !== "ymd") { /* month names always valid */ }
+      else if (mo > 11 && d >= 1 && d <= 12 && mo + 1 <= 31) { const t = d; d = mo + 1; mo = t - 1; }
+      const date = validDate(d, mo, y);
+      if (date) return date;
     }
   }
   return null;
+}
+
+/* "Date: 120022018" / "Date: 1603/2018" — separators eaten by OCR.
+   Reassemble: day = first 2 digits, year = last 4, month = what's left. */
+function dateFromDigitRun(segment) {
+  const digits = (segment.match(/\d[\d\s\/\-.:]*/) || [""])[0].replace(/\D/g, "");
+  if (digits.length < 8 || digits.length > 10) return null;
+  const d = +digits.slice(0, 2);
+  const y = +digits.slice(-4);
+  const mid = +digits.slice(2, -4);
+  return validDate(d, mid - 1, y);
 }
 
 /* Prefer a date sitting on a "Date:"-style line — random digit runs in
    item rows otherwise masquerade as dates. */
 function extractDate(lines, joined) {
   for (const line of lines) {
-    if (/\b[dp]ate\b|tarikh/i.test(line)) {
-      const d = dateFromString(line);
+    const km = line.match(/\b([dp]ate|tarikh)\b/i);
+    if (km) {
+      const seg = line.slice(km.index);
+      const d = dateFromString(seg) || dateFromDigitRun(seg);
       if (d) return d;
     }
   }
@@ -341,12 +369,18 @@ function guessMerchant(lines) {
     if (NOISE_LINE_RE.test(line)) continue;
     if (COMPANY_HINT_RE.test(line) && (line.match(/[a-zA-Z]/g) || []).length >= 5) {
       let name = cleanMerchantLine(line);
-      /* "ELECTRICAL TRADING" with the brand on the logo line above it —
-         pull a short all-caps brand word down when the company line
+      /* "ELECTRICAL TRADING" / "BISTRO & CAFE" with the brand on the line
+         above — pull up to two brand words down when the company line
          starts with a generic trade word. */
-      if (i > 0 && /^(electrical|electronic|hardware|trading|enterprise|marketing|furniture|motor|machinery|engineering|construction|stationery|services)\b/i.test(name)) {
-        const prevTok = ((head[i - 1].trim().split(/\s+/)[0]) || "").replace(/[^A-Za-z]/g, "");
-        if (/^[A-Z]{2,8}$/.test(prevTok)) name = prevTok + " " + name;
+      if (i > 0 && /^(electrical|electronic|hardware|trading|enterprise|marketing|furniture|motor|machinery|engineering|construction|stationery|services|bistro|cafe|kafe|restaurant|restoran|bakery|pharmacy|farmasi)\b/i.test(name)) {
+        const prev = head[i - 1];
+        if (!NOISE_LINE_RE.test(prev) && !ADDRESS_RE.test(prev)) {
+          const toks = prev.trim().split(/\s+/)
+            .map(t => t.replace(/[^A-Za-z]/g, ""))
+            .filter(t => /^[A-Z]{2,12}$/.test(t))
+            .slice(0, 2);
+          if (toks.length) name = toks.join(" ") + " " + name;
+        }
       }
       return name;
     }
@@ -400,11 +434,13 @@ function guessCategory(text, merchant) {
 
 function totalLineScore(line) {
   if (/\bsub\s*-?\s*total\b/i.test(line)) return 4;
-  /* "GST @6% included in total RM 2.43" is a tax breakdown, not a total. */
+  /* "GST @6% included in total" and "Total GST 0.42" are tax breakdowns. */
   if (/\b(gst|sst)\b.*inclu/i.test(line) && !/^\s*total/i.test(line)) return 0;
+  if (/\btotal\s*(gst|sst|tax|cukai)\b/i.test(line)) return 0;
+  if (/\btotal\s*qty\b|\bqty\b[^a-z]*\btotal\b/i.test(line)) return 0;
   if (/\b(total|jumlah|jum\.?)\b/i.test(line) || /\bamount\s*(due|payable)\b/i.test(line)) {
     if (/exclu/i.test(line)) return 3;
-    if (/payable|due|inclu|round|grand|net|bersih|keseluruhan|total\s*amount/i.test(line)) return 12;
+    if (/payable|due|\bincl/i.test(line) || /round|grand|net|bersih|keseluruhan|total\s*amount/i.test(line)) return 12;
     return 10;
   }
   return 0;
@@ -419,41 +455,97 @@ function lineAmounts(line, allowLoose) {
   return amounts.filter(a => a > 0 && a < 100000);
 }
 
-function extractTotal(lines) {
-  let best = null, bestScore = -1, bestIsRound = false, plainTotal = null;
-  for (const line of lines) {
-    const score = totalLineScore(line);
-    if (EXCLUDE_TOTAL_RE.test(line) && score < 10) continue;
-    let amounts = lineAmounts(line, score >= 10);
-    if (!amounts.length && score >= 10) {
-      const m = line.match(RM_INT_RE);
-      if (m && +m[1] > 0) amounts.push(+m[1]);
-    }
-    /* Column invoices ("TOTAL AMOUNT RM | 2269 | 00") often OCR with fake
-       dots in the ringgit part: "22.69 00". A lone trailing 2-digit sen
-       group means the real amount is all the digits joined. */
-    if (score >= 10 && /\brm\b|amount/i.test(line)) {
-      const m = line.match(/(\d[\d.,]*)\s+(\d{2})\s*\|?\s*$/);
-      if (m) {
-        const digits = m[1].replace(/\D/g, "") + m[2];
-        if (digits.length >= 3 && digits.length <= 7) {
-          amounts = [parseFloat(digits.slice(0, -2) + "." + digits.slice(-2))];
-        }
+function totalLineAmounts(line, score) {
+  let amounts = lineAmounts(line, score >= 10);
+  if (!amounts.length && score >= 10) {
+    const m = line.match(RM_INT_RE);
+    if (m && +m[1] > 0) amounts.push(+m[1]);
+  }
+  /* Column invoices ("TOTAL AMOUNT RM | 2269 | 00") often OCR with fake
+     dots in the ringgit part: "22.69 00". A lone trailing 2-digit sen
+     group means the real amount is all the digits joined. */
+  if (score >= 10 && /\brm\b|amount/i.test(line)) {
+    const m = line.match(/(\d[\d.,]*)\s+(\d{2})\s*\|?\s*$/);
+    if (m) {
+      const digits = m[1].replace(/\D/g, "") + m[2];
+      if (digits.length >= 3 && digits.length <= 7) {
+        amounts = [parseFloat(digits.slice(0, -2) + "." + digits.slice(-2))];
       }
     }
+  }
+  /* "Grand Total: 9280" — decimal point eaten by OCR: sen-jammed integer.
+     A letter glued to the digits ("C310") means garbage — don't trust it. */
+  if (!amounts.length && score >= 10) {
+    const m = line.match(/(?<![A-Za-z])(\d{3,6})\D*$/);
+    if (m) amounts.push(parseInt(m[1], 10) / 100);
+  }
+  return amounts.filter(a => a > 0 && a < 100000);
+}
+
+/* Collect every money fact the receipt offers, then arbitrate between the
+   printed total, subtotal+tax+service arithmetic, and cash-change. */
+function extractTotal(lines, ccInfo) {
+  const c = { boosted: null, boostedIsRound: false, plain: null, sub: null, tax: null, svc: null, rounding: 0, fallbackMax: null };
+  for (const line of lines) {
+    const score = totalLineScore(line);
+    if (/round/i.test(line) && score < 10) {
+      const m = line.match(/(-)?\s*(\d{1,2}\.\d{2})(?!\d)/);
+      if (m && parseFloat(m[2]) <= 0.09) c.rounding = (m[1] ? -1 : 1) * parseFloat(m[2]);
+      continue;
+    }
+    if (score === 0 && /\b(gst|sst|tax|cukai)\b/i.test(line) && !/summary/i.test(line)) {
+      const a = lineAmounts(line, false);
+      if (a.length && (c.tax === null || a[a.length - 1] > c.tax)) c.tax = a[a.length - 1];
+      continue;
+    }
+    if (/\b(service|svc)\b/i.test(line) && /charge|chg|caj|%/i.test(line) && score < 10) {
+      if (c.svc === null) {
+        const a = lineAmounts(line, false);
+        if (a.length) c.svc = a[a.length - 1];
+      }
+      continue;
+    }
+    if (EXCLUDE_TOTAL_RE.test(line) && score < 10) continue;
+    const amounts = totalLineAmounts(line, score);
     if (!amounts.length) continue;
     const amt = Math.max(...amounts);
-    if (score === 10 && plainTotal === null) plainTotal = amt;
-    if (score > bestScore || (score === bestScore && best !== null && amt > best)) {
-      best = amt; bestScore = score; bestIsRound = /round/i.test(line);
-    }
+    if (score === 4) { if (c.sub === null || amt > c.sub) c.sub = amt; }
+    else if (score === 12) { if (c.boosted === null || amt > c.boosted) { c.boosted = amt; c.boostedIsRound = /round/i.test(line); } }
+    else if (score >= 10) { if (c.plain === null || amt > c.plain) c.plain = amt; }
+    else if (score === 0 && (c.fallbackMax === null || amt > c.fallbackMax)) c.fallbackMax = amt;
   }
-  /* A rounded total can only differ from the plain total by a few sen;
-     a bigger gap means OCR mangled the rounded line — trust the plain one. */
-  if (bestIsRound && plainTotal !== null && Math.abs(best - plainTotal) > 0.05) {
-    return plainTotal;
-  }
-  return best;
+
+  const close = (a, b, tol) => a !== null && b !== null && Math.abs(a - b) <= tol;
+  const r2 = x => Math.round(x * 100) / 100;
+  let kt = c.boosted !== null ? c.boosted : c.plain;
+  if (c.boostedIsRound && c.plain !== null && Math.abs(c.boosted - c.plain) > 0.05) kt = c.plain;
+  const st = (c.sub !== null && (c.tax !== null || c.svc !== null))
+    ? r2(c.sub + (c.tax || 0) + (c.svc || 0) + c.rounding) : null;
+  const cc = ccInfo ? ccInfo.cc : null;
+  const ccWeak = ccInfo ? ccInfo.weak : false;
+  /* boosted + rounding === plain means the receipt's own arithmetic confirms
+     the printed totals — they outrank a possibly-misread cash/change pair. */
+  const roundConfirmed = c.boosted !== null && c.plain !== null && !c.boostedIsRound
+    && Math.abs(r2(c.boosted + c.rounding) - c.plain) <= 0.015;
+
+  if (close(cc, kt, 0.06)) return kt;
+  if (roundConfirmed) return c.plain;
+  if (close(st, kt, 0.02) && kt !== null) return kt;
+  /* The "total" line the parser found is just the subtotal echoed (GST
+     summary rows do this) — the real total is subtotal + tax. */
+  if (st !== null && kt !== null && c.sub !== null && Math.abs(kt - c.sub) < 0.01) return st;
+  /* Two independent printed total lines agreeing beat a cash/change pair
+     that might itself be misread. */
+  if (c.boosted !== null && c.plain !== null && Math.abs(c.boosted - c.plain) <= 0.015) return kt;
+  if (close(st, cc, 0.06)) return cc;
+  if (cc !== null && !ccWeak) return cc;
+  if (st !== null && kt === null) return st;
+  if (ccWeak && cc !== null && kt !== null && c.tax !== null && close(cc, r2(kt + c.tax), 0.06)) return cc;
+  if (kt !== null) return kt;
+  if (cc !== null) return cc;
+  if (st !== null) return st;
+  if (c.sub !== null) return c.sub;
+  return c.fallbackMax;
 }
 
 /* Malaysian receipts print Cash and Change: cash - change IS the amount paid.
@@ -470,13 +562,20 @@ function cashChangeTotal(lines) {
         const m = line.match(LOOSE_AMOUNT_RE) || line.match(COLUMN_AMOUNT_RE);
         if (m) a.push(parseFloat(m[1] + "." + m[2]));
       }
+      if (!a.length) {
+        const m = line.match(/(?<![A-Za-z])(\d{3,6})\D*$/);
+        if (m) a.push(parseInt(m[1], 10) / 100);
+      }
       const valid = a.filter(x => x >= 0 && x < 100000);
       if (valid.length) change = valid[valid.length - 1];
     }
   }
   if (cash === null || change === null) return null;
   const cc = Math.round((cash - change) * 100) / 100;
-  return cc > 0 && change < cash ? cc : null;
+  if (!(cc > 0 && change < cash)) return null;
+  /* change of 0.00 adds no arithmetic cross-check — cash alone is one
+     possibly-misread number, so mark it weak. */
+  return { cc, weak: change === 0 };
 }
 
 function extractItems(lines, total) {
@@ -504,12 +603,7 @@ function extractItems(lines, total) {
 function parseReceiptText(text) {
   const lines = text.split(/\n/).map(l => l.trim()).filter(l => l.length > 1);
   const joined = lines.join("\n");
-  /* When cash and change both parsed, cash - change is the paid total by
-     arithmetic — on real receipts this beat the printed-total line every
-     time the two disagreed, so it wins outright. */
-  let total = extractTotal(lines);
-  const cc = cashChangeTotal(lines);
-  if (cc !== null && cc < 50000) total = cc;
+  const total = extractTotal(lines, cashChangeTotal(lines));
   const date = extractDate(lines, joined);
   const time = extractTime(joined);
   const merchant = guessMerchant(lines);

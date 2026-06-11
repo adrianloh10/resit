@@ -1,4 +1,4 @@
-const CACHE = "resit-v6";
+const CACHE = "resit-v7";
 const SHELL = [
   "./",
   "./index.html",
