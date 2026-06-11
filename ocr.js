@@ -166,40 +166,9 @@ async function ocrBest(worker, file, onProgress) {
   return { ...r, canvas };
 }
 
-/* When no amount was found in the full read, zoom into the region to the
-   right of the "TOTAL" label and re-read it in digits-only mode. Enlarged,
-   isolated digits read far better — including most handwriting. */
-async function sniperTotal(worker, canvas, lines) {
-  const totalLines = lines.filter(l => /total|jumlah/i.test(l.text || "") && l.bbox);
-  if (!totalLines.length) return null;
-  const strong = totalLines.filter(l => /amount|amt|rm|payable|inclu/i.test(l.text));
-  const target = strong.length ? strong[strong.length - 1] : totalLines[totalLines.length - 1];
-  let cropX = target.bbox.x0;
-  for (const w of target.words) {
-    if (w.bbox && /total|amount|amt|jumlah|rm|payable|[:]/i.test(w.text || "")) {
-      cropX = Math.max(cropX, w.bbox.x1);
-    }
-  }
-  const lh = Math.max(8, target.bbox.y1 - target.bbox.y0);
-  const y0 = Math.max(0, target.bbox.y0 - lh * 0.8);
-  const y1 = Math.min(canvas.height, target.bbox.y1 + lh * 0.8);
-  const x0 = Math.min(cropX + 4, canvas.width - 20);
-  const w = canvas.width - x0 - 2;
-  const h = y1 - y0;
-  if (w < 20 || h < 8) return null;
-  const scale = Math.max(1, Math.min(4, 120 / h));
-  const crop = document.createElement("canvas");
-  crop.width = Math.round(w * scale);
-  crop.height = Math.round(h * scale);
-  crop.getContext("2d").drawImage(canvas, x0, y0, w, h, 0, 0, crop.width, crop.height);
-  await worker.setParameters({ tessedit_char_whitelist: "0123456789.,|/- ", tessedit_pageseg_mode: "7" });
-  let text = "";
-  try {
-    text = (await worker.recognize(crop)).data.text || "";
-  } finally {
-    await worker.setParameters({ tessedit_char_whitelist: "", tessedit_pageseg_mode: "3" });
-  }
-  /* Conservative read: a wrong amount is worse than an empty field. */
+/* Conservative read of a digits-only OCR result: a wrong amount is worse
+   than an empty field. */
+function parseSniperDigits(text) {
   const groups = text.match(/\d+/g);
   if (!groups) return null;
   let amt = null;
@@ -214,6 +183,68 @@ async function sniperTotal(worker, canvas, lines) {
   return amt !== null && amt > 0 && amt < 100000 ? amt : null;
 }
 
+/* When no amount was found in the full read, zoom into the region to the
+   right of the "TOTAL" label and re-read it digits-only. Tries tight and
+   tall crops (handwriting overflows the printed line), raw grayscale and
+   binarized (thin pen strokes can vanish when binarized), and two
+   segmentation modes — then votes among the readings. */
+async function sniperTotal(worker, file, boostFlag, canvas, lines) {
+  const totalLines = lines.filter(l => /total|jumlah/i.test(l.text || "") && l.bbox);
+  if (!totalLines.length) return null;
+  const strong = totalLines.filter(l => /amount|amt|rm|payable|inclu/i.test(l.text));
+  const target = strong.length ? strong[strong.length - 1] : totalLines[totalLines.length - 1];
+  let cropX = target.bbox.x0;
+  for (const w of target.words) {
+    if (w.bbox && /total|amount|amt|jumlah|rm|payable|[:]/i.test(w.text || "")) {
+      cropX = Math.max(cropX, w.bbox.x1);
+    }
+  }
+  const lh = Math.max(8, target.bbox.y1 - target.bbox.y0);
+  const x0 = Math.min(cropX + 4, canvas.width - 20);
+  const cw = canvas.width - x0 - 2;
+  if (cw < 20) return null;
+  const raw = await loadCanvas(file, boostFlag);
+
+  const votes = [];
+  for (const pad of [0.9, 1.6]) {
+    const y0 = Math.max(0, target.bbox.y0 - lh * pad);
+    const y1 = Math.min(canvas.height, target.bbox.y1 + lh * pad);
+    const ch = y1 - y0;
+    if (ch < 8) continue;
+    for (const useBin of [false, true]) {
+      const scale = Math.max(1, Math.min(4, 130 / ch));
+      const crop = document.createElement("canvas");
+      crop.width = Math.round(cw * scale);
+      crop.height = Math.round(ch * scale);
+      crop.getContext("2d").drawImage(raw, x0, y0, cw, ch, 0, 0, crop.width, crop.height);
+      if (useBin) adaptiveThreshold(crop);
+      await worker.setParameters({ tessedit_char_whitelist: "0123456789.,|/- ", tessedit_pageseg_mode: "7" });
+      let amt = null;
+      try {
+        amt = parseSniperDigits((await worker.recognize(crop)).data.text || "");
+      } catch (e) { /* keep trying other variants */ }
+      if (amt !== null) votes.push(amt);
+    }
+  }
+  await worker.setParameters({ tessedit_char_whitelist: "", tessedit_pageseg_mode: "3" });
+  if (!votes.length) return null;
+  /* Magnitude consensus: a hallucinated extra digit lands 10x off the
+     other readings — keep only votes near the median, and demand either
+     agreement or a modest single value. */
+  const sorted = [...votes].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const kept = votes.filter(v => v <= median * 2 && v >= median / 2);
+  if (kept.length === 0) return null;
+  if (kept.length === 1) return kept[0] < 10000 ? kept[0] : null;
+  const counts = {};
+  let best = kept[0], bestN = 0;
+  for (const v of kept) {
+    counts[v] = (counts[v] || 0) + 1;
+    if (counts[v] > bestN) { bestN = counts[v]; best = v; }
+  }
+  return best;
+}
+
 /* Full scan pipeline: OCR (with retry), parse, then the digit-zoom rescue
    pass if the total is still missing. */
 async function scanReceipt(file, onProgress) {
@@ -221,27 +252,35 @@ async function scanReceipt(file, onProgress) {
   const worker = await getOcrWorker();
   let r = await ocrBest(worker, file, onProgress);
   let parsed = parseReceiptText(r.text);
+  let rBoost = false;
   /* Retry magnified when the total is missing, weakly evidenced, or the
      photo is low-res (where the normal pass misreads small digits). */
   const small = r.canvas.srcMinDim && r.canvas.srcMinDim < 700;
+  let boosted = null;
   if (parsed.total === null || parsed.totalConf <= 1 || (small && parsed.totalConf < 3)) {
     if (onProgress) onProgress("Looking closer…");
     try {
       const big = adaptiveThreshold(await loadCanvas(file, true));
       const r2 = await recognizeWithBoxes(worker, big);
       const p2 = parseReceiptText(r2.text);
+      boosted = { r: { ...r2, canvas: big }, p: p2 };
       if (p2.total !== null && (parsed.total === null || p2.totalConf > parsed.totalConf || (small && p2.totalConf >= parsed.totalConf))) {
-        r = { ...r2, canvas: big };
+        r = boosted.r;
         parsed = p2;
+        rBoost = true;
       }
     } catch (e) { /* magnified retry is best-effort */ }
   }
-  if (parsed.total === null && r.lines.length) {
+  if (parsed.total === null) {
     if (onProgress) onProgress("Zooming into the total…");
-    try {
-      const t = await sniperTotal(worker, r.canvas, r.lines);
-      if (t) parsed.total = t;
-    } catch (e) { /* rescue pass is best-effort */ }
+    /* Prefer the magnified pass's geometry for the zoom — finer detail. */
+    const src = (boosted && boosted.r.lines.length) ? { rr: boosted.r, flag: true } : (r.lines.length ? { rr: r, flag: rBoost } : null);
+    if (src) {
+      try {
+        const t = await sniperTotal(worker, file, src.flag, src.rr.canvas, src.rr.lines);
+        if (t) parsed.total = t;
+      } catch (e) { /* rescue pass is best-effort */ }
+    }
   }
   return parsed;
 }
@@ -505,7 +544,9 @@ function totalLineAmounts(line, score) {
     const m = line.match(/(\d[\d.,]*)\s+(\d{2})\s*\|?\s*$/);
     if (m) {
       const digits = m[1].replace(/\D/g, "") + m[2];
-      if (digits.length >= 3 && digits.length <= 7) {
+      /* 6-digit cap: a 7-digit run means OCR hallucinated a digit
+         (RM 22,649.08 expenses don't appear on receipts; RM 2,269.00 does). */
+      if (digits.length >= 3 && digits.length <= 6) {
         amounts = [parseFloat(digits.slice(0, -2) + "." + digits.slice(-2))];
       }
     }
