@@ -11,8 +11,45 @@ let state = {
   expenses: [],
   budget: 3000,
   editing: null,
-  ocrCancelled: false
+  ocrCancelled: false,
+  merchantCats: {}
 };
+
+/* ---------- Learned merchant -> category memory ---------- */
+
+function normMerchant(s) {
+  return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/* Generic first words that don't identify a brand ("Restoran X" vs "Restoran Y"). */
+const BRAND_STOPWORDS = new Set(["restoran", "restaurant", "kedai", "pasar", "pasaraya", "klinik", "clinic", "farmasi", "pharmacy", "stesen", "the", "cafe", "kafe", "warung", "gerai", "mr", "new", "old", "one"]);
+
+function brandOf(norm) {
+  for (const t of norm.split(" ")) {
+    if (t.length >= 3 && !BRAND_STOPWORDS.has(t) && /[a-z]/.test(t)) return t;
+  }
+  return norm;
+}
+
+function learnedCategory(merchant) {
+  const n = normMerchant(merchant);
+  if (!n) return null;
+  if (state.merchantCats[n]) return state.merchantCats[n];
+  const brand = brandOf(n);
+  for (const [k, v] of Object.entries(state.merchantCats)) {
+    if (k.length >= 4 && (n.includes(k) || k.includes(n))) return v;
+    if (brand.length >= 4 && brandOf(k) === brand) return v;
+  }
+  return null;
+}
+
+function rememberMerchantCategory(merchant, category) {
+  const n = normMerchant(merchant);
+  if (!n || !category) return;
+  if (state.merchantCats[n] === category) return;
+  state.merchantCats[n] = category;
+  DB.setSetting("merchantCats", state.merchantCats);
+}
 
 function viewedMonth() {
   const now = new Date();
@@ -208,7 +245,7 @@ function parsedToDraft(parsed) {
     id: null,
     amount: parsed.total || null,
     merchant: parsed.merchant || "",
-    category: parsed.category || "Other",
+    category: learnedCategory(parsed.merchant) || parsed.category || "Other",
     date: d.toISOString(),
     items: parsed.items || [],
     note: "",
@@ -233,21 +270,7 @@ function openConfirmSheet(expense) {
   $("confirm-time").value = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
   $("confirm-note").value = e.note || "";
 
-  const chips = $("category-chips");
-  chips.innerHTML = "";
-  for (const c of CATS) {
-    const b = document.createElement("button");
-    b.className = "chip" + (c.name === e.category ? " selected" : "");
-    b.textContent = c.name;
-    if (c.name === e.category) b.style.background = c.color, b.style.borderColor = c.color;
-    b.addEventListener("click", () => {
-      state.editing.category = c.name;
-      [...chips.children].forEach(x => { x.className = "chip"; x.style.background = ""; x.style.borderColor = ""; });
-      b.className = "chip selected";
-      b.style.background = c.color; b.style.borderColor = c.color;
-    });
-    chips.appendChild(b);
-  }
+  renderCategoryChips();
 
   const itemsBlock = $("items-block");
   itemsBlock.innerHTML = "";
@@ -285,6 +308,26 @@ function openConfirmSheet(expense) {
   if (!e.amount && !e.fromReceipt) setTimeout(() => $("confirm-amount").focus(), 50);
 }
 
+function renderCategoryChips() {
+  const e = state.editing;
+  if (!e) return;
+  const chips = $("category-chips");
+  chips.innerHTML = "";
+  for (const c of CATS) {
+    const b = document.createElement("button");
+    const sel = c.name === e.category;
+    b.className = "chip" + (sel ? " selected" : "");
+    b.textContent = c.name;
+    if (sel) { b.style.background = c.color; b.style.borderColor = c.color; }
+    b.addEventListener("click", () => {
+      state.editing.category = c.name;
+      state.editing.userPicked = true;
+      renderCategoryChips();
+    });
+    chips.appendChild(b);
+  }
+}
+
 function closeConfirmSheet() {
   $("confirm-overlay").hidden = true;
   state.editing = null;
@@ -319,6 +362,8 @@ async function saveExpense() {
     record.id = await DB.addExpense(record);
     state.expenses.push(record);
   }
+
+  rememberMerchantCategory(record.merchant, record.category);
 
   closeConfirmSheet();
   const saved = new Date(record.date);
@@ -361,6 +406,7 @@ async function exportCSV() {
 
 async function init() {
   state.budget = await DB.getSetting("budget", 3000);
+  state.merchantCats = await DB.getSetting("merchantCats", {});
   state.expenses = await DB.getAllExpenses();
   renderHome();
 
@@ -383,6 +429,15 @@ async function init() {
   $("gallery-input").addEventListener("change", ev => { handleImage(ev.target.files[0]); ev.target.value = ""; });
   $("cancel-ocr").addEventListener("click", () => { state.ocrCancelled = true; $("processing-overlay").hidden = true; });
 
+  $("confirm-merchant").addEventListener("input", () => {
+    const e = state.editing;
+    if (!e || e.userPicked || e.id) return;
+    const v = $("confirm-merchant").value;
+    if (v.trim().length < 3) return;
+    const g = learnedCategory(v) || window.ReceiptOCR.guessCategory(v, v);
+    if (g && g !== "Other" && g !== e.category) { e.category = g; renderCategoryChips(); }
+  });
+
   $("confirm-back").addEventListener("click", closeConfirmSheet);
   $("confirm-overlay").addEventListener("click", ev => { if (ev.target === $("confirm-overlay")) closeConfirmSheet(); });
   $("save-btn").addEventListener("click", saveExpense);
@@ -399,6 +454,7 @@ async function init() {
     await DB.eraseAll();
     state.expenses = [];
     state.budget = 3000;
+    state.merchantCats = {};
     switchView("home");
     toast("All data erased");
   });

@@ -1,4 +1,4 @@
-const CACHE = "resit-v1";
+const CACHE = "resit-v2";
 const SHELL = [
   "./",
   "./index.html",
@@ -8,7 +8,8 @@ const SHELL = [
   "./ocr.js",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
-  "./icons/icon-512.png"
+  "./icons/icon-512.png",
+  "./icons/icon-maskable-512.png"
 ];
 
 self.addEventListener("install", e => {
@@ -26,14 +27,20 @@ self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET") return;
 
+  /* Same-origin: stale-while-revalidate — serve instantly from cache,
+     refresh in the background so the next launch gets new code. */
   if (url.origin === location.origin) {
-    e.respondWith(
-      caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy));
+    e.respondWith((async () => {
+      const cached = await caches.match(e.request);
+      const network = fetch(e.request).then(res => {
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy));
+        }
         return res;
-      }))
-    );
+      }).catch(() => cached);
+      return cached || network;
+    })());
     return;
   }
 

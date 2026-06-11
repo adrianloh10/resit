@@ -87,14 +87,14 @@ const CATEGORIES = [
 ];
 
 const CATEGORY_KEYWORDS = {
-  Groceries: ["tesco", "lotus", "aeon", "giant", "mydin", "99 speedmart", "speedmart", "econsave", "village grocer", "jaya grocer", "nsk", "supermarket", "pasar", "mini market", "grocer", "hero market", "tf value"],
-  Food: ["restoran", "restaurant", "cafe", "kafe", "kopitiam", "nasi", "mamak", "mcdonald", "kfc", "pizza", "subway", "starbucks", "tealive", "zus", "secret recipe", "sushi", "bakery", "bistro", "food court", "foodcourt", "burger", "satay", "chicken rice", "dim sum", "mixue", "domino", "marrybrown", "oldtown", "grabfood", "foodpanda", "bbq", "steamboat", "western", "warung", "gerai", "char kuey", "kuey teow", "chee cheong", "delivery"],
-  Fuel: ["petronas", "shell", "petron", "caltex", "bhp", "esso", "petrol", "fuel", "setel"],
-  Transport: ["grab", "touch n go", "touch 'n go", "tng", "rapidkl", "ktm", "mrt", "lrt", "toll", "plus highway", "parking", "parkir", "airasia", "mas airline", "taxi"],
-  Health: ["farmasi", "pharmacy", "guardian", "watsons", "caring", "klinik", "clinic", "hospital", "alpro", "big pharmacy", "dental", "dentist"],
-  Bills: ["tnb", "tenaga", "syabas", "air selangor", "unifi", "maxis", "celcom", "digi", "umobile", "u mobile", "astro", "indah water", "telekom", "yes 4g", "redone", "insurans", "insurance", "takaful"],
-  Shopping: ["mr diy", "mr. diy", "ikea", "uniqlo", "padini", "h&m", "decathlon", "lazada", "shopee", "harvey norman", "courts", "senheng", "machines", "switch", "popular", "kaison", "eco shop", "noko", "daiso"],
-  Entertainment: ["gsc", "tgv", "cinema", "karaoke", "netflix", "spotify", "steam", "playstation", "genting", "zoo", "theme park", "bowling"]
+  Groceries: ["tesco", "lotus", "aeon", "giant", "mydin", "99 speedmart", "speedmart", "econsave", "village grocer", "jaya grocer", "nsk", "supermarket", "pasar", "mini market", "minimart", "mini mart", "grocer", "hero market", "tf value", "kk mart", "kk super", "7-eleven", "7 eleven", "seven eleven", "family mart", "familymart", "emart", "billion", "segi fresh", "bens independent", "ben's independent", "cold storage", "mercato", "groceria", "maslee", "pasaraya", "st rosyam", "everrise", "servay", "farley", "hypermarket", "kedai runcit", "convenience"],
+  Food: ["restoran", "restaurant", "cafe", "kafe", "kopitiam", "nasi", "mamak", "mcdonald", "kfc", "pizza", "subway", "starbucks", "tealive", "zus", "secret recipe", "sushi", "bakery", "bakeri", "bistro", "food court", "foodcourt", "burger", "satay", "chicken rice", "dim sum", "mixue", "domino", "marrybrown", "oldtown", "grabfood", "foodpanda", "shopeefood", "bbq", "steamboat", "western", "warung", "gerai", "char kuey", "char koay", "kuey teow", "koay teow", "chee cheong", "kedai makan", "medan selera", "hawker", "ayam", "ikan bakar", "tomyam", "tom yam", "cendol", "laksa", "kopi", "teh tarik", "chatime", "gigi coffee", "coffee bean", "san francisco coffee", "kenangan", "luckin", "richiamo", "llaollao", "baskin", "inside scoop", "sushi king", "kenny rogers", "texas chicken", "nando", "a&w", "wendy", "shihlin", "4fingers", "dragon-i", "din tai fung", "pelita", "bak kut teh", "haidilao", "hotpot", "seafood", "ramen", "donut", "dunkin", "krispy", "big apple", "boost juice", "coolblog", "banana leaf", "claypot", "economy rice", "chap fan", "wantan", "catering", "stall"],
+  Fuel: ["petronas", "shell", "petron", "caltex", "bhp", "esso", "petrol", "fuel", "setel", "stesen minyak", "five petroleum"],
+  Transport: ["grab", "touch n go", "touch 'n go", "tng", "rapidkl", "rapid bus", "rapid rail", "prasarana", "ktm", "mrt", "lrt", "klia ekspres", "klia transit", "toll", "tol", "plus highway", "duke", "kesas", "lekas", "besraya", "litrak", "parking", "parkir", "car park", "carpark", "valet", "airasia", "batik air", "firefly", "malindo", "malaysia airlines", "taxi", "teksi", "ferry", "bas ekspres", "smarttag", "smart tag", "socar", "trevo", "jpj", "roadtax", "road tax", "puspakom"],
+  Health: ["farmasi", "pharmacy", "guardian", "watsons", "caring", "klinik", "poliklinik", "clinic", "hospital", "alpro", "big pharmacy", "dental", "dentist", "pergigian", "pathlab", "bp healthcare", "lablink", "kpj", "sunway medical", "columbia asia", "gleneagles", "pantai hospital", "prince court", "vitamin", "supplement", "vitahealth", "physio", "tcm", "chinese medicine", "gym", "fitness", "anytime fitness", "celebrity fitness", "chi fitness", "optical", "optometry", "eyecare"],
+  Bills: ["tnb", "tenaga", "syabas", "air selangor", "unifi", "maxis", "celcom", "digi", "umobile", "u mobile", "astro", "indah water", "telekom", "yes 4g", "redone", "insurans", "insurance", "takaful", "time internet", "time dotcom", "hotlink", "tune talk", "prepaid", "postpaid", "streamyx", "pos malaysia", "mbpj", "dbkl", "mbsa", "mpsj", "majlis perbandaran"],
+  Shopping: ["mr diy", "mr. diy", "ikea", "uniqlo", "padini", "h&m", "h & m", "decathlon", "lazada", "shopee", "harvey norman", "courts", "senheng", "machines", "switch", "popular", "kaison", "eco shop", "noko", "daiso", "parkson", "metrojaya", "sports direct", "al-ikhsan", "brands outlet", "miniso", "typo", "cotton on", "zara", "lovisa", "sephora", "mph", "borders", "times bookstore", "bookstore", "stationery", "toys r us", "mr toy", "ace hardware", "homepro", "hardware", "ssf", "jakel", "kamdar", "furniture", "electrical", "elektronik", "poh kong", "habib", "tomei", "wah chan", "goldsmith", "perfume", "thrift", "bundle"],
+  Entertainment: ["gsc", "tgv", "mbo", "lfs", "dadi cinema", "cinema", "karaoke", "ktv", "netflix", "spotify", "steam", "playstation", "genting", "zoo", "aquaria", "theme park", "sunway lagoon", "escape room", "arcade", "bowling", "bowl", "snooker", "concert", "disney", "hbo", "youtube premium", "viu", "iqiyi"]
 };
 
 const AMOUNT_RE = /(\d{1,3}(?:[,\s]\d{3})*\.\d{2})(?!\d)/g;
@@ -162,13 +162,38 @@ function guessMerchant(lines) {
   return "";
 }
 
-function guessCategory(text) {
-  const lower = text.toLowerCase();
-  let best = "Other", bestHits = 0;
+function kwHits(lower, words) {
+  let hits = 0, first = Infinity;
+  for (const w of words) {
+    let idx = -1;
+    if (w.length <= 3) {
+      const re = new RegExp("\\b" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i");
+      const m = re.exec(lower);
+      if (m) idx = m.index;
+    } else {
+      idx = lower.indexOf(w);
+    }
+    if (idx >= 0) { hits++; if (idx < first) first = idx; }
+  }
+  return { hits, first };
+}
+
+/* Merchant-name matches count 3x: the shop name is a far stronger signal
+   than a keyword buried in the item lines. Ties go to the keyword that
+   appears earliest in the merchant name ("GSC Aeon Mall" -> the brand GSC,
+   not the mall it sits in). */
+function guessCategory(text, merchant) {
+  const lowerAll = (text || "").toLowerCase();
+  const lowerMerchant = (merchant || "").toLowerCase();
+  let best = "Other", bestScore = 0, bestFirst = Infinity;
   for (const [cat, words] of Object.entries(CATEGORY_KEYWORDS)) {
-    let hits = 0;
-    for (const w of words) if (lower.includes(w)) hits++;
-    if (hits > bestHits) { bestHits = hits; best = cat; }
+    const m = kwHits(lowerMerchant, words);
+    const t = kwHits(lowerAll, words);
+    const score = m.hits * 3 + t.hits;
+    const first = m.first !== Infinity ? m.first : 10000 + (t.first === Infinity ? 10000 : t.first);
+    if (score > bestScore || (score === bestScore && score > 0 && first < bestFirst)) {
+      bestScore = score; bestFirst = first; best = cat;
+    }
   }
   return best;
 }
@@ -219,9 +244,9 @@ function parseReceiptText(text) {
   const date = extractDate(joined);
   const time = extractTime(joined);
   const merchant = guessMerchant(lines);
-  const category = guessCategory(joined);
+  const category = guessCategory(joined, merchant);
   const items = extractItems(lines, total);
   return { total, date, time, merchant, category, items, rawText: text };
 }
 
-window.ReceiptOCR = { ocrImage, parseReceiptText, CATEGORIES };
+window.ReceiptOCR = { ocrImage, parseReceiptText, guessCategory, CATEGORIES };
