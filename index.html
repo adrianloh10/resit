@@ -66,6 +66,12 @@
       <span class="field-label">Monthly budget (RM)</span>
       <input type="number" id="budget-input" inputmode="decimal" min="0" step="50">
     </label>
+    <div class="field">
+      <span class="field-label">AI assist (reads receipts on-device OCR can't — optional)</span>
+      <input type="url" id="ai-url" placeholder="Relay URL, e.g. https://resit-xxx.vercel.app/api/read-receipt" style="margin-bottom: 8px;">
+      <input type="password" id="ai-secret" placeholder="Access code">
+      <button class="ghost-btn small" id="ai-test" style="margin-top: 8px;">Test connection</button>
+    </div>
     <button class="ghost-btn" id="export-csv">Export all expenses (CSV)</button>
     <button class="ghost-btn" id="copy-scan">Copy last scan text</button>
     <button class="ghost-btn danger" id="erase-data">Erase all data</button>

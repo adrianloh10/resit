@@ -1,6 +1,6 @@
 /* Resit — snap receipts, track spending. All data stays on-device. */
 
-const APP_VERSION = "v14"; /* keep in step with CACHE in sw.js */
+const APP_VERSION = "v15"; /* keep in step with CACHE in sw.js */
 
 const $ = id => document.getElementById(id);
 const CATS = window.ReceiptOCR.CATEGORIES;
@@ -17,7 +17,9 @@ let state = {
   merchantCats: {},
   merchantNames: {},
   totalHints: {},
-  theme: "auto"
+  theme: "auto",
+  aiUrl: "",
+  aiSecret: ""
 };
 
 /* ---------- Theme ---------- */
@@ -282,8 +284,80 @@ function switchView(name) {
   if (ns) ns.classList.toggle("active", name === "settings");
   if (name === "home") renderHome();
   if (name === "insights") renderInsights();
-  if (name === "settings") { $("budget-input").value = state.budget || ""; renderThemeChips(); }
+  if (name === "settings") {
+    $("budget-input").value = state.budget || "";
+    $("ai-url").value = state.aiUrl || "";
+    $("ai-secret").value = state.aiSecret || "";
+    renderThemeChips();
+  }
   window.scrollTo(0, 0);
+}
+
+/* ---------- AI assist (optional relay fallback) ---------- */
+
+function fileToJpegBase64(file, maxDim) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL("image/jpeg", 0.85).split(",")[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Could not read image")); };
+    img.src = url;
+  });
+}
+
+async function askAI(file) {
+  if (!state.aiUrl || !state.aiSecret) return null;
+  const image = await fileToJpegBase64(file, 1568);
+  const res = await fetch(state.aiUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image, mediaType: "image/jpeg", secret: state.aiSecret })
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "AI reading failed");
+  }
+  return res.json();
+}
+
+/* Merge the AI's reading over the on-device parse — the AI only runs when
+   the on-device result was weak, so it wins where it answered. */
+function mergeAIResult(parsed, ai) {
+  if (!ai || ai.readable === false) return parsed;
+  if (ai.total !== null && ai.total > 0 && ai.total < 100000) {
+    parsed.total = Math.round(ai.total * 100) / 100;
+    parsed.totalConf = 3;
+  }
+  if (ai.merchant && ai.merchant.length >= 2) parsed.merchant = ai.merchant;
+  if (ai.category && CATS.some(c => c.name === ai.category)) parsed.category = ai.category;
+  if (ai.date) {
+    const m = String(ai.date).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) {
+      const d = new Date(+m[1], +m[2] - 1, +m[3]);
+      if (d <= new Date() && +m[1] >= 2015) {
+        parsed.date = d;
+        const t = String(ai.time || "").match(/^(\d{1,2}):(\d{2})$/);
+        if (t && +t[1] <= 23 && +t[2] <= 59) parsed.time = { h: +t[1], min: +t[2] };
+      }
+    }
+  }
+  if (Array.isArray(ai.items) && ai.items.length) {
+    const items = ai.items
+      .filter(i => i && typeof i.name === "string" && typeof i.price === "number" && i.price > 0)
+      .slice(0, 25)
+      .map(i => ({ name: String(i.name).slice(0, 40), price: Math.round(i.price * 100) / 100 }));
+    if (items.length) parsed.items = items;
+  }
+  parsed.fromAI = true;
+  return parsed;
 }
 
 /* ---------- Capture flow ---------- */
@@ -300,9 +374,21 @@ async function handleImage(file) {
   try {
     const parsed = await window.ReceiptOCR.scanReceipt(file, msg => { $("processing-text").textContent = msg; });
     if (state.ocrCancelled) return;
-    $("processing-overlay").hidden = true;
     DB.setSetting("lastScan", parsed.rawText || "");
     applyLearnedTotalHint(parsed);
+    /* AI fallback: only when on-device reading came up empty or weak. */
+    if (state.aiUrl && state.aiSecret && (parsed.total === null || (parsed.totalConf || 0) <= 1)) {
+      $("processing-text").textContent = "Asking AI…";
+      try {
+        const ai = await askAI(file);
+        if (state.ocrCancelled) return;
+        mergeAIResult(parsed, ai);
+      } catch (err) {
+        toast(err.message || "AI reading failed");
+      }
+    }
+    if (state.ocrCancelled) return;
+    $("processing-overlay").hidden = true;
     if (!parsed.total && !parsed.merchant && !parsed.items.length) {
       toast("Couldn't read that — try better lighting, or enter manually");
       openConfirmSheet(null);
@@ -497,6 +583,8 @@ async function init() {
   state.merchantNames = await DB.getSetting("merchantNames", {});
   state.totalHints = await DB.getSetting("totalHints", {});
   state.theme = await DB.getSetting("theme", "auto");
+  state.aiUrl = await DB.getSetting("aiUrl", "");
+  state.aiSecret = await DB.getSetting("aiSecret", "");
   applyTheme();
   darkMedia.addEventListener("change", () => { if (state.theme === "auto") applyTheme(); });
   renderHome();
@@ -564,6 +652,36 @@ async function init() {
     toast("Budget saved");
   });
   $("export-csv").addEventListener("click", exportCSV);
+  $("ai-url").addEventListener("change", async () => {
+    state.aiUrl = $("ai-url").value.trim();
+    await DB.setSetting("aiUrl", state.aiUrl);
+  });
+  $("ai-secret").addEventListener("change", async () => {
+    state.aiSecret = $("ai-secret").value.trim();
+    await DB.setSetting("aiSecret", state.aiSecret);
+  });
+  $("ai-test").addEventListener("click", async () => {
+    const url = $("ai-url").value.trim(), secret = $("ai-secret").value.trim();
+    if (!url || !secret) { toast("Enter the relay URL and access code first"); return; }
+    state.aiUrl = url; state.aiSecret = secret;
+    await DB.setSetting("aiUrl", url);
+    await DB.setSetting("aiSecret", secret);
+    toast("Testing…");
+    try {
+      /* 1x1 white pixel — verifies URL, access code, API key and credit. */
+      const px = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: px, mediaType: "image/jpeg", secret })
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) toast("Connected — AI assist is ready");
+      else toast(body.error || ("Connection failed (" + res.status + ")"));
+    } catch (e) {
+      toast("Could not reach the relay — check the URL");
+    }
+  });
   $("app-version").textContent = "Resit " + APP_VERSION + " · ";
   $("copy-scan").addEventListener("click", async () => {
     const t = await DB.getSetting("lastScan", "");

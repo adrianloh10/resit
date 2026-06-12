@@ -247,6 +247,7 @@ html, body {
   border-radius: 12px; padding: 12px 14px; font-size: 16px; font-family: var(--mono);
   color: var(--ink); outline: none;
 }
+.field input[type="url"], .field input[type="password"] { font-size: 13px; }
 .ghost-btn {
   background: none; border: 1px solid var(--divider-soft); border-radius: 999px;
   padding: 12px; font-size: 14px; color: var(--ink-soft); font-family: var(--sans); cursor: pointer;
