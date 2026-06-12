@@ -20,14 +20,14 @@
 }
 
 html[data-theme="dark"] {
-  --paper: #1A1714;
-  --paper-raised: #232019;
-  --ink: #ECE5D8;
-  --ink-soft: #C8BFAE;
-  --muted: #958C7B;
-  --faint: #6B6356;
-  --divider: #2E2A24;
-  --divider-soft: #3B362E;
+  --paper: #25211A;
+  --paper-raised: #2E2921;
+  --ink: #EFE7D8;
+  --ink-soft: #D2C8B5;
+  --muted: #9D937F;
+  --faint: #6E6555;
+  --divider: #3A342A;
+  --divider-soft: #483F31;
   --terracotta: #C9714A;
   --ochre: #CDAC5C;
   --sage: #8C9A76;
