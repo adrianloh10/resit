@@ -1,6 +1,6 @@
 /* Resit — snap receipts, track spending. All data stays on-device. */
 
-const APP_VERSION = "v12"; /* keep in step with CACHE in sw.js */
+const APP_VERSION = "v13"; /* keep in step with CACHE in sw.js */
 
 const $ = id => document.getElementById(id);
 const CATS = window.ReceiptOCR.CATEGORIES;
@@ -27,7 +27,11 @@ const darkMedia = window.matchMedia("(prefers-color-scheme: dark)");
 function applyTheme() {
   const resolved = state.theme === "auto" ? (darkMedia.matches ? "dark" : "light") : state.theme;
   document.documentElement.dataset.theme = resolved;
-  $("meta-theme").setAttribute("content", resolved === "dark" ? "#25211A" : "#F7F3EC");
+  document.documentElement.style.colorScheme = resolved === "dark" ? "dark" : "only light";
+  const mt = $("meta-theme");
+  if (mt) mt.setAttribute("content", resolved === "dark" ? "#25211A" : "#F7F3EC");
+  const ms = $("meta-scheme");
+  if (ms) ms.setAttribute("content", resolved === "dark" ? "dark" : "only light");
 }
 
 function renderThemeChips() {

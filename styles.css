@@ -37,7 +37,9 @@ html[data-theme="dark"] {
   --sand: #B9A375;
   --stone: #95897A;
 }
-html { color-scheme: light; }
+/* "only light" opts out of Android Chrome's force-dark, which would
+   otherwise re-darken the intentionally light paper theme. */
+html { color-scheme: only light; }
 html[data-theme="dark"] { color-scheme: dark; }
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
