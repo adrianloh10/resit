@@ -20,9 +20,13 @@
 <main id="view-home" class="view">
   <header class="home-header">
     <div class="month-row">
+      <button class="icon-btn" id="open-settings-btn" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/></svg>
+      </button>
       <button class="icon-btn" id="month-prev" aria-label="Previous month">&#8249;</button>
       <p class="month-label" id="month-label">June</p>
       <button class="icon-btn" id="month-next" aria-label="Next month">&#8250;</button>
+      <span class="spacer"></span>
     </div>
     <p class="big-amount" id="month-total">0<span class="cents">.00</span></p>
     <p class="budget-line" id="budget-line">of RM 3,000 budget</p>
@@ -35,9 +39,13 @@
 <main id="view-insights" class="view" hidden>
   <header class="home-header">
     <div class="month-row">
+      <button class="icon-btn" id="ins-open-settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/></svg>
+      </button>
       <button class="icon-btn" id="ins-month-prev" aria-label="Previous month">&#8249;</button>
       <p class="month-label" id="ins-month-label">June</p>
       <button class="icon-btn" id="ins-month-next" aria-label="Next month">&#8250;</button>
+      <span class="spacer"></span>
     </div>
   </header>
   <section class="insights-body" id="insights-body"></section>
@@ -74,9 +82,6 @@
   </button>
   <button class="nav-btn" id="nav-insights" aria-label="Insights">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 19V11M12 19V5M19 19v-6"/></svg>
-  </button>
-  <button class="nav-btn" id="nav-settings" aria-label="Settings">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/></svg>
   </button>
 </nav>
 

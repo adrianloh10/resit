@@ -1,6 +1,6 @@
 /* Resit — snap receipts, track spending. All data stays on-device. */
 
-const APP_VERSION = "v13"; /* keep in step with CACHE in sw.js */
+const APP_VERSION = "v14"; /* keep in step with CACHE in sw.js */
 
 const $ = id => document.getElementById(id);
 const CATS = window.ReceiptOCR.CATEGORIES;
@@ -278,7 +278,8 @@ function switchView(name) {
   $("view-settings").hidden = name !== "settings";
   $("nav-home").classList.toggle("active", name === "home");
   $("nav-insights").classList.toggle("active", name === "insights");
-  $("nav-settings").classList.toggle("active", name === "settings");
+  const ns = $("nav-settings");
+  if (ns) ns.classList.toggle("active", name === "settings");
   if (name === "home") renderHome();
   if (name === "insights") renderInsights();
   if (name === "settings") { $("budget-input").value = state.budget || ""; renderThemeChips(); }
@@ -507,8 +508,31 @@ async function init() {
 
   $("nav-home").addEventListener("click", () => switchView("home"));
   $("nav-insights").addEventListener("click", () => switchView("insights"));
-  $("nav-settings").addEventListener("click", () => switchView("settings"));
+  /* on(): elements may be absent for one update cycle while the cached
+     index.html lags behind app.js — never let wiring crash init. */
+  const on = (id, fn) => { const el = $(id); if (el) el.addEventListener("click", fn); };
+  on("nav-settings", () => switchView("settings"));
+  on("open-settings-btn", () => switchView("settings"));
+  on("ins-open-settings", () => switchView("settings"));
   $("settings-back").addEventListener("click", () => switchView("home"));
+
+  /* Swipe left/right anywhere on home or insights to change month. */
+  let swipe = null;
+  document.addEventListener("touchstart", ev => {
+    if (state.view === "settings" || !$("confirm-overlay").hidden || !$("chooser-overlay").hidden) { swipe = null; return; }
+    const t = ev.changedTouches[0];
+    swipe = { x: t.clientX, y: t.clientY };
+  }, { passive: true });
+  document.addEventListener("touchend", ev => {
+    if (!swipe) return;
+    const t = ev.changedTouches[0];
+    const dx = t.clientX - swipe.x;
+    const dy = t.clientY - swipe.y;
+    swipe = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 2) return;
+    if (state.view === "home") { state.monthOffset += dx < 0 ? 1 : -1; renderHome(); }
+    else if (state.view === "insights") { state.monthOffset += dx < 0 ? 1 : -1; renderInsights(); }
+  }, { passive: true });
 
   $("fab-camera").addEventListener("click", openChooser);
   $("choose-camera").addEventListener("click", () => { $("chooser-overlay").hidden = true; $("camera-input").click(); });
