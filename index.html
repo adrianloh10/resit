@@ -67,7 +67,12 @@
       <input type="number" id="budget-input" inputmode="decimal" min="0" step="50">
     </label>
     <div class="field">
-      <span class="field-label">AI assist (reads receipts on-device OCR can't — optional)</span>
+      <span class="field-label">Claude inbox (free — your receipts get checked by Claude on your PC)</span>
+      <input type="password" id="gh-token" placeholder="GitHub token (github_pat_...)">
+      <button class="ghost-btn small" id="gh-test" style="margin-top: 8px;">Test connection</button>
+    </div>
+    <div class="field">
+      <span class="field-label">AI assist (instant API reading — optional)</span>
       <input type="url" id="ai-url" placeholder="Relay URL, e.g. https://resit-xxx.vercel.app/api/read-receipt" style="margin-bottom: 8px;">
       <input type="password" id="ai-secret" placeholder="Access code">
       <button class="ghost-btn small" id="ai-test" style="margin-top: 8px;">Test connection</button>

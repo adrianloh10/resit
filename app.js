@@ -1,6 +1,6 @@
 /* Resit — snap receipts, track spending. All data stays on-device. */
 
-const APP_VERSION = "v15"; /* keep in step with CACHE in sw.js */
+const APP_VERSION = "v16"; /* keep in step with CACHE in sw.js */
 
 const $ = id => document.getElementById(id);
 const CATS = window.ReceiptOCR.CATEGORIES;
@@ -19,8 +19,110 @@ let state = {
   totalHints: {},
   theme: "auto",
   aiUrl: "",
-  aiSecret: ""
+  aiSecret: "",
+  ghToken: ""
 };
+
+/* ---------- Claude inbox (free — processed by Claude Code on the PC) ----------
+   Every scanned receipt's photo is queued to the private resit-inbox repo.
+   Claude reads them when it runs and writes results/; we poll, apply, and
+   delete. Photos are named <photoId>__<expenseId>.jpg so results can be
+   matched back to the saved expense. */
+
+const GH_REPO = "adrianloh10/resit-inbox";
+
+function ghHeaders() {
+  return { Authorization: "Bearer " + state.ghToken, Accept: "application/vnd.github+json" };
+}
+
+async function queuePhotoForClaude(expenseId, file) {
+  if (!state.ghToken || !file) return;
+  try {
+    const b64 = await fileToJpegBase64(file, 1600);
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    await DB.addPhoto({ id, expenseId, b64, status: "queued", createdAt: new Date().toISOString() });
+    syncInbox();
+  } catch (e) { /* photo conversion failed — expense is still saved */ }
+}
+
+let inboxSyncing = false;
+async function syncInbox() {
+  if (!state.ghToken || inboxSyncing || !navigator.onLine) return;
+  inboxSyncing = true;
+  try {
+    const photos = await DB.getAllPhotos();
+    for (const p of photos.filter(x => x.status === "queued")) {
+      const res = await fetch("https://api.github.com/repos/" + GH_REPO + "/contents/inbox/" + p.id + "__" + p.expenseId + ".jpg", {
+        method: "PUT",
+        headers: ghHeaders(),
+        body: JSON.stringify({ message: "receipt " + p.id, content: p.b64 })
+      });
+      if (res.ok || res.status === 422) {
+        p.status = "uploaded";
+        delete p.b64;
+        await DB.updatePhoto(p);
+      } else {
+        break;
+      }
+    }
+    await fetchClaudeResults();
+  } catch (e) { /* offline or auth issue — retry next launch */ }
+  finally { inboxSyncing = false; }
+}
+
+async function fetchClaudeResults() {
+  const res = await fetch("https://api.github.com/repos/" + GH_REPO + "/contents/results", { headers: ghHeaders() });
+  if (!res.ok) return;
+  const files = (await res.json()).filter(f => f.name.endsWith(".json"));
+  let applied = 0;
+  for (const f of files) {
+    try {
+      const fr = await fetch(f.url, { headers: ghHeaders() });
+      if (!fr.ok) continue;
+      const meta = await fr.json();
+      const data = JSON.parse(decodeURIComponent(escape(atob(meta.content.replace(/\s/g, "")))));
+      if (await applyClaudeResult(data)) applied++;
+      await fetch("https://api.github.com/repos/" + GH_REPO + "/contents/results/" + f.name, {
+        method: "DELETE",
+        headers: ghHeaders(),
+        body: JSON.stringify({ message: "applied " + f.name, sha: meta.sha })
+      });
+      if (data.photoId) { try { await DB.deletePhoto(data.photoId); } catch (e) {} }
+    } catch (e) { /* skip malformed result */ }
+  }
+  if (applied) {
+    toast("Claude filled in " + applied + " receipt" + (applied > 1 ? "s" : ""));
+    renderCurrent();
+  }
+}
+
+async function applyClaudeResult(data) {
+  const e = state.expenses.find(x => String(x.id) === String(data.expenseId));
+  if (!e) return false;
+  if (typeof data.total === "number" && data.total > 0 && data.total < 100000) {
+    e.amount = Math.round(data.total * 100) / 100;
+  }
+  if (data.merchant && String(data.merchant).length >= 2) {
+    const preferred = state.merchantNames[brandOf(normMerchant(data.merchant))];
+    e.merchant = preferred || String(data.merchant).slice(0, 60);
+  }
+  if (data.category && CAT_COLOR[data.category]) e.category = data.category;
+  if (data.date && /^\d{4}-\d{2}-\d{2}$/.test(String(data.date))) {
+    const t = /^\d{1,2}:\d{2}$/.test(String(data.time || "")) ? data.time : "12:00";
+    const d = new Date(data.date + "T" + t);
+    if (!isNaN(d) && d <= new Date() && d.getFullYear() >= 2015) e.date = d.toISOString();
+  }
+  if (Array.isArray(data.items)) {
+    const items = data.items
+      .filter(i => i && typeof i.name === "string" && typeof i.price === "number" && i.price > 0)
+      .slice(0, 25)
+      .map(i => ({ name: String(i.name).slice(0, 40), price: Math.round(i.price * 100) / 100 }));
+    if (items.length) e.items = items;
+  }
+  e.pending = false;
+  await DB.updateExpense(e);
+  return true;
+}
 
 /* ---------- Theme ---------- */
 
@@ -206,7 +308,7 @@ function renderHome() {
       <span class="cat-dot" style="background:${CAT_COLOR[e.category] || CAT_COLOR.Other}"></span>
       <span class="entry-main">
         <span class="entry-merchant">${escapeHtml(e.merchant || "Expense")}</span>
-        <span class="entry-cat">${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
+        <span class="entry-cat">${e.pending ? "waiting for Claude · " : ""}${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
       </span>
       <span class="entry-amount">${fmtRM(e.amount)}</span>`;
     row.addEventListener("click", () => openConfirmSheet(e));
@@ -288,6 +390,7 @@ function switchView(name) {
     $("budget-input").value = state.budget || "";
     $("ai-url").value = state.aiUrl || "";
     $("ai-secret").value = state.aiSecret || "";
+    $("gh-token").value = state.ghToken || "";
     renderThemeChips();
   }
   window.scrollTo(0, 0);
@@ -390,11 +493,11 @@ async function handleImage(file) {
     if (state.ocrCancelled) return;
     $("processing-overlay").hidden = true;
     if (!parsed.total && !parsed.merchant && !parsed.items.length) {
-      toast("Couldn't read that — try better lighting, or enter manually");
-      openConfirmSheet(null);
-      return;
+      toast(state.ghToken ? "Couldn't read it — save anyway, Claude will fill it in" : "Couldn't read that — try better lighting, or enter manually");
     }
-    openConfirmSheet(parsedToDraft(parsed));
+    const draft = parsedToDraft(parsed);
+    draft._file = file;
+    openConfirmSheet(draft);
   } catch (err) {
     if (state.ocrCancelled) return;
     $("processing-overlay").hidden = true;
@@ -509,30 +612,39 @@ async function saveExpense() {
   const e = state.editing;
   if (!e) return;
   const amount = parseFloat(($("confirm-amount").value || "").replace(/[^\d.]/g, ""));
-  if (!(amount > 0)) { toast("Enter an amount"); $("confirm-amount").focus(); return; }
+  /* With the Claude inbox configured, a scanned receipt may be saved without
+     an amount — Claude fills it in later. */
+  const canPend = !!(!e.id && e.fromReceipt && e._file && state.ghToken);
+  if (!(amount > 0) && !canPend) { toast("Enter an amount"); $("confirm-amount").focus(); return; }
 
   const dateStr = $("confirm-date").value;
   const timeStr = $("confirm-time").value || "12:00";
   const d = dateStr ? new Date(dateStr + "T" + timeStr) : new Date();
 
   const record = {
-    amount: Math.round(amount * 100) / 100,
+    amount: amount > 0 ? Math.round(amount * 100) / 100 : 0,
     merchant: $("confirm-merchant").value.trim(),
     category: e.category || "Other",
     date: d.toISOString(),
     items: e.items || [],
     note: $("confirm-note").value.trim(),
+    pending: !(amount > 0) && canPend,
     createdAt: e.createdAt || new Date().toISOString()
   };
 
   if (e.id) {
     record.id = e.id;
+    record.pending = !!(e.pending && !(amount > 0));
     await DB.updateExpense(record);
     const i = state.expenses.findIndex(x => x.id === e.id);
     if (i >= 0) state.expenses[i] = record;
   } else {
     record.id = await DB.addExpense(record);
     state.expenses.push(record);
+  }
+
+  if (!e.id && e._file && state.ghToken) {
+    queuePhotoForClaude(record.id, e._file);
   }
 
   rememberMerchantCategory(record.merchant, record.category);
@@ -543,7 +655,7 @@ async function saveExpense() {
   const now = new Date();
   state.monthOffset = (saved.getFullYear() - now.getFullYear()) * 12 + (saved.getMonth() - now.getMonth());
   switchView("home");
-  toast(e.id ? "Updated" : "Saved " + fmtRM(record.amount, true));
+  toast(record.pending ? "Saved — Claude will fill it in" : e.id ? "Updated" : "Saved " + fmtRM(record.amount, true));
 }
 
 function renderCurrent() {
@@ -585,6 +697,7 @@ async function init() {
   state.theme = await DB.getSetting("theme", "auto");
   state.aiUrl = await DB.getSetting("aiUrl", "");
   state.aiSecret = await DB.getSetting("aiSecret", "");
+  state.ghToken = await DB.getSetting("ghToken", "");
   applyTheme();
   darkMedia.addEventListener("change", () => { if (state.theme === "auto") applyTheme(); });
   renderHome();
@@ -652,6 +765,26 @@ async function init() {
     toast("Budget saved");
   });
   $("export-csv").addEventListener("click", exportCSV);
+  $("gh-token").addEventListener("change", async () => {
+    state.ghToken = $("gh-token").value.trim();
+    await DB.setSetting("ghToken", state.ghToken);
+  });
+  $("gh-test").addEventListener("click", async () => {
+    const token = $("gh-token").value.trim();
+    if (!token) { toast("Paste the GitHub token first"); return; }
+    state.ghToken = token;
+    await DB.setSetting("ghToken", token);
+    toast("Testing…");
+    try {
+      const res = await fetch("https://api.github.com/repos/" + GH_REPO + "/contents/inbox", { headers: ghHeaders() });
+      if (res.ok) { toast("Connected — Claude inbox is ready"); syncInbox(); }
+      else if (res.status === 401) toast("Token not valid — check it was copied fully");
+      else if (res.status === 404) toast("Token can't see resit-inbox — check its repository access");
+      else toast("Connection failed (" + res.status + ")");
+    } catch (e) {
+      toast("Could not reach GitHub — check your connection");
+    }
+  });
   $("ai-url").addEventListener("change", async () => {
     state.aiUrl = $("ai-url").value.trim();
     await DB.setSetting("aiUrl", state.aiUrl);
@@ -708,6 +841,12 @@ async function init() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
+
+  /* Pick up Claude's results and push any queued photos. */
+  syncInbox();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") syncInbox();
+  });
 }
 
 init();

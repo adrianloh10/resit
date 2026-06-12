@@ -1,5 +1,5 @@
 const DB_NAME = "resit";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -12,6 +12,9 @@ function openDB() {
       }
       if (!db.objectStoreNames.contains("settings")) {
         db.createObjectStore("settings", { keyPath: "key" });
+      }
+      if (!db.objectStoreNames.contains("photos")) {
+        db.createObjectStore("photos", { keyPath: "id" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -54,11 +57,22 @@ const DB = {
     }));
   },
   setSetting(key, value) { return tx("settings", "readwrite", s => s.put({ key, value })); },
+  addPhoto(p) { return tx("photos", "readwrite", s => s.put(p)); },
+  updatePhoto(p) { return tx("photos", "readwrite", s => s.put(p)); },
+  deletePhoto(id) { return tx("photos", "readwrite", s => s.delete(id)); },
+  getAllPhotos() {
+    return getDB().then(db => new Promise((resolve, reject) => {
+      const req = db.transaction("photos").objectStore("photos").getAll();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    }));
+  },
   eraseAll() {
     return getDB().then(db => new Promise((resolve, reject) => {
-      const t = db.transaction(["expenses", "settings"], "readwrite");
+      const t = db.transaction(["expenses", "settings", "photos"], "readwrite");
       t.objectStore("expenses").clear();
       t.objectStore("settings").clear();
+      t.objectStore("photos").clear();
       t.oncomplete = () => resolve();
       t.onerror = () => reject(t.error);
     }));
