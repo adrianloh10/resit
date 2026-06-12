@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Resit</title>
 <meta name="description" content="Snap receipts, track spending. Everything stays on your phone.">
-<meta name="theme-color" content="#F7F3EC">
+<meta name="theme-color" content="#F7F3EC" id="meta-theme">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -49,6 +49,10 @@
     <span class="spacer"></span>
   </header>
   <section class="settings-body">
+    <div class="field">
+      <span class="field-label">Appearance</span>
+      <div class="chip-row" style="justify-content: flex-start; margin-top: 4px;" id="theme-chips"></div>
+    </div>
     <label class="field">
       <span class="field-label">Monthly budget (RM)</span>
       <input type="number" id="budget-input" inputmode="decimal" min="0" step="50">
@@ -56,7 +60,7 @@
     <button class="ghost-btn" id="export-csv">Export all expenses (CSV)</button>
     <button class="ghost-btn" id="copy-scan">Copy last scan text</button>
     <button class="ghost-btn danger" id="erase-data">Erase all data</button>
-    <p class="settings-note"><span id="app-version"></span>Resit keeps everything on this phone. Nothing is uploaded anywhere.</p>
+    <p class="settings-note"><span id="app-version"></span>Resit keeps everything on this phone and learns from your corrections — categories, shop names, and where each shop prints its total. Nothing is uploaded anywhere.</p>
   </section>
 </main>
 
@@ -69,6 +73,9 @@
   </button>
   <button class="nav-btn" id="nav-insights" aria-label="Insights">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 19V11M12 19V5M19 19v-6"/></svg>
+  </button>
+  <button class="nav-btn" id="nav-settings" aria-label="Settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/></svg>
   </button>
 </nav>
 

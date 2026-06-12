@@ -700,4 +700,9 @@ function parseReceiptText(text) {
   return { total, totalConf, date, time, merchant, category, items, rawText: text };
 }
 
-window.ReceiptOCR = { ocrImage, scanReceipt, parseReceiptText, guessCategory, CATEGORIES };
+function amountFromLine(line) {
+  const a = totalLineAmounts(line, 12);
+  return a.length ? Math.max(...a) : null;
+}
+
+window.ReceiptOCR = { ocrImage, scanReceipt, parseReceiptText, guessCategory, amountFromLine, CATEGORIES };

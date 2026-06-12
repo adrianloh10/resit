@@ -1,6 +1,6 @@
 /* Resit — snap receipts, track spending. All data stays on-device. */
 
-const APP_VERSION = "v10"; /* keep in step with CACHE in sw.js */
+const APP_VERSION = "v11"; /* keep in step with CACHE in sw.js */
 
 const $ = id => document.getElementById(id);
 const CATS = window.ReceiptOCR.CATEGORIES;
@@ -14,8 +14,39 @@ let state = {
   budget: 3000,
   editing: null,
   ocrCancelled: false,
-  merchantCats: {}
+  merchantCats: {},
+  merchantNames: {},
+  totalHints: {},
+  theme: "auto"
 };
+
+/* ---------- Theme ---------- */
+
+const darkMedia = window.matchMedia("(prefers-color-scheme: dark)");
+
+function applyTheme() {
+  const resolved = state.theme === "auto" ? (darkMedia.matches ? "dark" : "light") : state.theme;
+  document.documentElement.dataset.theme = resolved;
+  $("meta-theme").setAttribute("content", resolved === "dark" ? "#1A1714" : "#F7F3EC");
+}
+
+function renderThemeChips() {
+  const row = $("theme-chips");
+  row.innerHTML = "";
+  for (const t of ["auto", "light", "dark"]) {
+    const b = document.createElement("button");
+    const sel = state.theme === t;
+    b.className = "chip" + (sel ? " selected" : "");
+    b.textContent = t === "auto" ? "Auto" : t === "light" ? "Light" : "Dark";
+    b.addEventListener("click", async () => {
+      state.theme = t;
+      await DB.setSetting("theme", t);
+      applyTheme();
+      renderThemeChips();
+    });
+    row.appendChild(b);
+  }
+}
 
 /* ---------- Learned merchant -> category memory ---------- */
 
@@ -51,6 +82,48 @@ function rememberMerchantCategory(merchant, category) {
   if (state.merchantCats[n] === category) return;
   state.merchantCats[n] = category;
   DB.setSetting("merchantCats", state.merchantCats);
+}
+
+/* ---------- Learning from corrections ----------
+   When a scanned field is corrected before saving, remember the lesson:
+   - the name you prefer for this shop
+   - which line of this shop's receipts carries the real total */
+
+function learnFromCorrections(e, record) {
+  if (!e.fromReceipt) return;
+  const parsedBrand = brandOf(normMerchant(e._parsedMerchant || ""));
+  if (parsedBrand.length >= 3 && record.merchant && record.merchant !== e._parsedMerchant) {
+    state.merchantNames[parsedBrand] = record.merchant;
+    DB.setSetting("merchantNames", state.merchantNames);
+  }
+  if (e._rawText && record.amount > 0 && Math.abs((e._parsedTotal || 0) - record.amount) > 0.005) {
+    const f = record.amount.toFixed(2);
+    const variants = [f, f.replace(".", " "), f.replace(".", ","), f.replace(/\.00$/, "")];
+    let hintLine = null;
+    for (const line of e._rawText.split("\n")) {
+      if (variants.some(v => v && line.includes(v))) { hintLine = line; break; }
+    }
+    if (hintLine && parsedBrand.length >= 3) {
+      const kw = (hintLine.match(/[A-Za-z][A-Za-z .]{3,24}/) || [""])[0].trim().toLowerCase();
+      if (kw.length >= 4) {
+        state.totalHints[parsedBrand] = kw;
+        DB.setSetting("totalHints", state.totalHints);
+        toast("Learned where " + (record.merchant || "this shop") + " prints its total");
+      }
+    }
+  }
+}
+
+function applyLearnedTotalHint(parsed) {
+  const brand = brandOf(normMerchant(parsed.merchant || ""));
+  const hint = state.totalHints[brand];
+  if (!hint || !parsed.rawText) return;
+  const line = parsed.rawText.split("\n").find(l => l.toLowerCase().includes(hint));
+  if (!line) return;
+  const amt = window.ReceiptOCR.amountFromLine(line);
+  if (amt && (parsed.total === null || (parsed.totalConf || 0) <= 1)) {
+    parsed.total = amt;
+  }
 }
 
 function viewedMonth() {
@@ -201,10 +274,10 @@ function switchView(name) {
   $("view-settings").hidden = name !== "settings";
   $("nav-home").classList.toggle("active", name === "home");
   $("nav-insights").classList.toggle("active", name === "insights");
-  $("bottom-nav").style.display = name === "settings" ? "none" : "";
+  $("nav-settings").classList.toggle("active", name === "settings");
   if (name === "home") renderHome();
   if (name === "insights") renderInsights();
-  if (name === "settings") $("budget-input").value = state.budget || "";
+  if (name === "settings") { $("budget-input").value = state.budget || ""; renderThemeChips(); }
   window.scrollTo(0, 0);
 }
 
@@ -224,6 +297,7 @@ async function handleImage(file) {
     if (state.ocrCancelled) return;
     $("processing-overlay").hidden = true;
     DB.setSetting("lastScan", parsed.rawText || "");
+    applyLearnedTotalHint(parsed);
     if (!parsed.total && !parsed.merchant && !parsed.items.length) {
       toast("Couldn't read that — try better lighting, or enter manually");
       openConfirmSheet(null);
@@ -243,11 +317,16 @@ function parsedToDraft(parsed) {
   if (parsed.time) d.setHours(parsed.time.h, parsed.time.min, 0, 0);
   else if (!parsed.date) { /* keep now */ }
   else { const now = new Date(); d.setHours(now.getHours(), now.getMinutes(), 0, 0); }
+  const brand = brandOf(normMerchant(parsed.merchant || ""));
+  const preferredName = state.merchantNames[brand];
   return {
     id: null,
     amount: parsed.total || null,
-    merchant: parsed.merchant || "",
-    category: learnedCategory(parsed.merchant) || parsed.category || "Other",
+    merchant: preferredName || parsed.merchant || "",
+    category: learnedCategory(preferredName || parsed.merchant) || parsed.category || "Other",
+    _rawText: parsed.rawText,
+    _parsedTotal: parsed.total,
+    _parsedMerchant: parsed.merchant,
     date: d.toISOString(),
     items: parsed.items || [],
     note: "",
@@ -366,6 +445,7 @@ async function saveExpense() {
   }
 
   rememberMerchantCategory(record.merchant, record.category);
+  learnFromCorrections(e, record);
 
   closeConfirmSheet();
   const saved = new Date(record.date);
@@ -409,7 +489,11 @@ async function exportCSV() {
 async function init() {
   state.budget = await DB.getSetting("budget", 3000);
   state.merchantCats = await DB.getSetting("merchantCats", {});
-  state.expenses = await DB.getAllExpenses();
+  state.merchantNames = await DB.getSetting("merchantNames", {});
+  state.totalHints = await DB.getSetting("totalHints", {});
+  state.theme = await DB.getSetting("theme", "auto");
+  applyTheme();
+  darkMedia.addEventListener("change", () => { if (state.theme === "auto") applyTheme(); });
   renderHome();
 
   $("month-prev").addEventListener("click", () => { state.monthOffset--; renderHome(); });
@@ -419,7 +503,8 @@ async function init() {
 
   $("nav-home").addEventListener("click", () => switchView("home"));
   $("nav-insights").addEventListener("click", () => switchView("insights"));
-  $("settings-back").addEventListener("click", () => switchView("insights"));
+  $("nav-settings").addEventListener("click", () => switchView("settings"));
+  $("settings-back").addEventListener("click", () => switchView("home"));
 
   $("fab-camera").addEventListener("click", openChooser);
   $("choose-camera").addEventListener("click", () => { $("chooser-overlay").hidden = true; $("camera-input").click(); });
@@ -468,6 +553,8 @@ async function init() {
     state.expenses = [];
     state.budget = 3000;
     state.merchantCats = {};
+    state.merchantNames = {};
+    state.totalHints = {};
     switchView("home");
     toast("All data erased");
   });
