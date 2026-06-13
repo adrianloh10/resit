@@ -1,6 +1,6 @@
 /* Resit — snap receipts, track spending. All data stays on-device. */
 
-const APP_VERSION = "v17"; /* keep in step with CACHE in sw.js */
+const APP_VERSION = "v18"; /* keep in step with CACHE in sw.js */
 
 const $ = id => document.getElementById(id);
 const CATS = window.ReceiptOCR.CATEGORIES;
@@ -97,8 +97,15 @@ async function fetchClaudeResults() {
 }
 
 async function applyClaudeResult(data) {
-  const e = state.expenses.find(x => String(x.id) === String(data.expenseId));
-  if (!e) return false;
+  let e = state.expenses.find(x => String(x.id) === String(data.expenseId));
+  let created = false;
+  /* Self-heal: if the pending expense is missing (storage hiccup, reinstall),
+     recreate it from Claude's result — the uploaded photo means the data
+     is never lost. */
+  if (!e) {
+    e = { amount: 0, merchant: "Receipt", category: "Other", date: new Date().toISOString(), items: [], note: "", pending: true, createdAt: new Date().toISOString() };
+    created = true;
+  }
   if (typeof data.total === "number" && data.total > 0 && data.total < 100000) {
     e.amount = Math.round(data.total * 100) / 100;
   }
@@ -120,7 +127,12 @@ async function applyClaudeResult(data) {
     if (items.length) e.items = items;
   }
   e.pending = false;
-  await DB.updateExpense(e);
+  if (created) {
+    e.id = await DB.addExpense(e);
+    state.expenses.push(e);
+  } else {
+    await DB.updateExpense(e);
+  }
   return true;
 }
 
@@ -711,14 +723,31 @@ async function exportCSV() {
 /* ---------- Init ---------- */
 
 async function init() {
-  state.budget = await DB.getSetting("budget", 3000);
-  state.merchantCats = await DB.getSetting("merchantCats", {});
-  state.merchantNames = await DB.getSetting("merchantNames", {});
-  state.totalHints = await DB.getSetting("totalHints", {});
-  state.theme = await DB.getSetting("theme", "auto");
-  state.aiUrl = await DB.getSetting("aiUrl", "");
-  state.aiSecret = await DB.getSetting("aiSecret", "");
-  state.ghToken = await DB.getSetting("ghToken", "");
+  /* Storage must never blank the app: if loading fails (e.g. stale cached
+     script vs upgraded DB), update the service worker and reload once. */
+  try {
+    state.budget = await DB.getSetting("budget", 3000);
+    state.merchantCats = await DB.getSetting("merchantCats", {});
+    state.merchantNames = await DB.getSetting("merchantNames", {});
+    state.totalHints = await DB.getSetting("totalHints", {});
+    state.theme = await DB.getSetting("theme", "auto");
+    state.aiUrl = await DB.getSetting("aiUrl", "");
+    state.aiSecret = await DB.getSetting("aiSecret", "");
+    state.ghToken = await DB.getSetting("ghToken", "");
+    state.expenses = await DB.getAllExpenses();
+    sessionStorage.removeItem("dbRetry");
+  } catch (err) {
+    if (!sessionStorage.getItem("dbRetry")) {
+      sessionStorage.setItem("dbRetry", "1");
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) await reg.update();
+      } catch (e2) {}
+      setTimeout(() => location.reload(), 600);
+      return;
+    }
+    toast("Couldn't open storage — your data is safe; close and reopen the app");
+  }
   applyTheme();
   darkMedia.addEventListener("change", () => { if (state.theme === "auto") applyTheme(); });
   renderHome();

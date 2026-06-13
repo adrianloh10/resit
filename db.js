@@ -18,7 +18,14 @@ function openDB() {
       }
     };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => {
+      /* A stale-cached older script can request an older DB version than the
+         database already has (VersionError) — that must never blank the app.
+         Reopen at whatever version exists. */
+      const retry = indexedDB.open(DB_NAME);
+      retry.onsuccess = () => resolve(retry.result);
+      retry.onerror = () => reject(retry.error);
+    };
   });
 }
 

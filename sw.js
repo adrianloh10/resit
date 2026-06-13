@@ -1,4 +1,4 @@
-const CACHE = "resit-v17";
+const CACHE = "resit-v18";
 const SHELL = [
   "./",
   "./index.html",
@@ -13,7 +13,14 @@ const SHELL = [
 ];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  /* cache: "reload" bypasses the HTTP cache so the precached set is truly
+     the newest release — and addAll is all-or-nothing, so the app shell is
+     always a consistent single version (no mixed old/new files). */
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => c.addAll(SHELL.map(u => new Request(u, { cache: "reload" }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", e => {
@@ -27,21 +34,19 @@ self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET") return;
 
-  /* Same-origin: stale-while-revalidate — serve instantly from cache,
-     refresh in the background so the next launch gets new code. */
+  /* Same-origin: cache-first from THIS release's precache. Updates arrive
+     atomically when a new SW version installs (its precache is complete
+     before activation), so the app can never run mixed old/new files. */
   if (url.origin === location.origin) {
     e.respondWith((async () => {
       const cached = await caches.match(e.request);
-      /* no-cache: revalidate with the server, not the HTTP cache, so app
-         updates actually reach installed phones. */
-      const network = fetch(e.request, { cache: "no-cache" }).then(res => {
-        if (res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, copy));
-        }
-        return res;
-      }).catch(() => cached);
-      return cached || network;
+      if (cached) return cached;
+      const res = await fetch(e.request);
+      if (res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy));
+      }
+      return res;
     })());
     return;
   }
