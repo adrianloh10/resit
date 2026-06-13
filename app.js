@@ -1,6 +1,6 @@
 /* Resit — snap receipts, track spending. All data stays on-device. */
 
-const APP_VERSION = "v16"; /* keep in step with CACHE in sw.js */
+const APP_VERSION = "v17"; /* keep in step with CACHE in sw.js */
 
 const $ = id => document.getElementById(id);
 const CATS = window.ReceiptOCR.CATEGORIES;
@@ -471,6 +471,27 @@ function openChooser() {
 
 async function handleImage(file) {
   if (!file) return;
+  /* Claude inbox mode: no on-device reading, no animation — save instantly
+     as pending and let Claude fill in everything when it reviews the photo. */
+  if (state.ghToken) {
+    const record = {
+      amount: 0,
+      merchant: "Receipt",
+      category: "Other",
+      date: new Date().toISOString(),
+      items: [],
+      note: "",
+      pending: true,
+      createdAt: new Date().toISOString()
+    };
+    record.id = await DB.addExpense(record);
+    state.expenses.push(record);
+    queuePhotoForClaude(record.id, file);
+    state.monthOffset = 0;
+    switchView("home");
+    toast("Saved — Claude will fill it in");
+    return;
+  }
   state.ocrCancelled = false;
   $("processing-overlay").hidden = false;
   $("processing-text").textContent = "Reading receipt…";
