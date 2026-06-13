@@ -64,6 +64,25 @@ const DB = {
     }));
   },
   setSetting(key, value) { return tx("settings", "readwrite", s => s.put({ key, value })); },
+  getAllSettings() {
+    return getDB().then(db => new Promise((resolve, reject) => {
+      const req = db.transaction("settings").objectStore("settings").getAll();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    }));
+  },
+  /* Restore from backup: clear all expenses then add the backup's records,
+     keeping their ids so nothing collides or is double-counted. */
+  replaceAllExpenses(list) {
+    return getDB().then(db => new Promise((resolve, reject) => {
+      const t = db.transaction("expenses", "readwrite");
+      const store = t.objectStore("expenses");
+      store.clear();
+      for (const e of list) store.put({ ...e });
+      t.oncomplete = () => resolve();
+      t.onerror = () => reject(t.error);
+    }));
+  },
   addPhoto(p) { return tx("photos", "readwrite", s => s.put(p)); },
   updatePhoto(p) { return tx("photos", "readwrite", s => s.put(p)); },
   deletePhoto(id) { return tx("photos", "readwrite", s => s.delete(id)); },

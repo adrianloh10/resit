@@ -24,14 +24,20 @@
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/></svg>
       </button>
       <button class="icon-btn" id="month-prev" aria-label="Previous month">&#8249;</button>
-      <p class="month-label" id="month-label">June</p>
+      <p class="month-label" id="month-label" title="Tap to jump to this month">June</p>
       <button class="icon-btn" id="month-next" aria-label="Next month">&#8250;</button>
-      <span class="spacer"></span>
+      <button class="icon-btn" id="search-toggle" aria-label="Search">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      </button>
     </div>
     <p class="big-amount" id="month-total">0<span class="cents">.00</span></p>
     <p class="budget-line" id="budget-line">of RM 3,000 budget</p>
     <div class="budget-track"><div class="budget-fill" id="budget-fill"></div></div>
   </header>
+  <div class="search-bar" id="search-bar" hidden>
+    <input type="search" id="search-input" placeholder="Search merchant, note or item…" autocomplete="off">
+    <div class="chip-row filter-chips" id="filter-chips"></div>
+  </div>
   <section class="ledger" id="ledger"></section>
   <p class="empty-note" id="empty-note">No expenses yet.<br>Tap the camera to snap your first receipt.</p>
 </main>
@@ -66,21 +72,42 @@
       <span class="field-label">Monthly budget (RM)</span>
       <input type="number" id="budget-input" inputmode="decimal" min="0" step="50">
     </label>
+    <details class="adv-details">
+      <summary>Category budgets (optional)</summary>
+      <div class="cat-budgets" id="cat-budgets"></div>
+    </details>
     <div class="field">
       <span class="field-label">Claude inbox (free — your receipts get checked by Claude on your PC)</span>
       <input type="password" id="gh-token" placeholder="GitHub token (github_pat_...)">
-      <button class="ghost-btn small" id="gh-test" style="margin-top: 8px;">Test connection</button>
+      <div class="btn-pair">
+        <button class="ghost-btn small" id="gh-test">Test connection</button>
+        <button class="ghost-btn small" id="sync-now">Check for Claude's updates</button>
+      </div>
+      <p class="sync-status" id="sync-status"></p>
     </div>
     <div class="field">
-      <span class="field-label">AI assist (instant API reading — optional)</span>
-      <input type="url" id="ai-url" placeholder="Relay URL, e.g. https://resit-xxx.vercel.app/api/read-receipt" style="margin-bottom: 8px;">
-      <input type="password" id="ai-secret" placeholder="Access code">
-      <button class="ghost-btn small" id="ai-test" style="margin-top: 8px;">Test connection</button>
+      <span class="field-label">Your data</span>
+      <div class="btn-pair">
+        <button class="ghost-btn small" id="backup-data">Back up (.json)</button>
+        <button class="ghost-btn small" id="restore-data">Restore from backup</button>
+      </div>
+      <div class="btn-pair">
+        <button class="ghost-btn small" id="export-csv">Export CSV</button>
+        <button class="ghost-btn small" id="export-xls">Export Excel</button>
+      </div>
     </div>
-    <button class="ghost-btn" id="export-csv">Export all expenses (CSV)</button>
-    <button class="ghost-btn" id="copy-scan">Copy last scan text</button>
+    <details class="adv-details">
+      <summary>Advanced</summary>
+      <div class="field" style="margin-top: 12px;">
+        <span class="field-label">AI assist (instant API reading — optional)</span>
+        <input type="url" id="ai-url" placeholder="Relay URL, e.g. https://resit-xxx.vercel.app/api/read-receipt" style="margin-bottom: 8px;">
+        <input type="password" id="ai-secret" placeholder="Access code">
+        <button class="ghost-btn small" id="ai-test" style="margin-top: 8px;">Test connection</button>
+      </div>
+      <button class="ghost-btn small" id="copy-scan" style="margin-top: 12px;">Copy last scan text</button>
+    </details>
     <button class="ghost-btn danger" id="erase-data">Erase all data</button>
-    <p class="settings-note"><span id="app-version"></span>Resit keeps everything on this phone and learns from your corrections — categories, shop names, and where each shop prints its total. Nothing is uploaded anywhere.</p>
+    <p class="settings-note"><span id="app-version"></span>Resit keeps everything on this phone and learns from your corrections — categories, shop names, and where each shop prints its total. Nothing is uploaded anywhere except the receipt photos sent to your private Claude inbox.</p>
   </section>
 </main>
 
@@ -98,6 +125,7 @@
 
 <input type="file" id="camera-input" accept="image/*" capture="environment" hidden>
 <input type="file" id="gallery-input" accept="image/*" hidden>
+<input type="file" id="restore-input" accept="application/json,.json" hidden>
 
 <div class="overlay sheet-overlay" id="chooser-overlay" hidden>
   <div class="confirm-sheet chooser-sheet">
@@ -135,6 +163,7 @@
       <p class="sheet-title" id="confirm-title">Check &amp; save</p>
       <span class="spacer"></span>
     </header>
+    <div class="photo-block" id="photo-block"></div>
     <div class="confirm-amount-wrap">
       <span class="rm-prefix">RM</span>
       <input class="confirm-amount" id="confirm-amount" inputmode="decimal" type="text" placeholder="0.00">
@@ -150,6 +179,10 @@
     <button class="save-btn" id="save-btn">Save</button>
     <p class="edit-hint">Tap anything to edit</p>
   </div>
+</div>
+
+<div class="overlay photo-overlay" id="photo-overlay" hidden>
+  <img id="photo-full" alt="Receipt photo">
 </div>
 
 <div class="toast" id="toast" hidden></div>

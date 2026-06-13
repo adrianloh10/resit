@@ -1,6 +1,6 @@
 /* Resit — snap receipts, track spending. All data stays on-device. */
 
-const APP_VERSION = "v18"; /* keep in step with CACHE in sw.js */
+const APP_VERSION = "v19"; /* keep in step with CACHE in sw.js */
 
 const $ = id => document.getElementById(id);
 const CATS = window.ReceiptOCR.CATEGORIES;
@@ -17,10 +17,15 @@ let state = {
   merchantCats: {},
   merchantNames: {},
   totalHints: {},
+  catBudgets: {},
   theme: "auto",
   aiUrl: "",
   aiSecret: "",
-  ghToken: ""
+  ghToken: "",
+  search: "",
+  filterCat: "",
+  syncStatus: "",   /* "", "syncing", "ok", "auth", "offline" */
+  lastSyncAt: null
 };
 
 /* ---------- Claude inbox (free — processed by Claude Code on the PC) ----------
@@ -45,10 +50,35 @@ async function queuePhotoForClaude(expenseId, file) {
   } catch (e) { /* photo conversion failed — expense is still saved */ }
 }
 
+function setSyncStatus(s) {
+  state.syncStatus = s;
+  if (s === "ok" || s === "auth" || s === "offline") state.lastSyncAt = new Date().toISOString();
+  renderSyncStatus();
+}
+
+function renderSyncStatus() {
+  const el = $("sync-status");
+  if (!el) return;
+  if (!state.ghToken) { el.textContent = ""; return; }
+  const when = state.lastSyncAt ? new Date(state.lastSyncAt).toLocaleTimeString("en-MY", { hour: "2-digit", minute: "2-digit" }) : "";
+  const map = {
+    syncing: "Checking with Claude…",
+    ok: "Synced" + (when ? " · " + when : ""),
+    auth: "Reconnect needed — check your token",
+    offline: "Offline — will retry when online",
+    "": ""
+  };
+  el.textContent = map[state.syncStatus] || "";
+  el.className = "sync-status" + (state.syncStatus === "auth" ? " bad" : "");
+}
+
 let inboxSyncing = false;
 async function syncInbox() {
-  if (!state.ghToken || inboxSyncing || !navigator.onLine) return;
+  if (!state.ghToken || inboxSyncing) return;
+  if (!navigator.onLine) { setSyncStatus("offline"); return; }
   inboxSyncing = true;
+  setSyncStatus("syncing");
+  let authBad = false;
   try {
     const photos = await DB.getAllPhotos();
     for (const p of photos.filter(x => x.status === "queued")) {
@@ -62,17 +92,37 @@ async function syncInbox() {
         delete p.b64;
         await DB.updatePhoto(p);
       } else {
+        if (res.status === 401 || res.status === 403) authBad = true;
         break;
       }
     }
-    await fetchClaudeResults();
-  } catch (e) { /* offline or auth issue — retry next launch */ }
-  finally { inboxSyncing = false; }
+    const fetchOk = await fetchClaudeResults();
+    if (fetchOk === "auth") authBad = true;
+    setSyncStatus(authBad ? "auth" : "ok");
+  } catch (e) {
+    setSyncStatus(navigator.onLine ? "ok" : "offline");
+  } finally {
+    inboxSyncing = false;
+  }
+}
+
+/* Settings "Check for Claude's updates" button + pull-to-refresh. */
+async function manualSync() {
+  if (!state.ghToken) { toast("Set up the Claude inbox first"); return; }
+  if (!navigator.onLine) { toast("You're offline"); return; }
+  const before = state.expenses.filter(e => e.pending).length;
+  await syncInbox();
+  const after = state.expenses.filter(e => e.pending).length;
+  const filled = before - after;
+  if (state.syncStatus === "auth") toast("Couldn't connect — check your token");
+  else if (filled > 0) toast("Claude filled in " + filled + " receipt" + (filled > 1 ? "s" : ""));
+  else toast("Up to date" + (before > 0 ? " — " + before + " still waiting for Claude" : ""));
 }
 
 async function fetchClaudeResults() {
   const res = await fetch("https://api.github.com/repos/" + GH_REPO + "/contents/results", { headers: ghHeaders() });
-  if (!res.ok) return;
+  if (res.status === 401 || res.status === 403) return "auth";
+  if (!res.ok) return res.status === 404 ? true : false; /* 404 = no results dir yet, that's fine */
   const files = (await res.json()).filter(f => f.name.endsWith(".json"));
   let applied = 0;
   for (const f of files) {
@@ -94,6 +144,7 @@ async function fetchClaudeResults() {
     toast("Claude filled in " + applied + " receipt" + (applied > 1 ? "s" : ""));
     renderCurrent();
   }
+  return true;
 }
 
 async function applyClaudeResult(data) {
@@ -165,6 +216,34 @@ function renderThemeChips() {
       renderThemeChips();
     });
     row.appendChild(b);
+  }
+}
+
+function renderCatBudgets() {
+  const wrap = $("cat-budgets");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  for (const c of CATS) {
+    const row = document.createElement("label");
+    row.className = "cat-budget-row";
+    const name = document.createElement("span");
+    name.className = "cat-budget-name";
+    name.innerHTML = `<span class="cat-dot" style="background:${c.color}"></span>${c.name}`;
+    const input = document.createElement("input");
+    input.type = "number";
+    input.inputMode = "decimal";
+    input.min = "0";
+    input.step = "10";
+    input.placeholder = "—";
+    input.className = "cat-budget-input";
+    input.value = state.catBudgets[c.name] || "";
+    input.addEventListener("change", async () => {
+      const v = parseFloat(input.value) || 0;
+      if (v > 0) state.catBudgets[c.name] = v; else delete state.catBudgets[c.name];
+      await DB.setSetting("catBudgets", state.catBudgets);
+    });
+    row.append(name, input);
+    wrap.appendChild(row);
   }
 }
 
@@ -279,8 +358,8 @@ function renderHome() {
   const sameYear = m.getFullYear() === now.getFullYear();
   $("month-label").textContent = MONTH_NAMES[m.getMonth()] + (sameYear ? "" : " " + m.getFullYear());
 
-  const exps = monthExpenses();
-  const total = exps.reduce((s, e) => s + e.amount, 0);
+  const allExps = monthExpenses();
+  const total = allExps.reduce((s, e) => s + e.amount, 0);
   const [whole, cents] = fmtRM(total).split(".");
   $("month-total").innerHTML = `${whole}<span class="cents">.${cents}</span>`;
 
@@ -295,9 +374,45 @@ function renderHome() {
     $("budget-fill").style.width = "0";
   }
 
+  /* Possible-duplicate detection: same merchant + amount + day. Flag all but
+     the first in each group — non-destructive, just a visual hint. */
+  const dupIds = new Set();
+  const groups = {};
+  for (const e of allExps) {
+    if (!(e.amount > 0)) continue;
+    const key = e.amount.toFixed(2) + "|" + (e.merchant || "").trim().toLowerCase() + "|" + new Date(e.date).toDateString();
+    (groups[key] = groups[key] || []).push(e);
+  }
+  for (const arr of Object.values(groups)) {
+    if (arr.length < 2) continue;
+    arr.sort((a, b) => new Date(a.createdAt || a.date) - new Date(b.createdAt || b.date));
+    arr.slice(1).forEach(e => dupIds.add(e.id));
+  }
+
+  renderFilterChips(allExps);
+
+  /* Search + category filter only affect the list, not the month total. */
+  const q = state.search.trim().toLowerCase();
+  let exps = allExps;
+  if (q) exps = exps.filter(e =>
+    (e.merchant || "").toLowerCase().includes(q) ||
+    (e.note || "").toLowerCase().includes(q) ||
+    (e.category || "").toLowerCase().includes(q) ||
+    (e.items || []).some(i => (i.name || "").toLowerCase().includes(q)));
+  if (state.filterCat) exps = exps.filter(e => e.category === state.filterCat);
+
   const ledger = $("ledger");
   ledger.innerHTML = "";
-  $("empty-note").hidden = exps.length > 0;
+  const empty = $("empty-note");
+  if (!allExps.length) {
+    empty.hidden = false;
+    empty.innerHTML = "No expenses yet.<br>Tap the camera to snap your first receipt.";
+  } else if (!exps.length) {
+    empty.hidden = false;
+    empty.innerHTML = "No matches" + (q ? " for “" + escapeHtml(state.search.trim()) + "”" : "") + ".";
+  } else {
+    empty.hidden = true;
+  }
 
   let lastDay = "";
   for (const e of exps) {
@@ -314,18 +429,47 @@ function renderHome() {
       label.textContent = prefix + d.toLocaleDateString("en-MY", { weekday: "short", day: "numeric", month: "short" });
       ledger.appendChild(label);
     }
+    const dup = dupIds.has(e.id) ? `<span class="dup-flag">duplicate?</span> · ` : "";
+    const camera = e.photo ? `<span class="has-photo" aria-hidden="true">▦ </span>` : "";
+    const amountHtml = e.pending
+      ? `<span class="entry-amount waiting">waiting…</span>`
+      : `<span class="entry-amount">${fmtRM(e.amount)}</span>`;
     const row = document.createElement("button");
     row.className = "entry";
     row.innerHTML = `
       <span class="cat-dot" style="background:${CAT_COLOR[e.category] || CAT_COLOR.Other}"></span>
       <span class="entry-main">
-        <span class="entry-merchant">${escapeHtml(e.merchant || "Expense")}</span>
-        <span class="entry-cat">${e.pending ? "waiting for Claude · " : ""}${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
+        <span class="entry-merchant">${camera}${escapeHtml(e.merchant || "Expense")}</span>
+        <span class="entry-cat">${dup}${e.pending ? "waiting for Claude · " : ""}${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
       </span>
-      <span class="entry-amount">${fmtRM(e.amount)}</span>`;
+      ${amountHtml}`;
     row.addEventListener("click", () => openConfirmSheet(e));
     ledger.appendChild(row);
   }
+}
+
+function renderFilterChips(monthExps) {
+  const row = $("filter-chips");
+  if (!row) return;
+  const present = [...new Set(monthExps.map(e => e.category))];
+  const cats = CATS.filter(c => present.includes(c.name)).map(c => c.name);
+  row.innerHTML = "";
+  const mk = (label, value) => {
+    const b = document.createElement("button");
+    b.className = "chip small-chip" + (state.filterCat === value ? " selected" : "");
+    b.textContent = label;
+    b.addEventListener("click", () => { state.filterCat = state.filterCat === value ? "" : value; renderHome(); });
+    row.appendChild(b);
+  };
+  if (state.filterCat) mk("All", "");
+  for (const c of cats) mk(c, c);
+}
+
+function totalForMonth(year, monthIndex) {
+  return state.expenses.reduce((s, e) => {
+    const d = new Date(e.date);
+    return d.getFullYear() === year && d.getMonth() === monthIndex ? s + e.amount : s;
+  }, 0);
 }
 
 function renderInsights() {
@@ -338,7 +482,7 @@ function renderInsights() {
   const body = $("insights-body");
 
   if (!exps.length) {
-    body.innerHTML = `<p class="empty-note">Nothing this month yet.</p>`;
+    body.innerHTML = `<p class="empty-note" style="margin-top:40px">Nothing this month yet.</p>`;
     return;
   }
 
@@ -361,15 +505,55 @@ function renderInsights() {
       <p class="budget-line">${exps.length} expenses · ${dayCount} days · avg ${fmtRM(total / Math.max(1, dayCount), true)}/day</p>
     </div>`;
 
+  /* Month-over-month + year-to-date */
+  const prev = new Date(m.getFullYear(), m.getMonth() - 1, 1);
+  const prevTotal = totalForMonth(prev.getFullYear(), prev.getMonth());
+  let ytd = 0;
+  for (let mi = 0; mi <= m.getMonth(); mi++) ytd += totalForMonth(m.getFullYear(), mi);
+  let trend = "";
+  if (prevTotal > 0) {
+    const diff = total - prevTotal;
+    const pct = Math.round(Math.abs(diff) / prevTotal * 100);
+    const up = diff > 0;
+    trend = `<span class="trend ${up ? "up" : "down"}">${up ? "▲" : "▼"} ${pct}% vs ${MONTH_NAMES[prev.getMonth()].slice(0, 3)}</span>`;
+  } else {
+    trend = `<span class="trend flat">— no ${MONTH_NAMES[prev.getMonth()].slice(0, 3)} to compare</span>`;
+  }
+  html += `<div class="ins-trend-row">${trend}<span class="ytd">${m.getFullYear()} so far · ${fmtRM(ytd, true)}</span></div>`;
+
+  /* Last 6 months mini chart, ending at the viewed month */
+  const bars = [];
+  let maxM = 0;
+  for (let i = 5; i >= 0; i--) {
+    const dd = new Date(m.getFullYear(), m.getMonth() - i, 1);
+    const t = totalForMonth(dd.getFullYear(), dd.getMonth());
+    bars.push({ label: MONTH_NAMES[dd.getMonth()].slice(0, 3), total: t, current: i === 0 });
+    if (t > maxM) maxM = t;
+  }
+  html += `<p class="ins-section-label">Last 6 months</p><div class="trend-chart">`;
+  for (const b of bars) {
+    const h = maxM > 0 ? Math.max(3, Math.round(b.total / maxM * 64)) : 3;
+    html += `<div class="trend-col">
+      <span class="trend-val">${b.total > 0 ? Math.round(b.total) : ""}</span>
+      <div class="trend-bar ${b.current ? "cur" : ""}" style="height:${h}px"></div>
+      <span class="trend-lbl">${b.label}</span>
+    </div>`;
+  }
+  html += `</div>`;
+
+  html += `<p class="ins-section-label">By category</p>`;
   for (const [cat, amt] of cats) {
     const pct = Math.round((amt / total) * 100);
+    const cb = state.catBudgets[cat];
+    const over = cb > 0 && amt > cb;
+    const budgetNote = cb > 0 ? `<span class="cat-budget ${over ? "over" : ""}">${over ? "over " + fmtRM(amt - cb, true) : fmtRM(cb - amt, true) + " left"}</span>` : "";
     html += `
       <div class="cat-bar-row">
         <div class="cat-bar-head">
-          <span class="cat-bar-name">${escapeHtml(cat)}</span>
+          <span class="cat-bar-name">${escapeHtml(cat)} ${budgetNote}</span>
           <span class="cat-bar-amt">${fmtRM(amt)} · ${pct}%</span>
         </div>
-        <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${pct}%;background:${CAT_COLOR[cat] || CAT_COLOR.Other}"></div></div>
+        <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${pct}%;background:${over ? "var(--rust)" : (CAT_COLOR[cat] || CAT_COLOR.Other)}"></div></div>
       </div>`;
   }
 
@@ -404,6 +588,8 @@ function switchView(name) {
     $("ai-secret").value = state.aiSecret || "";
     $("gh-token").value = state.ghToken || "";
     renderThemeChips();
+    renderSyncStatus();
+    renderCatBudgets();
   }
   window.scrollTo(0, 0);
 }
@@ -425,6 +611,29 @@ function fileToJpegBase64(file, maxDim) {
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Could not read image")); };
     img.src = url;
+  });
+}
+
+/* Small on-device thumbnail (data URL) kept with the expense so the original
+   receipt can be re-checked later. Stays on the phone; never uploaded, never
+   in the backup file. */
+function fileToThumb(file, maxDim) {
+  return new Promise((resolve) => {
+    try {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL("image/jpeg", 0.6));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    } catch (e) { resolve(null); }
   });
 }
 
@@ -486,6 +695,7 @@ async function handleImage(file) {
   /* Claude inbox mode: no on-device reading, no animation — save instantly
      as pending and let Claude fill in everything when it reviews the photo. */
   if (state.ghToken) {
+    const thumb = await fileToThumb(file, 700);
     const record = {
       amount: 0,
       merchant: "Receipt",
@@ -494,6 +704,7 @@ async function handleImage(file) {
       items: [],
       note: "",
       pending: true,
+      photo: thumb || undefined,
       createdAt: new Date().toISOString()
     };
     record.id = await DB.addExpense(record);
@@ -579,21 +790,8 @@ function openConfirmSheet(expense) {
   $("confirm-note").value = e.note || "";
 
   renderCategoryChips();
-
-  const itemsBlock = $("items-block");
-  itemsBlock.innerHTML = "";
-  if (e.items && e.items.length) {
-    const label = document.createElement("p");
-    label.className = "items-label";
-    label.textContent = e.items.length + (e.items.length === 1 ? " item read from receipt" : " items read from receipt");
-    itemsBlock.appendChild(label);
-    for (const it of e.items) {
-      const row = document.createElement("div");
-      row.className = "item-row";
-      row.innerHTML = `<span class="item-name">${escapeHtml(it.name)}</span><span class="item-price">${fmtRM(it.price)}</span>`;
-      itemsBlock.appendChild(row);
-    }
-  }
+  renderPhotoBlock();
+  renderItemsEditor();
 
   let del = $("delete-btn");
   if (del) del.remove();
@@ -614,6 +812,72 @@ function openConfirmSheet(expense) {
 
   $("confirm-overlay").hidden = false;
   if (!e.amount) setTimeout(() => $("confirm-amount").focus(), 50);
+}
+
+function renderPhotoBlock() {
+  const block = $("photo-block");
+  if (!block) return;
+  const e = state.editing;
+  block.innerHTML = "";
+  if (e && e.photo) {
+    const img = document.createElement("img");
+    img.className = "receipt-thumb";
+    img.src = e.photo;
+    img.alt = "Receipt photo — tap to enlarge";
+    img.addEventListener("click", () => openPhoto(e.photo));
+    block.appendChild(img);
+  }
+}
+
+function openPhoto(src) {
+  const ov = $("photo-overlay");
+  const img = $("photo-full");
+  if (!ov || !img) return;
+  img.src = src;
+  ov.hidden = false;
+}
+
+function renderItemsEditor() {
+  const e = state.editing;
+  const block = $("items-block");
+  if (!block || !e) return;
+  e.items = e.items || [];
+  block.innerHTML = "";
+  const label = document.createElement("p");
+  label.className = "items-label";
+  label.textContent = e.items.length ? "Items" : "Items (optional)";
+  block.appendChild(label);
+  e.items.forEach((it, idx) => {
+    const row = document.createElement("div");
+    row.className = "item-edit-row";
+    const name = document.createElement("input");
+    name.className = "item-name-input";
+    name.type = "text";
+    name.value = it.name || "";
+    name.placeholder = "Item";
+    name.addEventListener("input", () => { e.items[idx].name = name.value; });
+    const price = document.createElement("input");
+    price.className = "item-price-input";
+    price.type = "text";
+    price.inputMode = "decimal";
+    price.value = it.price != null && it.price !== 0 ? Number(it.price).toFixed(2) : "";
+    price.placeholder = "0.00";
+    price.addEventListener("input", () => { e.items[idx].price = parseFloat(price.value.replace(/[^\d.]/g, "")) || 0; });
+    const del = document.createElement("button");
+    del.className = "item-del";
+    del.type = "button";
+    del.textContent = "✕";
+    del.setAttribute("aria-label", "Remove item");
+    del.addEventListener("click", () => { e.items.splice(idx, 1); renderItemsEditor(); });
+    row.append(name, price, del);
+    block.appendChild(row);
+  });
+  const add = document.createElement("button");
+  add.className = "add-item-btn";
+  add.type = "button";
+  add.textContent = "+ Add item";
+  add.addEventListener("click", () => { e.items.push({ name: "", price: 0 }); renderItemsEditor(); });
+  block.appendChild(add);
 }
 
 function renderCategoryChips() {
@@ -654,14 +918,19 @@ async function saveExpense() {
   const timeStr = $("confirm-time").value || "12:00";
   const d = dateStr ? new Date(dateStr + "T" + timeStr) : new Date();
 
+  let photo = e.photo;
+  if (!photo && e._file) photo = await fileToThumb(e._file, 700);
+
   const record = {
     amount: amount > 0 ? Math.round(amount * 100) / 100 : 0,
     merchant: $("confirm-merchant").value.trim(),
     category: e.category || "Other",
     date: d.toISOString(),
-    items: e.items || [],
+    items: (e.items || []).filter(i => i && ((i.name && i.name.trim()) || i.price > 0))
+      .map(i => ({ name: (i.name || "").trim(), price: Math.round((i.price || 0) * 100) / 100 })),
     note: $("confirm-note").value.trim(),
     pending: !(amount > 0) && canPend,
+    photo: photo || undefined,
     createdAt: e.createdAt || new Date().toISOString()
   };
 
@@ -712,10 +981,90 @@ async function exportCSV() {
     ]);
   }
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  downloadBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), "resit-expenses.csv");
+}
+
+/* Styled Excel export — dependency-free. An HTML table with Excel's XML
+   namespace opens directly in Excel/Sheets with formatting intact. */
+async function exportXLS() {
+  const all = [...state.expenses].sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (!all.length) { toast("Nothing to export yet"); return; }
+  const headers = ["Date", "Time", "Merchant", "Category", "Amount (RM)", "Note", "Items"];
+  let body = "";
+  let total = 0;
+  for (const e of all) {
+    const d = new Date(e.date);
+    total += e.amount || 0;
+    const items = (e.items || []).map(i => `${i.name} ${i.price.toFixed(2)}`).join("; ");
+    body += `<tr>
+      <td>${escapeHtml(d.toLocaleDateString("en-MY"))}</td>
+      <td>${escapeHtml(d.toTimeString().slice(0, 5))}</td>
+      <td>${escapeHtml(e.merchant || "")}</td>
+      <td>${escapeHtml(e.category || "")}</td>
+      <td style="mso-number-format:'0.00';text-align:right">${(e.amount || 0).toFixed(2)}</td>
+      <td>${escapeHtml(e.note || "")}</td>
+      <td>${escapeHtml(items)}</td>
+    </tr>`;
+  }
+  const th = headers.map(h => `<th>${h}</th>`).join("");
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+  <head><meta charset="utf-8"><style>
+    table{border-collapse:collapse;font-family:Calibri,sans-serif;font-size:11pt}
+    th{background:#2B2722;color:#fff;font-weight:bold;padding:6px 10px;border:1px solid #999;text-align:left}
+    td{padding:5px 10px;border:1px solid #ccc}
+    tr.total td{font-weight:bold;background:#F2EDE3}
+  </style></head>
+  <body><table>
+    <thead><tr>${th}</tr></thead>
+    <tbody>${body}
+      <tr class="total"><td colspan="4">Total (${all.length} expenses)</td>
+      <td style="mso-number-format:'0.00';text-align:right">${total.toFixed(2)}</td><td></td><td></td></tr>
+    </tbody>
+  </table></body></html>`;
+  downloadBlob(new Blob(["﻿" + html], { type: "application/vnd.ms-excel;charset=utf-8" }), "resit-expenses.xls");
+}
+
+/* Full backup: everything needed to rebuild the app on a new phone. Secrets
+   (GitHub token, AI code) and the cached scan/photos are deliberately left out
+   so the file is safe to store and small. */
+async function exportBackup() {
+  const settingsAll = await DB.getAllSettings();
+  const SKIP = new Set(["ghToken", "aiSecret", "lastScan"]);
+  const settings = settingsAll.filter(s => s && s.key && !SKIP.has(s.key));
+  const expenses = state.expenses.map(({ photo, ...rest }) => rest);
+  const backup = { app: "resit", type: "backup", version: 1, exportedAt: new Date().toISOString(), expenses, settings };
+  const stamp = new Date().toISOString().slice(0, 10);
+  downloadBlob(new Blob([JSON.stringify(backup)], { type: "application/json" }), "resit-backup-" + stamp + ".json");
+  toast("Backed up " + expenses.length + " expenses");
+}
+
+async function importBackup(file) {
+  if (!file) return;
+  let data;
+  try { data = JSON.parse(await file.text()); }
+  catch (e) { toast("That file isn't a valid backup"); return; }
+  if (!data || data.app !== "resit" || !Array.isArray(data.expenses)) { toast("That doesn't look like a Resit backup"); return; }
+  if (!confirm("Restore " + data.expenses.length + " expenses from this backup? It replaces everything currently in the app.")) return;
+  await DB.replaceAllExpenses(data.expenses);
+  if (Array.isArray(data.settings)) {
+    for (const s of data.settings) { if (s && s.key) await DB.setSetting(s.key, s.value); }
+  }
+  state.expenses = await DB.getAllExpenses();
+  state.budget = await DB.getSetting("budget", 3000);
+  state.merchantCats = await DB.getSetting("merchantCats", {});
+  state.merchantNames = await DB.getSetting("merchantNames", {});
+  state.totalHints = await DB.getSetting("totalHints", {});
+  state.catBudgets = await DB.getSetting("catBudgets", {});
+  state.theme = await DB.getSetting("theme", "auto");
+  applyTheme();
+  switchView("home");
+  toast("Restored " + data.expenses.length + " expenses");
+}
+
+function downloadBlob(blob, name) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "resit-expenses.csv";
+  a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
@@ -730,6 +1079,7 @@ async function init() {
     state.merchantCats = await DB.getSetting("merchantCats", {});
     state.merchantNames = await DB.getSetting("merchantNames", {});
     state.totalHints = await DB.getSetting("totalHints", {});
+    state.catBudgets = await DB.getSetting("catBudgets", {});
     state.theme = await DB.getSetting("theme", "auto");
     state.aiUrl = await DB.getSetting("aiUrl", "");
     state.aiSecret = await DB.getSetting("aiSecret", "");
@@ -767,19 +1117,44 @@ async function init() {
   on("ins-open-settings", () => switchView("settings"));
   $("settings-back").addEventListener("click", () => switchView("home"));
 
+  /* Tap the month name to jump back to the current month. */
+  on("month-label", () => { if (state.monthOffset !== 0) { state.monthOffset = 0; renderHome(); } });
+  on("ins-month-label", () => { if (state.monthOffset !== 0) { state.monthOffset = 0; renderInsights(); } });
+
+  /* Search bar toggle + live filter. */
+  on("search-toggle", () => {
+    const bar = $("search-bar");
+    if (!bar) return;
+    const show = bar.hidden;
+    bar.hidden = !show;
+    if (show) { setTimeout(() => { const i = $("search-input"); if (i) i.focus(); }, 30); }
+    else { state.search = ""; const i = $("search-input"); if (i) i.value = ""; renderHome(); }
+  });
+  const si = $("search-input");
+  if (si) si.addEventListener("input", () => { state.search = si.value; renderHome(); });
+
+  /* Receipt photo lightbox — tap anywhere to close. */
+  on("photo-overlay", () => { const ov = $("photo-overlay"); if (ov) ov.hidden = true; });
+
   /* Swipe left/right anywhere on home or insights to change month. */
   let swipe = null;
   document.addEventListener("touchstart", ev => {
     if (state.view === "settings" || !$("confirm-overlay").hidden || !$("chooser-overlay").hidden) { swipe = null; return; }
     const t = ev.changedTouches[0];
-    swipe = { x: t.clientX, y: t.clientY };
+    swipe = { x: t.clientX, y: t.clientY, scroll: window.scrollY };
   }, { passive: true });
   document.addEventListener("touchend", ev => {
     if (!swipe) return;
     const t = ev.changedTouches[0];
     const dx = t.clientX - swipe.x;
     const dy = t.clientY - swipe.y;
+    const startScroll = swipe.scroll;
     swipe = null;
+    /* Pull down from the top of the home list to check with Claude. */
+    if (state.view === "home" && startScroll <= 2 && dy > 90 && Math.abs(dy) > Math.abs(dx) * 2) {
+      if (state.ghToken) manualSync();
+      return;
+    }
     if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 2) return;
     if (state.view === "home") { state.monthOffset += dx < 0 ? 1 : -1; renderHome(); }
     else if (state.view === "insights") { state.monthOffset += dx < 0 ? 1 : -1; renderInsights(); }
@@ -815,6 +1190,12 @@ async function init() {
     toast("Budget saved");
   });
   $("export-csv").addEventListener("click", exportCSV);
+  on("export-xls", exportXLS);
+  on("backup-data", exportBackup);
+  on("restore-data", () => { const r = $("restore-input"); if (r) r.click(); });
+  const ri = $("restore-input");
+  if (ri) ri.addEventListener("change", ev => { importBackup(ev.target.files[0]); ev.target.value = ""; });
+  on("sync-now", manualSync);
   $("gh-token").addEventListener("change", async () => {
     state.ghToken = $("gh-token").value.trim();
     await DB.setSetting("ghToken", state.ghToken);
@@ -888,15 +1269,50 @@ async function init() {
     toast("All data erased");
   });
 
+  /* Service worker + auto-update: when a new version installs, the SW takes
+     control and we reload once automatically — no more closing the app twice. */
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register("sw.js").then(reg => {
+      reg.addEventListener("updatefound", () => {
+        const nw = reg.installing;
+        if (nw) nw.addEventListener("statechange", () => {
+          if (nw.state === "installed" && navigator.serviceWorker.controller) toast("Updating Resit…");
+        });
+      });
+    }).catch(() => {});
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloaded || !hadController) return; /* skip the very first install */
+      reloaded = true;
+      location.reload();
+    });
   }
 
   /* Pick up Claude's results and push any queued photos. */
   syncInbox();
+  cleanupPhotos();
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") syncInbox();
   });
+}
+
+/* Remove queued-photo records whose work is done or long stale, so storage
+   doesn't grow forever. Keeps photos still waiting on a Claude result. */
+async function cleanupPhotos() {
+  try {
+    const photos = await DB.getAllPhotos();
+    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+    for (const p of photos) {
+      const exp = state.expenses.find(x => String(x.id) === String(p.expenseId));
+      const done = exp && !exp.pending;            /* expense already filled in */
+      const orphan = !exp;                          /* expense was deleted */
+      const stale = p.createdAt && new Date(p.createdAt).getTime() < cutoff;
+      if (done || orphan || (p.status === "uploaded" && stale)) {
+        await DB.deletePhoto(p.id);
+      }
+    }
+  } catch (e) { /* non-critical */ }
 }
 
 init();
