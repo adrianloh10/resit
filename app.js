@@ -1,6 +1,6 @@
 /* Resit — snap receipts, track spending. All data stays on-device. */
 
-const APP_VERSION = "v19"; /* keep in step with CACHE in sw.js */
+const APP_VERSION = "v20"; /* keep in step with CACHE in sw.js */
 
 const $ = id => document.getElementById(id);
 const CATS = window.ReceiptOCR.CATEGORIES;
@@ -18,7 +18,7 @@ let state = {
   merchantNames: {},
   totalHints: {},
   catBudgets: {},
-  theme: "auto",
+  theme: "light",
   aiUrl: "",
   aiSecret: "",
   ghToken: "",
@@ -1080,7 +1080,7 @@ async function init() {
     state.merchantNames = await DB.getSetting("merchantNames", {});
     state.totalHints = await DB.getSetting("totalHints", {});
     state.catBudgets = await DB.getSetting("catBudgets", {});
-    state.theme = await DB.getSetting("theme", "auto");
+    state.theme = await DB.getSetting("theme", "light");
     state.aiUrl = await DB.getSetting("aiUrl", "");
     state.aiSecret = await DB.getSetting("aiSecret", "");
     state.ghToken = await DB.getSetting("ghToken", "");
