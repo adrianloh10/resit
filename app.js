@@ -1,10 +1,17 @@
 /* Resit — snap receipts, track spending. All data stays on-device. */
 
-const APP_VERSION = "v20"; /* keep in step with CACHE in sw.js */
+const APP_VERSION = "v21"; /* keep in step with CACHE in sw.js */
 
 const $ = id => document.getElementById(id);
 const CATS = window.ReceiptOCR.CATEGORIES;
 const CAT_COLOR = Object.fromEntries(CATS.map(c => [c.name, c.color]));
+
+/* A second classification axis, independent of category: who the spend is for.
+   Each gets its own earth-tone accent. Default for new/old expenses: Personal. */
+const SCOPES = ["Personal", "Shared", "Company"];
+const SCOPE_CLASS = { Personal: "scope-personal", Shared: "scope-shared", Company: "scope-company" };
+const SCOPE_FILL = { Personal: "var(--clay)", Shared: "var(--moss)", Company: "var(--ochre)" };
+const scopeOf = e => (e && SCOPES.includes(e.scope)) ? e.scope : "Personal";
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 let state = {
@@ -24,6 +31,7 @@ let state = {
   ghToken: "",
   search: "",
   filterCat: "",
+  scopeFilter: "",  /* "", "Personal", "Shared", "Company" */
   syncStatus: "",   /* "", "syncing", "ok", "auth", "offline" */
   lastSyncAt: null
 };
@@ -154,7 +162,7 @@ async function applyClaudeResult(data) {
      recreate it from Claude's result — the uploaded photo means the data
      is never lost. */
   if (!e) {
-    e = { amount: 0, merchant: "Receipt", category: "Other", date: new Date().toISOString(), items: [], note: "", pending: true, createdAt: new Date().toISOString() };
+    e = { amount: 0, merchant: "Receipt", category: "Other", scope: "Personal", date: new Date().toISOString(), items: [], note: "", pending: true, createdAt: new Date().toISOString() };
     created = true;
   }
   if (typeof data.total === "number" && data.total > 0 && data.total < 100000) {
@@ -359,26 +367,42 @@ function renderHome() {
   $("month-label").textContent = MONTH_NAMES[m.getMonth()] + (sameYear ? "" : " " + m.getFullYear());
 
   const allExps = monthExpenses();
-  const total = allExps.reduce((s, e) => s + e.amount, 0);
+  renderScopeFilter(allExps);
+
+  /* The Personal/Shared/Company filter narrows everything below it, including
+     the headline total. "" = All. */
+  const scoped = state.scopeFilter ? allExps.filter(e => scopeOf(e) === state.scopeFilter) : allExps;
+  const total = scoped.reduce((s, e) => s + e.amount, 0);
   const [whole, cents] = fmtRM(total).split(".");
   $("month-total").innerHTML = `${whole}<span class="cents">.${cents}</span>`;
 
-  if (state.budget > 0) {
-    $("budget-line").textContent = `of RM ${state.budget.toLocaleString("en-MY")} budget`;
-    const pct = Math.min(100, (total / state.budget) * 100);
-    const fill = $("budget-fill");
-    fill.style.width = pct + "%";
-    fill.classList.toggle("over", total > state.budget);
+  const fill = $("budget-fill");
+  if (state.scopeFilter) {
+    /* When filtering by type, the bar shows that type's share of the month. */
+    const monthTotal = allExps.reduce((s, e) => s + e.amount, 0);
+    const share = monthTotal > 0 ? Math.round((total / monthTotal) * 100) : 0;
+    $("budget-line").textContent = `${state.scopeFilter} · ${share}% of this month`;
+    fill.style.width = share + "%";
+    fill.classList.remove("over");
+    fill.style.background = SCOPE_FILL[state.scopeFilter];
   } else {
-    $("budget-line").textContent = "no budget set";
-    $("budget-fill").style.width = "0";
+    fill.style.background = "";
+    if (state.budget > 0) {
+      $("budget-line").textContent = `of RM ${state.budget.toLocaleString("en-MY")} budget`;
+      const pct = Math.min(100, (total / state.budget) * 100);
+      fill.style.width = pct + "%";
+      fill.classList.toggle("over", total > state.budget);
+    } else {
+      $("budget-line").textContent = "no budget set";
+      fill.style.width = "0";
+    }
   }
 
   /* Possible-duplicate detection: same merchant + amount + day. Flag all but
      the first in each group — non-destructive, just a visual hint. */
   const dupIds = new Set();
   const groups = {};
-  for (const e of allExps) {
+  for (const e of scoped) {
     if (!(e.amount > 0)) continue;
     const key = e.amount.toFixed(2) + "|" + (e.merchant || "").trim().toLowerCase() + "|" + new Date(e.date).toDateString();
     (groups[key] = groups[key] || []).push(e);
@@ -389,11 +413,11 @@ function renderHome() {
     arr.slice(1).forEach(e => dupIds.add(e.id));
   }
 
-  renderFilterChips(allExps);
+  renderFilterChips(scoped);
 
-  /* Search + category filter only affect the list, not the month total. */
+  /* Search + category filter further narrow the (already scope-filtered) list. */
   const q = state.search.trim().toLowerCase();
-  let exps = allExps;
+  let exps = scoped;
   if (q) exps = exps.filter(e =>
     (e.merchant || "").toLowerCase().includes(q) ||
     (e.note || "").toLowerCase().includes(q) ||
@@ -431,6 +455,8 @@ function renderHome() {
     }
     const dup = dupIds.has(e.id) ? `<span class="dup-flag">duplicate?</span> · ` : "";
     const camera = e.photo ? `<span class="has-photo" aria-hidden="true">▦ </span>` : "";
+    const sc = scopeOf(e);
+    const scopePill = `<span class="scope-pill ${SCOPE_CLASS[sc]}">${sc}</span>`;
     const amountHtml = e.pending
       ? `<span class="entry-amount waiting">waiting…</span>`
       : `<span class="entry-amount">${fmtRM(e.amount)}</span>`;
@@ -439,7 +465,7 @@ function renderHome() {
     row.innerHTML = `
       <span class="cat-dot" style="background:${CAT_COLOR[e.category] || CAT_COLOR.Other}"></span>
       <span class="entry-main">
-        <span class="entry-merchant">${camera}${escapeHtml(e.merchant || "Expense")}</span>
+        <span class="entry-merchant">${camera}${escapeHtml(e.merchant || "Expense")}${scopePill}</span>
         <span class="entry-cat">${dup}${e.pending ? "waiting for Claude · " : ""}${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
       </span>
       ${amountHtml}`;
@@ -463,6 +489,43 @@ function renderFilterChips(monthExps) {
   };
   if (state.filterCat) mk("All", "");
   for (const c of cats) mk(c, c);
+}
+
+/* Personal / Shared / Company filter with each type's running monthly total
+   shown right on the chip — tap to filter the list and the headline total. */
+function renderScopeFilter(monthExps) {
+  const row = $("scope-filter");
+  if (!row) return;
+  const totals = { Personal: 0, Shared: 0, Company: 0 };
+  let all = 0;
+  for (const e of monthExps) { totals[scopeOf(e)] += e.amount; all += e.amount; }
+  row.innerHTML = "";
+  const mk = (label, value, amount, cls) => {
+    const b = document.createElement("button");
+    b.className = "scope-chip " + cls + (state.scopeFilter === value ? " selected" : "");
+    b.innerHTML = `<span class="scope-chip-name">${label}</span><span class="scope-chip-amt">${fmtRM(amount)}</span>`;
+    b.addEventListener("click", () => { state.scopeFilter = (state.scopeFilter === value) ? "" : value; renderHome(); });
+    row.appendChild(b);
+  };
+  mk("All", "", all, "scope-all");
+  for (const s of SCOPES) mk(s, s, totals[s], SCOPE_CLASS[s]);
+}
+
+function renderScopeChips() {
+  const e = state.editing;
+  if (!e) return;
+  const chips = $("scope-chips");
+  if (!chips) return;
+  const cur = scopeOf(e);
+  chips.innerHTML = "";
+  for (const s of SCOPES) {
+    const b = document.createElement("button");
+    const sel = s === cur;
+    b.className = "chip scope-opt " + SCOPE_CLASS[s] + (sel ? " selected" : "");
+    b.textContent = s;
+    b.addEventListener("click", () => { state.editing.scope = s; renderScopeChips(); });
+    chips.appendChild(b);
+  }
 }
 
 function totalForMonth(year, monthIndex) {
@@ -700,6 +763,7 @@ async function handleImage(file) {
       amount: 0,
       merchant: "Receipt",
       category: "Other",
+      scope: "Personal",
       date: new Date().toISOString(),
       items: [],
       note: "",
@@ -789,6 +853,7 @@ function openConfirmSheet(expense) {
   $("confirm-time").value = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
   $("confirm-note").value = e.note || "";
 
+  renderScopeChips();
   renderCategoryChips();
   renderPhotoBlock();
   renderItemsEditor();
@@ -929,6 +994,7 @@ async function saveExpense() {
     items: (e.items || []).filter(i => i && ((i.name && i.name.trim()) || i.price > 0))
       .map(i => ({ name: (i.name || "").trim(), price: Math.round((i.price || 0) * 100) / 100 })),
     note: $("confirm-note").value.trim(),
+    scope: scopeOf(e),
     pending: !(amount > 0) && canPend,
     photo: photo || undefined,
     createdAt: e.createdAt || new Date().toISOString()
@@ -970,13 +1036,13 @@ function renderCurrent() {
 async function exportCSV() {
   const all = [...state.expenses].sort((a, b) => new Date(a.date) - new Date(b.date));
   if (!all.length) { toast("Nothing to export yet"); return; }
-  const rows = [["Date", "Time", "Merchant", "Category", "Amount (RM)", "Note", "Items"]];
+  const rows = [["Date", "Time", "Merchant", "Category", "Type", "Amount (RM)", "Note", "Items"]];
   for (const e of all) {
     const d = new Date(e.date);
     rows.push([
       d.toLocaleDateString("en-MY"),
       d.toTimeString().slice(0, 5),
-      e.merchant, e.category, e.amount.toFixed(2), e.note || "",
+      e.merchant, e.category, scopeOf(e), e.amount.toFixed(2), e.note || "",
       (e.items || []).map(i => `${i.name} ${i.price.toFixed(2)}`).join("; ")
     ]);
   }
@@ -989,7 +1055,7 @@ async function exportCSV() {
 async function exportXLS() {
   const all = [...state.expenses].sort((a, b) => new Date(a.date) - new Date(b.date));
   if (!all.length) { toast("Nothing to export yet"); return; }
-  const headers = ["Date", "Time", "Merchant", "Category", "Amount (RM)", "Note", "Items"];
+  const headers = ["Date", "Time", "Merchant", "Category", "Type", "Amount (RM)", "Note", "Items"];
   let body = "";
   let total = 0;
   for (const e of all) {
@@ -1001,6 +1067,7 @@ async function exportXLS() {
       <td>${escapeHtml(d.toTimeString().slice(0, 5))}</td>
       <td>${escapeHtml(e.merchant || "")}</td>
       <td>${escapeHtml(e.category || "")}</td>
+      <td>${escapeHtml(scopeOf(e))}</td>
       <td style="mso-number-format:'0.00';text-align:right">${(e.amount || 0).toFixed(2)}</td>
       <td>${escapeHtml(e.note || "")}</td>
       <td>${escapeHtml(items)}</td>
@@ -1017,7 +1084,7 @@ async function exportXLS() {
   <body><table>
     <thead><tr>${th}</tr></thead>
     <tbody>${body}
-      <tr class="total"><td colspan="4">Total (${all.length} expenses)</td>
+      <tr class="total"><td colspan="5">Total (${all.length} expenses)</td>
       <td style="mso-number-format:'0.00';text-align:right">${total.toFixed(2)}</td><td></td><td></td></tr>
     </tbody>
   </table></body></html>`;

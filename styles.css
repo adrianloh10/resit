@@ -363,3 +363,38 @@ html, body {
 .trend-lbl { font-size: 10.5px; color: var(--muted); margin-top: 5px; }
 .cat-budget { font-size: 10.5px; color: var(--sage); }
 .cat-budget.over { color: var(--rust); }
+
+/* ---------- Scope: Personal / Shared / Company ---------- */
+/* Home filter row — each type with its monthly total; tap to filter. */
+.scope-filter { display: flex; gap: 7px; margin: 16px 0 0; }
+.scope-chip {
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 7px 6px; border-radius: 12px;
+  border: 1px solid var(--divider-soft); background: var(--paper-raised);
+  cursor: pointer; font-family: var(--sans);
+}
+.scope-chip-name { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.scope-chip-amt { font-size: 12.5px; font-family: var(--mono); color: var(--ink); }
+.scope-chip.selected .scope-chip-name,
+.scope-chip.selected .scope-chip-amt { color: var(--paper); }
+.scope-chip.scope-all.selected { background: var(--ink); border-color: var(--ink); }
+.scope-chip.scope-personal.selected { background: var(--clay); border-color: var(--clay); }
+.scope-chip.scope-shared.selected { background: var(--moss); border-color: var(--moss); }
+.scope-chip.scope-company.selected { background: var(--ochre); border-color: var(--ochre); }
+
+/* Per-entry colored tag in the ledger. */
+.scope-pill {
+  font-size: 9.5px; padding: 1px 6px; border-radius: 999px; margin-left: 7px;
+  border: 0.5px solid currentColor; vertical-align: middle; white-space: nowrap;
+}
+.scope-personal { color: var(--clay); }
+.scope-shared { color: var(--moss); }
+.scope-company { color: var(--ochre); }
+
+/* Confirm-sheet Type picker — colored when chosen. */
+.chip-group-label { font-size: 11px; color: var(--muted); text-align: center; margin-top: 16px; }
+.chip-group-label + .chip-row { margin-top: 7px; }
+.chip.scope-opt.selected.scope-personal { background: var(--clay); border-color: var(--clay); color: var(--paper); }
+.chip.scope-opt.selected.scope-shared { background: var(--moss); border-color: var(--moss); color: var(--paper); }
+.chip.scope-opt.selected.scope-company { background: var(--ochre); border-color: var(--ochre); color: var(--paper); }

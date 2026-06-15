@@ -33,6 +33,7 @@
     <p class="big-amount" id="month-total">0<span class="cents">.00</span></p>
     <p class="budget-line" id="budget-line">of RM 3,000 budget</p>
     <div class="budget-track"><div class="budget-fill" id="budget-fill"></div></div>
+    <div class="scope-filter" id="scope-filter"></div>
   </header>
   <div class="search-bar" id="search-bar" hidden>
     <input type="search" id="search-input" placeholder="Search merchant, note or item…" autocomplete="off">
@@ -173,6 +174,9 @@
       <input type="date" id="confirm-date">
       <input type="time" id="confirm-time">
     </div>
+    <p class="chip-group-label">Type</p>
+    <div class="chip-row" id="scope-chips"></div>
+    <p class="chip-group-label">Category</p>
     <div class="chip-row" id="category-chips"></div>
     <div class="items-block" id="items-block"></div>
     <textarea class="confirm-note" id="confirm-note" rows="1" placeholder="Note (optional)"></textarea>
