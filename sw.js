@@ -1,8 +1,10 @@
-const CACHE = "resit-v21";
+importScripts("version.js");
+const CACHE = "resit-" + self.RESIT_VERSION;
 const SHELL = [
   "./",
   "./index.html",
   "./styles.css",
+  "./version.js",
   "./app.js",
   "./db.js",
   "./ocr.js",

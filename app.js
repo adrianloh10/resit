@@ -1,6 +1,6 @@
 /* Resit — snap receipts, track spending. All data stays on-device. */
 
-const APP_VERSION = "v21"; /* keep in step with CACHE in sw.js */
+const APP_VERSION = self.RESIT_VERSION || "v?"; /* set once in version.js; sw.js shares it */
 
 const $ = id => document.getElementById(id);
 const CATS = window.ReceiptOCR.CATEGORIES;
@@ -60,7 +60,7 @@ async function queuePhotoForClaude(expenseId, file) {
 
 function setSyncStatus(s) {
   state.syncStatus = s;
-  if (s === "ok" || s === "auth" || s === "offline") state.lastSyncAt = new Date().toISOString();
+  if (s === "ok") state.lastSyncAt = new Date().toISOString();
   renderSyncStatus();
 }
 
@@ -73,11 +73,12 @@ function renderSyncStatus() {
     syncing: "Checking with Claude…",
     ok: "Synced" + (when ? " · " + when : ""),
     auth: "Reconnect needed — check your token",
+    error: "Couldn't reach Claude — will retry",
     offline: "Offline — will retry when online",
     "": ""
   };
   el.textContent = map[state.syncStatus] || "";
-  el.className = "sync-status" + (state.syncStatus === "auth" ? " bad" : "");
+  el.className = "sync-status" + (state.syncStatus === "auth" || state.syncStatus === "error" ? " bad" : "");
 }
 
 let inboxSyncing = false;
@@ -86,7 +87,7 @@ async function syncInbox() {
   if (!navigator.onLine) { setSyncStatus("offline"); return; }
   inboxSyncing = true;
   setSyncStatus("syncing");
-  let authBad = false;
+  let result = "ok";
   try {
     const photos = await DB.getAllPhotos();
     for (const p of photos.filter(x => x.status === "queued")) {
@@ -100,15 +101,17 @@ async function syncInbox() {
         delete p.b64;
         await DB.updatePhoto(p);
       } else {
-        if (res.status === 401 || res.status === 403) authBad = true;
+        result = (res.status === 401 || res.status === 403) ? "auth" : "error";
         break;
       }
     }
     const fetchOk = await fetchClaudeResults();
-    if (fetchOk === "auth") authBad = true;
-    setSyncStatus(authBad ? "auth" : "ok");
+    if (fetchOk === "auth") result = "auth";
+    else if (fetchOk === false && result === "ok") result = "error";
+    setSyncStatus(result);
   } catch (e) {
-    setSyncStatus(navigator.onLine ? "ok" : "offline");
+    /* Never report success on a thrown error — surface offline vs. a real fault. */
+    setSyncStatus(navigator.onLine ? "error" : "offline");
   } finally {
     inboxSyncing = false;
   }
@@ -118,13 +121,17 @@ async function syncInbox() {
 async function manualSync() {
   if (!state.ghToken) { toast("Set up the Claude inbox first"); return; }
   if (!navigator.onLine) { toast("You're offline"); return; }
-  const before = state.expenses.filter(e => e.pending).length;
+  state._lastApplied = 0;
   await syncInbox();
-  const after = state.expenses.filter(e => e.pending).length;
-  const filled = before - after;
   if (state.syncStatus === "auth") toast("Couldn't connect — check your token");
-  else if (filled > 0) toast("Claude filled in " + filled + " receipt" + (filled > 1 ? "s" : ""));
-  else toast("Up to date" + (before > 0 ? " — " + before + " still waiting for Claude" : ""));
+  else if (state.syncStatus === "error") toast("Couldn't reach Claude — will retry shortly");
+  else if (state.syncStatus === "offline") toast("You're offline");
+  else if (!state._lastApplied) {
+    /* fetchClaudeResults already toasts when it fills something; only speak up
+       here when nothing was applied. */
+    const waiting = state.expenses.filter(e => e.pending).length;
+    toast("Up to date" + (waiting > 0 ? " — " + waiting + " still waiting for Claude" : ""));
+  }
 }
 
 async function fetchClaudeResults() {
@@ -139,7 +146,11 @@ async function fetchClaudeResults() {
       if (!fr.ok) continue;
       const meta = await fr.json();
       const data = JSON.parse(decodeURIComponent(escape(atob(meta.content.replace(/\s/g, "")))));
-      if (await applyClaudeResult(data)) applied++;
+      /* Only consume (delete) the result once it's actually applied. If it was
+         skipped — e.g. that expense is open in the editor — leave it for the
+         next sync so we don't drop Claude's data or the user's edit. */
+      if (!(await applyClaudeResult(data))) continue;
+      applied++;
       await fetch("https://api.github.com/repos/" + GH_REPO + "/contents/results/" + f.name, {
         method: "DELETE",
         headers: ghHeaders(),
@@ -148,6 +159,7 @@ async function fetchClaudeResults() {
       if (data.photoId) { try { await DB.deletePhoto(data.photoId); } catch (e) {} }
     } catch (e) { /* skip malformed result */ }
   }
+  state._lastApplied = applied;
   if (applied) {
     toast("Claude filled in " + applied + " receipt" + (applied > 1 ? "s" : ""));
     renderCurrent();
@@ -156,6 +168,11 @@ async function fetchClaudeResults() {
 }
 
 async function applyClaudeResult(data) {
+  /* Don't clobber an expense the user is editing right now — skip and retry
+     on the next sync (the result file is left in place by the caller). */
+  if (state.editing && data.expenseId != null && String(state.editing.id) === String(data.expenseId)) {
+    return false;
+  }
   let e = state.expenses.find(x => String(x.id) === String(data.expenseId));
   let created = false;
   /* Self-heal: if the pending expense is missing (storage hiccup, reinstall),
@@ -659,28 +676,10 @@ function switchView(name) {
 
 /* ---------- AI assist (optional relay fallback) ---------- */
 
-function fileToJpegBase64(file, maxDim) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-      const c = document.createElement("canvas");
-      c.width = Math.round(img.width * scale);
-      c.height = Math.round(img.height * scale);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      resolve(c.toDataURL("image/jpeg", 0.85).split(",")[1]);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Could not read image")); };
-    img.src = url;
-  });
-}
-
-/* Small on-device thumbnail (data URL) kept with the expense so the original
-   receipt can be re-checked later. Stays on the phone; never uploaded, never
-   in the backup file. */
-function fileToThumb(file, maxDim) {
+/* Shared core: load a file, downscale to maxDim, return a JPEG data URL at the
+   given quality (or null on decode failure). The two callers below differ only
+   in quality and return shape. */
+function loadScaledJpeg(file, maxDim, quality) {
   return new Promise((resolve) => {
     try {
       const url = URL.createObjectURL(file);
@@ -692,12 +691,26 @@ function fileToThumb(file, maxDim) {
         c.width = Math.round(img.width * scale);
         c.height = Math.round(img.height * scale);
         c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-        resolve(c.toDataURL("image/jpeg", 0.6));
+        resolve(c.toDataURL("image/jpeg", quality));
       };
       img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
       img.src = url;
     } catch (e) { resolve(null); }
   });
+}
+
+function fileToJpegBase64(file, maxDim) {
+  return loadScaledJpeg(file, maxDim, 0.85).then(u => {
+    if (!u) throw new Error("Could not read image");
+    return u.split(",")[1];
+  });
+}
+
+/* Small on-device thumbnail (data URL) kept with the expense so the original
+   receipt can be re-checked later. Stays on the phone; never uploaded, never
+   in the backup file. */
+function fileToThumb(file, maxDim) {
+  return loadScaledJpeg(file, maxDim, 0.6);
 }
 
 async function askAI(file) {
@@ -839,7 +852,7 @@ function parsedToDraft(parsed) {
 /* ---------- Confirm sheet ---------- */
 
 function openConfirmSheet(expense) {
-  state.editing = expense ? { ...expense, items: (expense.items || []).slice() } : {
+  state.editing = expense ? { ...expense, items: (expense.items || []).map(i => ({ ...i })) } : {
     id: null, amount: null, merchant: "", category: "Other",
     date: new Date().toISOString(), items: [], note: "", fromReceipt: false
   };
@@ -1033,19 +1046,34 @@ function renderCurrent() {
 
 /* ---------- Settings ---------- */
 
+/* One source of truth for export columns — CSV and Excel both build from this,
+   so adding a column (or guarding a value) happens once. Numbers are coerced
+   defensively so a malformed restored record can never crash an export. */
+const EXPORT_HEADERS = ["Date", "Time", "Merchant", "Category", "Type", "Amount (RM)", "Note", "Items"];
+function expenseExportRecords() {
+  return [...state.expenses]
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .map(e => {
+      const d = new Date(e.date);
+      const amount = Number(e.amount) || 0;
+      return {
+        date: d.toLocaleDateString("en-MY"),
+        time: d.toTimeString().slice(0, 5),
+        merchant: e.merchant || "",
+        category: e.category || "",
+        type: scopeOf(e),
+        amount,
+        note: e.note || "",
+        items: (e.items || []).map(i => `${(i && i.name) || ""} ${(Number(i && i.price) || 0).toFixed(2)}`.trim()).join("; ")
+      };
+    });
+}
+
 async function exportCSV() {
-  const all = [...state.expenses].sort((a, b) => new Date(a.date) - new Date(b.date));
-  if (!all.length) { toast("Nothing to export yet"); return; }
-  const rows = [["Date", "Time", "Merchant", "Category", "Type", "Amount (RM)", "Note", "Items"]];
-  for (const e of all) {
-    const d = new Date(e.date);
-    rows.push([
-      d.toLocaleDateString("en-MY"),
-      d.toTimeString().slice(0, 5),
-      e.merchant, e.category, scopeOf(e), e.amount.toFixed(2), e.note || "",
-      (e.items || []).map(i => `${i.name} ${i.price.toFixed(2)}`).join("; ")
-    ]);
-  }
+  const recs = expenseExportRecords();
+  if (!recs.length) { toast("Nothing to export yet"); return; }
+  const rows = [EXPORT_HEADERS];
+  for (const r of recs) rows.push([r.date, r.time, r.merchant, r.category, r.type, r.amount.toFixed(2), r.note, r.items]);
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
   downloadBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), "resit-expenses.csv");
 }
@@ -1053,27 +1081,24 @@ async function exportCSV() {
 /* Styled Excel export — dependency-free. An HTML table with Excel's XML
    namespace opens directly in Excel/Sheets with formatting intact. */
 async function exportXLS() {
-  const all = [...state.expenses].sort((a, b) => new Date(a.date) - new Date(b.date));
-  if (!all.length) { toast("Nothing to export yet"); return; }
-  const headers = ["Date", "Time", "Merchant", "Category", "Type", "Amount (RM)", "Note", "Items"];
+  const recs = expenseExportRecords();
+  if (!recs.length) { toast("Nothing to export yet"); return; }
   let body = "";
   let total = 0;
-  for (const e of all) {
-    const d = new Date(e.date);
-    total += e.amount || 0;
-    const items = (e.items || []).map(i => `${i.name} ${i.price.toFixed(2)}`).join("; ");
+  for (const r of recs) {
+    total += r.amount;
     body += `<tr>
-      <td>${escapeHtml(d.toLocaleDateString("en-MY"))}</td>
-      <td>${escapeHtml(d.toTimeString().slice(0, 5))}</td>
-      <td>${escapeHtml(e.merchant || "")}</td>
-      <td>${escapeHtml(e.category || "")}</td>
-      <td>${escapeHtml(scopeOf(e))}</td>
-      <td style="mso-number-format:'0.00';text-align:right">${(e.amount || 0).toFixed(2)}</td>
-      <td>${escapeHtml(e.note || "")}</td>
-      <td>${escapeHtml(items)}</td>
+      <td>${escapeHtml(r.date)}</td>
+      <td>${escapeHtml(r.time)}</td>
+      <td>${escapeHtml(r.merchant)}</td>
+      <td>${escapeHtml(r.category)}</td>
+      <td>${escapeHtml(r.type)}</td>
+      <td style="mso-number-format:'0.00';text-align:right">${r.amount.toFixed(2)}</td>
+      <td>${escapeHtml(r.note)}</td>
+      <td>${escapeHtml(r.items)}</td>
     </tr>`;
   }
-  const th = headers.map(h => `<th>${h}</th>`).join("");
+  const th = EXPORT_HEADERS.map(h => `<th>${h}</th>`).join("");
   const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
   <head><meta charset="utf-8"><style>
     table{border-collapse:collapse;font-family:Calibri,sans-serif;font-size:11pt}
@@ -1084,7 +1109,7 @@ async function exportXLS() {
   <body><table>
     <thead><tr>${th}</tr></thead>
     <tbody>${body}
-      <tr class="total"><td colspan="5">Total (${all.length} expenses)</td>
+      <tr class="total"><td colspan="5">Total (${recs.length} expenses)</td>
       <td style="mso-number-format:'0.00';text-align:right">${total.toFixed(2)}</td><td></td><td></td></tr>
     </tbody>
   </table></body></html>`;
@@ -1105,6 +1130,35 @@ async function exportBackup() {
   toast("Backed up " + expenses.length + " expenses");
 }
 
+/* Build a clean, storable expense from arbitrary backup JSON. Every field is
+   coerced/defaulted so a put() can never throw, and ids are made unique so the
+   restore transaction stays atomic (a bad record can't half-wipe the store). */
+function sanitizeRestoredExpense(e, fallbackId) {
+  e = e || {};
+  const amount = Number(e.amount);
+  const items = Array.isArray(e.items)
+    ? e.items
+        .filter(i => i && typeof i.name === "string" && Number.isFinite(Number(i.price)))
+        .slice(0, 50)
+        .map(i => ({ name: String(i.name).slice(0, 60), price: Math.round(Number(i.price) * 100) / 100 }))
+    : [];
+  const dateOk = e.date && !isNaN(new Date(e.date));
+  return {
+    id: Number.isInteger(e.id) ? e.id : fallbackId,
+    amount: Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0,
+    merchant: e.merchant ? String(e.merchant).slice(0, 80) : "Expense",
+    category: CAT_COLOR[e.category] ? e.category : "Other",
+    scope: SCOPES.includes(e.scope) ? e.scope : "Personal",
+    date: dateOk ? new Date(e.date).toISOString() : new Date().toISOString(),
+    items,
+    note: e.note ? String(e.note).slice(0, 200) : "",
+    /* Photos aren't in backups, so a restored entry can't be Claude-filled —
+       never leave it stuck "waiting"; restore it as a normal editable expense. */
+    pending: false,
+    createdAt: e.createdAt ? String(e.createdAt) : new Date().toISOString()
+  };
+}
+
 async function importBackup(file) {
   if (!file) return;
   let data;
@@ -1112,20 +1166,34 @@ async function importBackup(file) {
   catch (e) { toast("That file isn't a valid backup"); return; }
   if (!data || data.app !== "resit" || !Array.isArray(data.expenses)) { toast("That doesn't look like a Resit backup"); return; }
   if (!confirm("Restore " + data.expenses.length + " expenses from this backup? It replaces everything currently in the app.")) return;
-  await DB.replaceAllExpenses(data.expenses);
-  if (Array.isArray(data.settings)) {
-    for (const s of data.settings) { if (s && s.key) await DB.setSetting(s.key, s.value); }
+
+  /* Sanitize everything BEFORE touching storage, so we never clear the store
+     and then fail mid-write. Assign ids above any existing one to avoid clashes. */
+  let nextId = 1;
+  for (const e of data.expenses) if (Number.isInteger(e && e.id) && e.id >= nextId) nextId = e.id + 1;
+  const clean = data.expenses.map(e => sanitizeRestoredExpense(e, Number.isInteger(e && e.id) ? e.id : nextId++));
+
+  try {
+    await DB.replaceAllExpenses(clean);
+    if (Array.isArray(data.settings)) {
+      for (const s of data.settings) { if (s && s.key) await DB.setSetting(s.key, s.value); }
+    }
+  } catch (err) {
+    /* IndexedDB rolls the transaction back on error, so current data is intact. */
+    toast("Restore failed — your current data is unchanged");
+    return;
   }
+
   state.expenses = await DB.getAllExpenses();
   state.budget = await DB.getSetting("budget", 3000);
   state.merchantCats = await DB.getSetting("merchantCats", {});
   state.merchantNames = await DB.getSetting("merchantNames", {});
   state.totalHints = await DB.getSetting("totalHints", {});
   state.catBudgets = await DB.getSetting("catBudgets", {});
-  state.theme = await DB.getSetting("theme", "auto");
+  state.theme = await DB.getSetting("theme", "light");
   applyTheme();
   switchView("home");
-  toast("Restored " + data.expenses.length + " expenses");
+  toast("Restored " + clean.length + " expenses");
 }
 
 function downloadBlob(blob, name) {
@@ -1356,26 +1424,29 @@ async function init() {
     });
   }
 
-  /* Pick up Claude's results and push any queued photos. */
-  syncInbox();
-  cleanupPhotos();
+  /* Pick up Claude's results and push any queued photos, THEN clean up — so a
+     still-queued photo can never be deleted before it has uploaded. */
+  syncInbox().finally(cleanupPhotos);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") syncInbox();
   });
 }
 
-/* Remove queued-photo records whose work is done or long stale, so storage
-   doesn't grow forever. Keeps photos still waiting on a Claude result. */
+/* Remove photo records whose work is done or long stale, so storage doesn't
+   grow forever. Only ever deletes photos that have actually UPLOADED — a
+   still-queued photo (never sent to Claude) is always kept so a receipt can't
+   be lost before it reaches the inbox. */
 async function cleanupPhotos() {
   try {
     const photos = await DB.getAllPhotos();
     const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
     for (const p of photos) {
+      if (p.status !== "uploaded") continue;        /* never drop a queued photo */
       const exp = state.expenses.find(x => String(x.id) === String(p.expenseId));
-      const done = exp && !exp.pending;            /* expense already filled in */
+      const done = exp && !exp.pending;             /* expense already filled in */
       const orphan = !exp;                          /* expense was deleted */
       const stale = p.createdAt && new Date(p.createdAt).getTime() < cutoff;
-      if (done || orphan || (p.status === "uploaded" && stale)) {
+      if (done || orphan || stale) {
         await DB.deletePhoto(p.id);
       }
     }
