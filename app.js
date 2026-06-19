@@ -51,7 +51,7 @@ const GH_REPO = "adrianloh10/resit-inbox";
    (see resit/cloud/DEPLOY.md) paste the Worker URL here. A user-set "advanced"
    override URL in Settings takes precedence, so it can be tested before baking
    the URL in. */
-const CLOUD_OCR_URL = "";
+const CLOUD_OCR_URL = "https://resit.adrianloh10.workers.dev";
 function cloudEndpoint() { return (state.aiUrl && state.aiUrl.trim()) || CLOUD_OCR_URL; }
 
 function ghHeaders() {
