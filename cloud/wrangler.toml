@@ -7,7 +7,7 @@ compatibility_date = "2026-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "resit-quota"
-database_id = "PASTE_DATABASE_ID_AFTER_CREATING"
+database_id = "cc890234-c8a9-4a5d-ace5-1d097c7015ed"
 
 [vars]
 # Origins allowed to call the reader. Add your custom domain here later if you get one.
