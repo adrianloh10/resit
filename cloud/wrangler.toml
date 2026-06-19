@@ -1,5 +1,6 @@
 name = "resit"
 main = "worker.js"
+# build from the cloud/ folder (root directory = cloud)
 compatibility_date = "2026-01-01"
 
 # Anonymous per-device daily counter (no personal data). The id is filled in
