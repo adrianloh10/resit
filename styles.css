@@ -364,6 +364,12 @@ html, body {
 .cat-budget { font-size: 10.5px; color: var(--sage); }
 .cat-budget.over { color: var(--rust); }
 
+/* ---------- Upgrade sheet ---------- */
+.upgrade-price { font-family: var(--mono); font-size: 22px; color: var(--ink); margin: 2px 0 10px; }
+.upgrade-list { list-style: none; text-align: left; max-width: 280px; margin: 4px auto 18px; padding: 0; }
+.upgrade-list li { font-size: 13.5px; color: var(--ink-soft); padding: 5px 0 5px 22px; position: relative; }
+.upgrade-list li::before { content: "✓"; position: absolute; left: 0; color: var(--sage); }
+
 /* ---------- Cloud reading + consent ---------- */
 .settings-sub { font-size: 12px; color: var(--muted); line-height: 1.55; margin: 2px 0 8px; }
 .cloud-privacy { text-align: center; text-decoration: none; display: flex; align-items: center; justify-content: center; }

@@ -31,6 +31,9 @@ let state = {
   ghToken: "",
   deviceId: "",
   cloudConsent: "",  /* "", "yes", "no" — explicit opt-in for cloud reading */
+  pro: false,        /* Pro entitlement (unlimited cloud reads) */
+  cloudMonth: "",    /* "YYYY-MM" the free cloud counter belongs to */
+  cloudUsed: 0,      /* free cloud reads used this month */
   search: "",
   filterCat: "",
   scopeFilter: "",  /* "", "Personal", "Shared", "Company" */
@@ -53,6 +56,72 @@ const GH_REPO = "adrianloh10/resit-inbox";
    the URL in. */
 const CLOUD_OCR_URL = "https://resit.adrianloh10.workers.dev";
 function cloudEndpoint() { return (state.aiUrl && state.aiUrl.trim()) || CLOUD_OCR_URL; }
+
+/* ---------- Freemium ----------
+   Free = full on-device core + a small monthly cloud-read allowance.
+   Pro  = unlimited cloud reads (still bounded by the Worker's daily cap).
+   PAY_URL is the checkout link (Stripe / LemonSqueezy) — fill it after you set
+   up a payment account; until then the upgrade button shows "coming soon". */
+const FREE_CLOUD_MONTHLY = 15;
+const PAY_URL = "";
+const PRICE_LABEL = "RM 59 / year";
+function thisMonth() { return new Date().toISOString().slice(0, 7); }
+function isPro() { return !!state.pro; }
+function cloudUsedThisMonth() { return state.cloudMonth === thisMonth() ? (state.cloudUsed || 0) : 0; }
+function cloudQuotaLeft() { return isPro() ? Infinity : Math.max(0, FREE_CLOUD_MONTHLY - cloudUsedThisMonth()); }
+async function bumpCloudUsed() {
+  const m = thisMonth();
+  if (state.cloudMonth !== m) { state.cloudMonth = m; state.cloudUsed = 0; }
+  state.cloudUsed = (state.cloudUsed || 0) + 1;
+  await DB.setSetting("cloudMonth", state.cloudMonth);
+  await DB.setSetting("cloudUsed", state.cloudUsed);
+}
+
+function showUpgrade(reason) {
+  const ov = $("upgrade-overlay");
+  if (!ov) return;
+  const r = $("upgrade-reason"); if (r) r.textContent = reason || "";
+  const p = $("upgrade-price"); if (p) p.textContent = PRICE_LABEL;
+  ov.hidden = false;
+}
+
+/* Pilot entitlement: a code the owner gives paying users, verified server-side
+   by the Worker (so the secret never ships in the public app). Cost is also
+   bounded by the Worker's per-device daily cap, so a leaked code can't run up
+   the bill. Replace with per-user license keys once a payment webhook exists. */
+async function unlockPro() {
+  const code = (prompt("Enter your unlock code") || "").trim();
+  if (!code) return;
+  const url = cloudEndpoint();
+  if (!url) { toast("Cloud isn't set up yet"); return; }
+  try {
+    const res = await fetch(url.replace(/\/+$/, "") + "/unlock", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code })
+    });
+    if (res.ok) {
+      state.pro = true;
+      await DB.setSetting("pro", true);
+      const ov = $("upgrade-overlay"); if (ov) ov.hidden = true;
+      renderPlan();
+      toast("Pro unlocked — thank you!");
+    } else {
+      toast("That code didn't work");
+    }
+  } catch (e) { toast("Couldn't verify the code"); }
+}
+
+function renderPlan() {
+  const status = $("plan-status");
+  const btn = $("plan-btn");
+  if (isPro()) {
+    if (status) status.textContent = "Pro — unlimited cloud reads. Thank you!";
+    if (btn) btn.hidden = true;
+  } else {
+    if (status) status.textContent = "Free — " + cloudQuotaLeft() + " of " + FREE_CLOUD_MONTHLY + " cloud reads left this month.";
+    if (btn) { btn.hidden = false; btn.textContent = "Upgrade to Pro"; }
+  }
+}
 
 function ghHeaders() {
   return { Authorization: "Bearer " + state.ghToken, Accept: "application/vnd.github+json" };
@@ -697,6 +766,7 @@ function switchView(name) {
     renderSyncStatus();
     renderCatBudgets();
     renderCloudSetting();
+    renderPlan();
   }
   window.scrollTo(0, 0);
 }
@@ -863,17 +933,25 @@ async function handleImage(file) {
        cloud reader is configured, and the user has opted in (asked once). */
     const weak = parsed.total === null || (parsed.totalConf || 0) <= 1;
     if (cloudEndpoint() && weak) {
-      const consented = await ensureCloudConsent();
-      if (state.ocrCancelled) return;
-      if (consented) {
-        $("processing-overlay").hidden = false;
-        $("processing-text").textContent = "Reading with cloud…";
-        try {
-          const ai = await cloudRead(file);
-          if (state.ocrCancelled) return;
-          mergeAIResult(parsed, ai);
-        } catch (err) {
-          toast(err.message || "Cloud reading failed");
+      if (cloudQuotaLeft() <= 0) {
+        /* Free monthly cloud allowance used up — keep the on-device result and
+           offer Pro. (Pro users never hit this.) */
+        $("processing-overlay").hidden = true;
+        showUpgrade("You've used your " + FREE_CLOUD_MONTHLY + " free cloud reads this month.");
+      } else {
+        const consented = await ensureCloudConsent();
+        if (state.ocrCancelled) return;
+        if (consented) {
+          $("processing-overlay").hidden = false;
+          $("processing-text").textContent = "Reading with cloud…";
+          try {
+            const ai = await cloudRead(file);
+            if (state.ocrCancelled) return;
+            mergeAIResult(parsed, ai);
+            if (!isPro() && ai && ai.readable !== false) await bumpCloudUsed();
+          } catch (err) {
+            toast(err.message || "Cloud reading failed");
+          }
         }
       }
     }
@@ -1291,6 +1369,9 @@ async function init() {
       state.deviceId = Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
       await DB.setSetting("deviceId", state.deviceId);
     }
+    state.pro = await DB.getSetting("pro", false);
+    state.cloudMonth = await DB.getSetting("cloudMonth", "");
+    state.cloudUsed = await DB.getSetting("cloudUsed", 0);
     state.expenses = await DB.getAllExpenses();
     sessionStorage.removeItem("dbRetry");
   } catch (err) {
@@ -1458,6 +1539,11 @@ async function init() {
     renderCloudSetting();
     toast(state.cloudConsent === "yes" ? "Cloud reading on" : "Cloud reading off — staying on-device");
   });
+  on("plan-btn", () => showUpgrade(""));
+  on("upgrade-buy", () => { if (PAY_URL) window.open(PAY_URL, "_blank", "noopener"); else toast("Online checkout is coming soon"); });
+  on("upgrade-code", unlockPro);
+  on("upgrade-close", () => { const ov = $("upgrade-overlay"); if (ov) ov.hidden = true; });
+  on("upgrade-overlay", ev => { if (ev.target === $("upgrade-overlay")) $("upgrade-overlay").hidden = true; });
   $("app-version").textContent = "Resit " + APP_VERSION + " · ";
   $("copy-scan").addEventListener("click", async () => {
     const t = await DB.getSetting("lastScan", "");

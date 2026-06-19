@@ -105,6 +105,16 @@ export default {
     if (request.method === "GET") return json({ ok: true, service: "resit-relay" }, 200, cors);
     if (request.method !== "POST") return json({ error: "POST only" }, 405, cors);
     if (!cors["Access-Control-Allow-Origin"]) return json({ error: "Origin not allowed" }, 403, cors);
+
+    /* Pro unlock (pilot): verify a code held only as a Worker secret, so it never
+       ships in the public app. POST /unlock {code}. */
+    if (new URL(request.url).pathname.replace(/\/+$/, "").endsWith("/unlock")) {
+      let u;
+      try { u = await request.json(); } catch (e) { return json({ error: "Bad request" }, 400, cors); }
+      if (env.PRO_UNLOCK && u && u.code === env.PRO_UNLOCK) return json({ ok: true }, 200, cors);
+      return json({ error: "Invalid code" }, 403, cors);
+    }
+
     if (!env.GEMINI_API_KEY) return json({ error: "Reader not configured" }, 500, cors);
 
     let body;

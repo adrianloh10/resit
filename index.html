@@ -96,6 +96,11 @@
       <p class="sync-status" id="cloud-status"></p>
     </div>
     <div class="field">
+      <span class="field-label">Plan</span>
+      <p class="sync-status" id="plan-status" style="text-align:left;margin-top:2px;"></p>
+      <button class="ghost-btn small" id="plan-btn" style="margin-top:8px;">Upgrade to Pro</button>
+    </div>
+    <div class="field">
       <span class="field-label">Your data</span>
       <div class="btn-pair">
         <button class="ghost-btn small" id="backup-data">Back up (.json)</button>
@@ -206,6 +211,22 @@
 
 <div class="overlay photo-overlay" id="photo-overlay" hidden>
   <img id="photo-full" alt="Receipt photo">
+</div>
+
+<div class="overlay sheet-overlay" id="upgrade-overlay" hidden>
+  <div class="confirm-sheet" style="text-align: center;">
+    <p class="sheet-title" style="margin: 6px 0 4px;">Resit Pro</p>
+    <p class="upgrade-price" id="upgrade-price">RM 59 / year</p>
+    <p class="consent-text" id="upgrade-reason"></p>
+    <ul class="upgrade-list">
+      <li>Unlimited cloud receipt reading</li>
+      <li>Everything else stays free &amp; on-device</li>
+      <li>No ads, no tracking — ever</li>
+    </ul>
+    <button class="save-btn" id="upgrade-buy">Upgrade</button>
+    <button class="ghost-btn" id="upgrade-code" style="margin-top: 10px;">I have an unlock code</button>
+    <button class="ghost-btn" id="upgrade-close" style="margin-top: 10px; border: none;">Not now</button>
+  </div>
 </div>
 
 <div class="toast" id="toast" hidden></div>
