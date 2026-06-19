@@ -86,6 +86,15 @@
       </div>
       <p class="sync-status" id="sync-status"></p>
     </div>
+    <div class="field" id="cloud-field" hidden>
+      <span class="field-label">Smarter receipt reading (cloud)</span>
+      <p class="settings-sub">When on, receipts your phone can't read clearly are sent to our cloud reader for a sharper result, then discarded — nothing is stored. Off keeps everything on your phone.</p>
+      <div class="btn-pair">
+        <button class="ghost-btn small" id="cloud-toggle">Turn on</button>
+        <a class="ghost-btn small cloud-privacy" href="privacy.html" target="_blank" rel="noopener">Privacy</a>
+      </div>
+      <p class="sync-status" id="cloud-status"></p>
+    </div>
     <div class="field">
       <span class="field-label">Your data</span>
       <div class="btn-pair">
@@ -100,15 +109,15 @@
     <details class="adv-details">
       <summary>Advanced</summary>
       <div class="field" style="margin-top: 12px;">
-        <span class="field-label">AI assist (instant API reading — optional)</span>
-        <input type="url" id="ai-url" placeholder="Relay URL, e.g. https://resit-xxx.vercel.app/api/read-receipt" style="margin-bottom: 8px;">
-        <input type="password" id="ai-secret" placeholder="Access code">
+        <span class="field-label">Cloud reader URL (optional override)</span>
+        <input type="url" id="ai-url" placeholder="https://resit-relay.&lt;you&gt;.workers.dev" style="margin-bottom: 8px;">
+        <input type="password" id="ai-secret" placeholder="Access code (only for the old relay)">
         <button class="ghost-btn small" id="ai-test" style="margin-top: 8px;">Test connection</button>
       </div>
       <button class="ghost-btn small" id="copy-scan" style="margin-top: 12px;">Copy last scan text</button>
     </details>
     <button class="ghost-btn danger" id="erase-data">Erase all data</button>
-    <p class="settings-note"><span id="app-version"></span>Resit keeps everything on this phone and learns from your corrections — categories, shop names, and where each shop prints its total. Nothing is uploaded anywhere except the receipt photos sent to your private Claude inbox.</p>
+    <p class="settings-note"><span id="app-version"></span>Resit keeps everything on this phone and learns from your corrections — categories, shop names, and where each shop prints its total. Nothing leaves your phone unless you turn on cloud reading or use the Claude inbox.</p>
   </section>
 </main>
 
@@ -182,6 +191,16 @@
     <textarea class="confirm-note" id="confirm-note" rows="1" placeholder="Note (optional)"></textarea>
     <button class="save-btn" id="save-btn">Save</button>
     <p class="edit-hint">Tap anything to edit</p>
+  </div>
+</div>
+
+<div class="overlay sheet-overlay" id="consent-overlay" hidden>
+  <div class="confirm-sheet" style="text-align: center;">
+    <p class="sheet-title" style="margin: 6px 0 12px;">Read this receipt in the cloud?</p>
+    <p class="consent-text">Your phone couldn't read this one clearly. Resit can send the photo to its cloud reader for a sharper result — the photo is read, then discarded, and nothing is stored. Or keep everything on your phone.</p>
+    <button class="save-btn" id="consent-yes">Use cloud reading</button>
+    <button class="ghost-btn" id="consent-no" style="margin-top: 10px;">Keep on-device only</button>
+    <p class="edit-hint"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · change anytime in Settings</p>
   </div>
 </div>
 

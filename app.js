@@ -29,6 +29,8 @@ let state = {
   aiUrl: "",
   aiSecret: "",
   ghToken: "",
+  deviceId: "",
+  cloudConsent: "",  /* "", "yes", "no" — explicit opt-in for cloud reading */
   search: "",
   filterCat: "",
   scopeFilter: "",  /* "", "Personal", "Shared", "Company" */
@@ -43,6 +45,14 @@ let state = {
    matched back to the saved expense. */
 
 const GH_REPO = "adrianloh10/resit-inbox";
+
+/* Public cloud receipt reader (Cloudflare Worker). Empty until deployed — when
+   empty, the app simply uses on-device OCR only (nothing changes). After deploy
+   (see resit/cloud/DEPLOY.md) paste the Worker URL here. A user-set "advanced"
+   override URL in Settings takes precedence, so it can be tested before baking
+   the URL in. */
+const CLOUD_OCR_URL = "";
+function cloudEndpoint() { return (state.aiUrl && state.aiUrl.trim()) || CLOUD_OCR_URL; }
 
 function ghHeaders() {
   return { Authorization: "Bearer " + state.ghToken, Accept: "application/vnd.github+json" };
@@ -79,6 +89,22 @@ function renderSyncStatus() {
   };
   el.textContent = map[state.syncStatus] || "";
   el.className = "sync-status" + (state.syncStatus === "auth" || state.syncStatus === "error" ? " bad" : "");
+}
+
+/* Cloud-reading opt-in row in Settings. Hidden entirely until a reader URL
+   exists (so nothing about it shows before the backend is deployed). */
+function renderCloudSetting() {
+  const wrap = $("cloud-field");
+  if (!wrap) return;
+  if (!cloudEndpoint()) { wrap.hidden = true; return; }
+  wrap.hidden = false;
+  const on = state.cloudConsent === "yes";
+  const btn = $("cloud-toggle");
+  const status = $("cloud-status");
+  if (btn) btn.textContent = on ? "Turn off" : "Turn on";
+  if (status) status.textContent = on
+    ? "On — hard-to-read receipts are read in the cloud, then discarded."
+    : "Off — everything stays on your phone.";
 }
 
 let inboxSyncing = false;
@@ -670,6 +696,7 @@ function switchView(name) {
     renderThemeChips();
     renderSyncStatus();
     renderCatBudgets();
+    renderCloudSetting();
   }
   window.scrollTo(0, 0);
 }
@@ -713,19 +740,51 @@ function fileToThumb(file, maxDim) {
   return loadScaledJpeg(file, maxDim, 0.6);
 }
 
-async function askAI(file) {
-  if (!state.aiUrl || !state.aiSecret) return null;
+/* Cloud reading: send the photo to the relay (Cloudflare Worker, or an old
+   Vercel relay if an access code is set). Returns the same shape the on-device
+   parser uses, so mergeAIResult() handles both. Nothing is stored server-side. */
+async function cloudRead(file) {
+  const url = cloudEndpoint();
+  if (!url) return null;
   const image = await fileToJpegBase64(file, 1568);
-  const res = await fetch(state.aiUrl, {
+  const payload = { image, mediaType: "image/jpeg", deviceId: state.deviceId };
+  if (state.aiSecret) payload.secret = state.aiSecret; /* back-compat with the old relay */
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image, mediaType: "image/jpeg", secret: state.aiSecret })
+    body: JSON.stringify(payload)
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "AI reading failed");
+    throw new Error(body.error || "Cloud reading failed");
   }
   return res.json();
+}
+
+/* Explicit, one-time consent before any photo leaves the device (PDPA). The
+   choice is remembered and can be changed in Settings. */
+function ensureCloudConsent() {
+  if (state.cloudConsent === "yes") return Promise.resolve(true);
+  if (state.cloudConsent === "no") return Promise.resolve(false);
+  return new Promise(resolve => {
+    const ov = $("consent-overlay");
+    const yes = $("consent-yes");
+    const no = $("consent-no");
+    if (!ov || !yes || !no) { resolve(false); return; }
+    const finish = (val) => async () => {
+      yes.removeEventListener("click", onYes);
+      no.removeEventListener("click", onNo);
+      ov.hidden = true;
+      state.cloudConsent = val ? "yes" : "no";
+      await DB.setSetting("cloudConsent", state.cloudConsent);
+      resolve(val);
+    };
+    const onYes = finish(true);
+    const onNo = finish(false);
+    yes.addEventListener("click", onYes);
+    no.addEventListener("click", onNo);
+    ov.hidden = false;
+  });
 }
 
 /* Merge the AI's reading over the on-device parse — the AI only runs when
@@ -800,15 +859,22 @@ async function handleImage(file) {
     if (state.ocrCancelled) return;
     DB.setSetting("lastScan", parsed.rawText || "");
     applyLearnedTotalHint(parsed);
-    /* AI fallback: only when on-device reading came up empty or weak. */
-    if (state.aiUrl && state.aiSecret && (parsed.total === null || (parsed.totalConf || 0) <= 1)) {
-      $("processing-text").textContent = "Asking AI…";
-      try {
-        const ai = await askAI(file);
-        if (state.ocrCancelled) return;
-        mergeAIResult(parsed, ai);
-      } catch (err) {
-        toast(err.message || "AI reading failed");
+    /* Cloud fallback: only when on-device reading came up empty or weak, the
+       cloud reader is configured, and the user has opted in (asked once). */
+    const weak = parsed.total === null || (parsed.totalConf || 0) <= 1;
+    if (cloudEndpoint() && weak) {
+      const consented = await ensureCloudConsent();
+      if (state.ocrCancelled) return;
+      if (consented) {
+        $("processing-overlay").hidden = false;
+        $("processing-text").textContent = "Reading with cloud…";
+        try {
+          const ai = await cloudRead(file);
+          if (state.ocrCancelled) return;
+          mergeAIResult(parsed, ai);
+        } catch (err) {
+          toast(err.message || "Cloud reading failed");
+        }
       }
     }
     if (state.ocrCancelled) return;
@@ -1219,6 +1285,12 @@ async function init() {
     state.aiUrl = await DB.getSetting("aiUrl", "");
     state.aiSecret = await DB.getSetting("aiSecret", "");
     state.ghToken = await DB.getSetting("ghToken", "");
+    state.cloudConsent = await DB.getSetting("cloudConsent", "");
+    state.deviceId = await DB.getSetting("deviceId", "");
+    if (!state.deviceId) {
+      state.deviceId = Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+      await DB.setSetting("deviceId", state.deviceId);
+    }
     state.expenses = await DB.getAllExpenses();
     sessionStorage.removeItem("dbRetry");
   } catch (err) {
@@ -1361,25 +1433,30 @@ async function init() {
   });
   $("ai-test").addEventListener("click", async () => {
     const url = $("ai-url").value.trim(), secret = $("ai-secret").value.trim();
-    if (!url || !secret) { toast("Enter the relay URL and access code first"); return; }
+    if (!url) { toast("Enter the cloud reader URL first"); return; }
     state.aiUrl = url; state.aiSecret = secret;
     await DB.setSetting("aiUrl", url);
     await DB.setSetting("aiSecret", secret);
+    renderCloudSetting();
     toast("Testing…");
     try {
-      /* 1x1 white pixel — verifies URL, access code, API key and credit. */
+      /* 1x1 white pixel — verifies URL, key and connectivity end-to-end. */
       const px = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==";
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: px, mediaType: "image/jpeg", secret })
-      });
+      const payload = { image: px, mediaType: "image/jpeg", deviceId: state.deviceId };
+      if (secret) payload.secret = secret;
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const body = await res.json().catch(() => ({}));
-      if (res.ok) toast("Connected — AI assist is ready");
+      if (res.ok) toast("Connected — cloud reader is ready");
       else toast(body.error || ("Connection failed (" + res.status + ")"));
     } catch (e) {
-      toast("Could not reach the relay — check the URL");
+      toast("Could not reach the reader — check the URL");
     }
+  });
+  on("cloud-toggle", async () => {
+    state.cloudConsent = state.cloudConsent === "yes" ? "no" : "yes";
+    await DB.setSetting("cloudConsent", state.cloudConsent);
+    renderCloudSetting();
+    toast(state.cloudConsent === "yes" ? "Cloud reading on" : "Cloud reading off — staying on-device");
   });
   $("app-version").textContent = "Resit " + APP_VERSION + " · ";
   $("copy-scan").addEventListener("click", async () => {

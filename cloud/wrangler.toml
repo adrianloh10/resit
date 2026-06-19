@@ -1,0 +1,22 @@
+name = "resit-relay"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Anonymous per-device daily counter (no personal data). The id is filled in
+# after you create the database (DEPLOY.md step 4): `wrangler d1 create resit-quota`.
+[[d1_databases]]
+binding = "DB"
+database_name = "resit-quota"
+database_id = "PASTE_DATABASE_ID_AFTER_CREATING"
+
+[vars]
+# Origins allowed to call the reader. Add your custom domain here later if you get one.
+ALLOW_ORIGINS = "https://adrianloh10.github.io,http://localhost:8902"
+# Max receipts one device may read per day via the cloud (protects the free quota).
+DAILY_CAP = "20"
+# Gemini model. flash-lite = cheapest; swap to "gemini-flash-latest" for higher accuracy.
+GEMINI_MODEL = "gemini-flash-lite-latest"
+
+# Secrets are NOT stored here. Set them once with:
+#   wrangler secret put GEMINI_API_KEY
+#   wrangler secret put TURNSTILE_SECRET   (optional)
