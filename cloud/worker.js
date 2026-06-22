@@ -48,6 +48,7 @@ const SYSTEM_PROMPT =
   "If a screenshot shows a transaction date and a separate event/show date, use the transaction date. " +
   "merchant = the shop's brand name, cleaned of corporate suffixes (SDN BHD, registration numbers). " +
   "Pick the category that best fits the merchant and items. " +
+  "Always fill merchant and total first; list AT MOST 20 line items (the total matters more than a complete item list). " +
   "Set readable=false if the image is not a receipt or is too unclear to read.";
 
 function corsHeaders(origin, allowList) {
@@ -120,7 +121,10 @@ export default {
     let body;
     try { body = await request.json(); } catch (e) { return json({ error: "Bad request" }, 400, cors); }
     const { image, mediaType, deviceId, turnstileToken } = body || {};
-    if (!image || typeof image !== "string" || image.length > 6_000_000) {
+    /* Cap input size too (base64). The app already downscales to ~1568px
+       (~0.5-1MB); rejecting anything larger bounds the input-token cost and
+       blocks oversized uploads from a direct caller. */
+    if (!image || typeof image !== "string" || image.length > 4_000_000) {
       return json({ error: "Missing or oversized image" }, 400, cors);
     }
 
@@ -152,7 +156,17 @@ export default {
                 { text: "Extract the expense fields from this receipt." }
               ]
             }],
-            generationConfig: { responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA, temperature: 0 }
+            generationConfig: {
+              responseMimeType: "application/json",
+              responseSchema: RESPONSE_SCHEMA,
+              temperature: 0,
+              /* Hard per-receipt cost caps: bound the output length and switch
+                 OFF the model's "thinking" tokens, so no single scan can run up
+                 a large bill. ~1024 tokens comfortably covers a receipt with up
+                 to ~20 line items. */
+              maxOutputTokens: 1024,
+              thinkingConfig: { thinkingBudget: 0 }
+            }
           })
         }
       );
