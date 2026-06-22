@@ -1,1 +1,9 @@
-﻿test-receipts/
+test-receipts/
+
+# Capacitor / native build artifacts — generated in the cloud, never committed
+node_modules/
+www/
+android/
+ios/
+*.keystore
+*.jks

@@ -891,6 +891,43 @@ function mergeAIResult(parsed, ai) {
 
 /* ---------- Capture flow ---------- */
 
+/* Running inside the Capacitor native shell (Android/iOS app) vs a browser/PWA. */
+function isNative() {
+  return !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform());
+}
+
+/* Native photo capture via the Capacitor Camera plugin; returns a File so it
+   flows through the same handleImage() path as the web file inputs. */
+async function captureNative(source) {
+  try {
+    const Cam = window.Capacitor.Plugins.Camera;
+    const photo = await Cam.getPhoto({
+      quality: 85,
+      resultType: "base64",
+      source: source === "camera" ? "CAMERA" : "PHOTOS",
+      saveToGallery: false
+    });
+    if (!photo || !photo.base64String) return null;
+    const bin = atob(photo.base64String);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new File([bytes], "receipt.jpg", { type: "image/jpeg" });
+  } catch (e) {
+    return null; /* user cancelled, or plugin unavailable */
+  }
+}
+
+/* One entry point for both: native camera/gallery on the app, file inputs on web. */
+async function pickImage(source) {
+  $("chooser-overlay").hidden = true;
+  if (isNative()) {
+    const file = await captureNative(source);
+    if (file) handleImage(file);
+    return;
+  }
+  (source === "camera" ? $("camera-input") : $("gallery-input")).click();
+}
+
 function openChooser() {
   $("chooser-overlay").hidden = false;
 }
@@ -1449,8 +1486,8 @@ async function init() {
   }, { passive: true });
 
   $("fab-camera").addEventListener("click", openChooser);
-  $("choose-camera").addEventListener("click", () => { $("chooser-overlay").hidden = true; $("camera-input").click(); });
-  $("choose-gallery").addEventListener("click", () => { $("chooser-overlay").hidden = true; $("gallery-input").click(); });
+  $("choose-camera").addEventListener("click", () => pickImage("camera"));
+  $("choose-gallery").addEventListener("click", () => pickImage("gallery"));
   $("choose-manual").addEventListener("click", () => { $("chooser-overlay").hidden = true; openConfirmSheet(null); });
   $("chooser-overlay").addEventListener("click", ev => { if (ev.target === $("chooser-overlay")) $("chooser-overlay").hidden = true; });
 
@@ -1568,8 +1605,9 @@ async function init() {
   });
 
   /* Service worker + auto-update: when a new version installs, the SW takes
-     control and we reload once automatically — no more closing the app twice. */
-  if ("serviceWorker" in navigator) {
+     control and we reload once automatically — no more closing the app twice.
+     Skipped in the native shell, which bundles its own assets offline. */
+  if ("serviceWorker" in navigator && !isNative()) {
     const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.register("sw.js").then(reg => {
       reg.addEventListener("updatefound", () => {

@@ -11,8 +11,8 @@ database_name = "resit-quota"
 database_id = "cc890234-c8a9-4a5d-ace5-1d097c7015ed"
 
 [vars]
-# Origins allowed to call the reader. Add your custom domain here later if you get one.
-ALLOW_ORIGINS = "https://adrianloh10.github.io,http://localhost:8902"
+# Origins allowed to call the reader: web app + native (Capacitor) shells.
+ALLOW_ORIGINS = "https://adrianloh10.github.io,http://localhost:8902,https://localhost,http://localhost,capacitor://localhost,ionic://localhost"
 # Max receipts one device may read per day via the cloud (protects the free quota).
 DAILY_CAP = "20"
 # Gemini model. flash-lite = cheapest; swap to "gemini-flash-latest" for higher accuracy.

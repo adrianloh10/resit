@@ -1,0 +1,37 @@
+# Cloud build for the Resit Android app (no Mac, no local Node needed).
+# Connect this repo in Codemagic; it runs these steps on a cloud machine and
+# produces an installable APK. The web app is copied into www/ and wrapped by
+# Capacitor; the native android/ project is generated fresh each build.
+#
+# First goal: a DEBUG apk you can sideload to confirm the wrap works.
+# Later (for Google Play): switch `assembleDebug` -> `bundleRelease`, add
+# Codemagic Android code signing, and publish the .aab.
+workflows:
+  android:
+    name: Resit Android (debug)
+    instance_type: linux_x2
+    max_build_duration: 30
+    environment:
+      node: 20
+      java: 17
+    scripts:
+      - name: Assemble web app into www/
+        script: |
+          rm -rf www && mkdir www
+          cp index.html app.js db.js ocr.js styles.css version.js manifest.webmanifest www/
+          cp -r icons www/icons
+      - name: Install Capacitor and add Android
+        script: |
+          npm install
+          npx cap add android
+          npx cap sync android
+      - name: Generate app icons (best-effort)
+        script: |
+          npx @capacitor/assets generate --android || echo "skipped icon generation"
+      - name: Build debug APK
+        script: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew assembleDebug
+    artifacts:
+      - android/app/build/outputs/**/*.apk

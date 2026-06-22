@@ -97,7 +97,7 @@ async function checkAndBumpQuota(db, deviceId, cap) {
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
-    const allowList = (env.ALLOW_ORIGINS || "https://adrianloh10.github.io,http://localhost:8902")
+    const allowList = (env.ALLOW_ORIGINS || "https://adrianloh10.github.io,http://localhost:8902,https://localhost,http://localhost,capacitor://localhost,ionic://localhost")
       .split(",").map(s => s.trim()).filter(Boolean);
     const cors = corsHeaders(origin, allowList);
 
