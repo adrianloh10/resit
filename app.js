@@ -932,17 +932,40 @@ function openChooser() {
   $("chooser-overlay").hidden = false;
 }
 
+/* Quick "who's this for?" picker shown right after a photo is taken, so the
+   receipt is tagged Personal/Shared/Company before it's saved. Resolves to the
+   chosen scope, or null if cancelled. */
+function pickScope() {
+  return new Promise(resolve => {
+    const ov = $("scope-pick-overlay");
+    if (!ov) { resolve("Personal"); return; }
+    const wired = [];
+    const cleanup = () => wired.forEach(([el, fn]) => el.removeEventListener("click", fn));
+    const finish = val => { cleanup(); ov.hidden = true; resolve(val); };
+    const bind = (id, val) => { const el = $(id); if (el) { const fn = () => finish(val); el.addEventListener("click", fn); wired.push([el, fn]); } };
+    bind("scope-pick-personal", "Personal");
+    bind("scope-pick-shared", "Shared");
+    bind("scope-pick-company", "Company");
+    bind("scope-pick-cancel", null);
+    const backdrop = ev => { if (ev.target === ov) finish(null); };
+    ov.addEventListener("click", backdrop); wired.push([ov, backdrop]);
+    ov.hidden = false;
+  });
+}
+
 async function handleImage(file) {
   if (!file) return;
   /* Claude inbox mode: no on-device reading, no animation — save instantly
      as pending and let Claude fill in everything when it reviews the photo. */
   if (state.ghToken) {
+    const scope = await pickScope();
+    if (!scope) return; /* cancelled — don't save */
     const thumb = await fileToThumb(file, 700);
     const record = {
       amount: 0,
       merchant: "Receipt",
       category: "Other",
-      scope: "Personal",
+      scope: scope,
       date: new Date().toISOString(),
       items: [],
       note: "",
