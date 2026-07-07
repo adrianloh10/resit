@@ -42,6 +42,15 @@ html[data-theme="dark"] {
 html { color-scheme: only light; }
 html[data-theme="dark"] { color-scheme: dark; }
 
+/* Phone-only layout guards: stop Android/Samsung text autosizing from
+   inflating text past the layout, and make horizontal page scroll
+   impossible — the app is designed to always fit the viewport width. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+html, body { overflow-x: clip; }
+
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
 
@@ -380,14 +389,17 @@ html, body {
 /* Home filter row — each type with its monthly total; tap to filter. */
 .scope-filter { display: flex; gap: 7px; margin: 16px 0 0; }
 .scope-chip {
-  flex: 1 1 0; min-width: 0;
+  flex: 1 1 0; min-width: 0; overflow: hidden;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 7px 6px; border-radius: 12px;
   border: 1px solid var(--divider-soft); background: var(--paper-raised);
   cursor: pointer; font-family: var(--sans);
 }
 .scope-chip-name { font-size: 11px; color: var(--muted); white-space: nowrap; }
-.scope-chip-amt { font-size: 12.5px; font-family: var(--mono); color: var(--ink); }
+.scope-chip-amt {
+  font-size: 12.5px; font-family: var(--mono); color: var(--ink);
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .scope-chip.selected .scope-chip-name,
 .scope-chip.selected .scope-chip-amt { color: var(--paper); }
 .scope-chip.scope-all.selected { background: var(--ink); border-color: var(--ink); }
