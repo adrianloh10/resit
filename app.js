@@ -577,7 +577,7 @@ function renderHome() {
     row.innerHTML = `
       <span class="cat-dot" style="background:${CAT_COLOR[e.category] || CAT_COLOR.Other}"></span>
       <span class="entry-main">
-        <span class="entry-merchant">${camera}${escapeHtml(e.merchant || "Expense")}${scopePill}</span>
+        <span class="entry-merchant">${camera}<span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span>${scopePill}</span>
         <span class="entry-cat">${dup}${e.pending ? "waiting for Claude · " : ""}${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
       </span>
       ${amountHtml}`;
