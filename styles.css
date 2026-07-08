@@ -379,6 +379,15 @@ html, body {
 .cat-budget.over { color: var(--rust); }
 .cat-budget.pace { color: var(--ochre); }
 
+/* ---------- Insight polish ---------- */
+.ins-row-sub { font-size: 11px; color: var(--muted); }
+.ins-merchant-row { cursor: pointer; }
+.odd-pill { font-size: 9.5px; padding: 1px 6px; border-radius: 999px; border: 0.5px solid currentColor; color: var(--rust); white-space: nowrap; }
+.rhythm-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 8px; }
+.rh-day { height: 16px; border-radius: 3px; background: var(--divider); }
+.rh-day.empty { background: none; }
+.rhythm-cap { text-align: center; font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+
 /* ---------- Recurring + rules ---------- */
 .recur-up { font-size: 10.5px; color: var(--rust); }
 .rules-list { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }

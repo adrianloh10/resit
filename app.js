@@ -655,6 +655,7 @@ function renderHome() {
   }
 
   renderFilterChips(scoped);
+  const unusualIds = computeUnusualIds();
 
   /* Search + category filter further narrow the (already scope-filtered) list. */
   const q = state.search.trim().toLowerCase();
@@ -717,6 +718,7 @@ function renderHome() {
     const dup = dupIds.has(e.id) ? `<span class="dup-flag">duplicate?</span> · ` : "";
     const claim = e.claimStatus === "to-claim" ? `<span class="claim-pill to">to claim</span> · `
       : e.claimStatus === "claimed" ? `<span class="claim-pill done">claimed ✓</span> · ` : "";
+    const odd = unusualIds.has(e.id) ? `<span class="odd-pill">higher than usual</span> · ` : "";
     const camera = e.photo ? `<span class="has-photo" aria-hidden="true">▦ </span>` : "";
     const sc = scopeOf(e);
     const scopePill = `<span class="scope-pill ${SCOPE_CLASS[sc]}">${sc}</span>`;
@@ -732,7 +734,7 @@ function renderHome() {
       <span class="cat-dot" style="background:${CAT_COLOR[e.category] || CAT_COLOR.Other}"></span>
       <span class="entry-main">
         <span class="entry-merchant">${camera}<span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span>${scopePill}</span>
-        <span class="entry-cat">${dup}${claim}${pendingText}${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
+        <span class="entry-cat">${dup}${claim}${odd}${pendingText}${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
       </span>
       ${amountHtml}`;
     row.addEventListener("click", () => openConfirmSheet(e));
@@ -913,12 +915,17 @@ function renderInsights() {
   for (const e of exps) byCat[e.category] = (byCat[e.category] || 0) + e.amount;
   const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
 
-  const byMerchant = {};
+  /* Top places grouped by BRAND (so OCR name variants of one shop merge),
+     with visit counts and per-visit average. */
+  const byBrand = {};
   for (const e of exps) {
-    const key = e.merchant || "Unnamed";
-    byMerchant[key] = (byMerchant[key] || 0) + e.amount;
+    const b = brandOf(normMerchant(e.merchant)) || "unnamed";
+    const g = byBrand[b] = byBrand[b] || { amt: 0, n: 0, name: e.merchant || "Unnamed", last: 0 };
+    g.amt += e.amount; g.n++;
+    const t = new Date(e.date).getTime();
+    if (t >= g.last) { g.last = t; g.name = state.merchantNames[b] || e.merchant || "Unnamed"; }
   }
-  const merchants = Object.entries(byMerchant).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const merchants = Object.values(byBrand).sort((a, b) => b.amt - a.amt).slice(0, 5);
 
   const dayCount = new Set(exps.map(e => new Date(e.date).toDateString())).size;
 
@@ -977,6 +984,32 @@ function renderInsights() {
   }
   html += `</div>`;
 
+  /* Rhythm: ink-density day grid for the viewed month. */
+  const dim2 = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+  const perDay = Array(dim2 + 1).fill(0);
+  for (const e of exps) perDay[new Date(e.date).getDate()] += e.amount;
+  const maxDay = Math.max(...perDay);
+  if (maxDay > 0) {
+    const offset = (new Date(m.getFullYear(), m.getMonth(), 1).getDay() + 6) % 7; /* Monday-first */
+    html += `<p class="ins-section-label">Rhythm</p><div class="rhythm-grid">`;
+    for (let i = 0; i < offset; i++) html += `<span class="rh-day empty"></span>`;
+    for (let d = 1; d <= dim2; d++) {
+      const op = perDay[d] > 0 ? (0.12 + 0.78 * (perDay[d] / maxDay)).toFixed(2) : 0;
+      html += `<span class="rh-day"${op ? ` style="background:var(--ink);opacity:${op}" title="${d}: ${fmtRM(perDay[d], true)}"` : ""}></span>`;
+    }
+    html += `</div>`;
+    let we = 0, weDays = 0, wd = 0, wdDays = 0;
+    for (let d = 1; d <= dim2; d++) {
+      const dow = new Date(m.getFullYear(), m.getMonth(), d).getDay();
+      if (dow === 0 || dow === 6) { we += perDay[d]; weDays++; } else { wd += perDay[d]; wdDays++; }
+    }
+    if (we > 0 && wd > 0) {
+      const ratio = (we / weDays) / (wd / wdDays);
+      if (ratio > 1.3) html += `<p class="rhythm-cap">Weekends run ~${ratio.toFixed(1)}× weekdays</p>`;
+      else if (ratio < 0.7) html += `<p class="rhythm-cap">Weekdays run ~${(1 / ratio).toFixed(1)}× weekends</p>`;
+    }
+  }
+
   /* Subscriptions & regulars — Pro radar (teaser row for free users). */
   if (isPro()) {
     const rec = detectRecurring();
@@ -1016,8 +1049,19 @@ function renderInsights() {
   }
 
   html += `<p class="ins-section-label">Top places</p>`;
-  for (const [name, amt] of merchants) {
-    html += `<div class="ins-row"><span class="ins-row-name">${escapeHtml(name)}</span><span class="ins-row-val">${fmtRM(amt)}</span></div>`;
+  for (const g of merchants) {
+    const detail = g.n > 1 ? ` <span class="ins-row-sub">· ${g.n}× · ~${fmtRM(g.amt / g.n, true)} each</span>` : "";
+    html += `<div class="ins-row ins-merchant-row" data-name="${escapeHtml(g.name)}"><span class="ins-row-name">${escapeHtml(g.name)}${detail}</span><span class="ins-row-val">${fmtRM(g.amt)}</span></div>`;
+  }
+
+  /* Worth a look — entries far above this shop's/category's usual price. */
+  const unusualIds = computeUnusualIds();
+  const odd = exps.filter(e => unusualIds.has(e.id)).slice(0, 3);
+  if (odd.length) {
+    html += `<p class="ins-section-label">Worth a look</p>`;
+    for (const e of odd) {
+      html += `<div class="ins-row"><span class="ins-row-name">${escapeHtml(e.merchant || "Expense")} <span class="ins-row-sub">· higher than usual</span></span><span class="ins-row-val">${fmtRM(e.amount)}</span></div>`;
+    }
   }
 
   html += `<div class="home-settings-row"><button class="settings-link" id="ins-statement">Monthly statement</button><button class="settings-link" id="open-settings">Settings</button></div>`;
@@ -1027,6 +1071,39 @@ function renderInsights() {
   if (st) st.addEventListener("click", () => { if (isPro()) openStatement(m); else showUpgrade("Monthly statements are a Pro feature."); });
   const ru = $("ins-radar-upgrade");
   if (ru) ru.addEventListener("click", () => showUpgrade("The recurring-charge radar is a Pro feature."));
+  /* Tap a top place -> home, pre-filtered to that shop. */
+  for (const row of body.querySelectorAll(".ins-merchant-row")) {
+    row.addEventListener("click", () => {
+      state.search = row.dataset.name || "";
+      switchView("home");
+      const bar = $("search-bar"), si2 = $("search-input");
+      if (bar) bar.hidden = false;
+      if (si2) si2.value = state.search;
+      renderHome();
+    });
+  }
+}
+
+/* Entries priced far (3×+) above this shop's usual — or, lacking shop
+   history, the category's usual. Catches typos, misreads and real spikes. */
+function computeUnusualIds() {
+  const byBrandAmts = {}, byCatAmts = {};
+  for (const e of state.expenses) {
+    if (e.pending || !(e.amount > 0)) continue;
+    const b = brandOf(normMerchant(e.merchant));
+    if (b) (byBrandAmts[b] = byBrandAmts[b] || []).push(e.amount);
+    (byCatAmts[e.category] = byCatAmts[e.category] || []).push(e.amount);
+  }
+  const med = arr => { const s = [...arr].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+  const ids = new Set();
+  for (const e of state.expenses) {
+    if (e.pending || !(e.amount > 0)) continue;
+    const b = brandOf(normMerchant(e.merchant));
+    const ref = b && byBrandAmts[b] && byBrandAmts[b].length >= 3 ? med(byBrandAmts[b])
+      : byCatAmts[e.category] && byCatAmts[e.category].length >= 5 ? med(byCatAmts[e.category]) : null;
+    if (ref !== null && ref > 0 && e.amount > ref * 3) ids.add(e.id);
+  }
+  return ids;
 }
 
 /* Printable, paper-styled statement for the viewed month — opens in a new tab
