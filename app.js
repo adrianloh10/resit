@@ -609,25 +609,41 @@ function renderHome() {
 
   /* Search + category filter further narrow the (already scope-filtered) list. */
   const q = state.search.trim().toLowerCase();
-  let exps = scoped;
-  if (q) exps = exps.filter(e =>
+  const matchesQuery = e =>
     (e.merchant || "").toLowerCase().includes(q) ||
     (e.note || "").toLowerCase().includes(q) ||
     (e.category || "").toLowerCase().includes(q) ||
-    (e.items || []).some(i => (i.name || "").toLowerCase().includes(q)));
+    (e.items || []).some(i => (i.name || "").toLowerCase().includes(q));
+  let exps = scoped;
+  if (q) exps = exps.filter(matchesQuery);
   if (state.filterCat) exps = exps.filter(e => e.category === state.filterCat);
+
+  /* When searching, also look OUTSIDE the viewed month so "that hardware shop
+     from March" doesn't mean swiping month by month. */
+  let others = [];
+  if (q) {
+    others = state.expenses.filter(e => {
+      const d = new Date(e.date);
+      return !(d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth());
+    });
+    if (state.scopeFilter) others = others.filter(e => scopeOf(e) === state.scopeFilter);
+    if (state.filterCat) others = others.filter(e => e.category === state.filterCat);
+    others = others.filter(matchesQuery)
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 20);
+  }
 
   const ledger = $("ledger");
   ledger.innerHTML = "";
   const empty = $("empty-note");
-  if (!allExps.length) {
+  if (!allExps.length && !others.length) {
     empty.hidden = false;
     /* First-run onboarding copy only when the app is truly empty; an empty
        other month just says so. */
     empty.innerHTML = state.expenses.length === 0
       ? "No expenses yet.<br>Tap the camera to snap your first receipt."
       : "Nothing in " + MONTH_NAMES[m.getMonth()] + (m.getFullYear() === now.getFullYear() ? "" : " " + m.getFullYear()) + ".";
-  } else if (!exps.length) {
+  } else if (!exps.length && !others.length) {
     empty.hidden = false;
     empty.innerHTML = "No matches" + (q ? " for “" + escapeHtml(state.search.trim()) + "”" : "") + ".";
   } else {
@@ -658,17 +674,50 @@ function renderHome() {
     const amountHtml = e.pending
       ? `<span class="entry-amount waiting">waiting…</span>`
       : `<span class="entry-amount">${fmtRM(e.amount)}</span>`;
+    /* A pending receipt older than a day is probably stuck — invite a manual fill. */
+    const stale = e.pending && Date.now() - new Date(e.createdAt || e.date).getTime() > 86400000;
+    const pendingText = e.pending ? (stale ? "still waiting — tap to fill it in yourself · " : "waiting for Claude · ") : "";
     const row = document.createElement("button");
     row.className = "entry";
     row.innerHTML = `
       <span class="cat-dot" style="background:${CAT_COLOR[e.category] || CAT_COLOR.Other}"></span>
       <span class="entry-main">
         <span class="entry-merchant">${camera}<span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span>${scopePill}</span>
-        <span class="entry-cat">${dup}${claim}${e.pending ? "waiting for Claude · " : ""}${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
+        <span class="entry-cat">${dup}${claim}${pendingText}${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
       </span>
       ${amountHtml}`;
     row.addEventListener("click", () => openConfirmSheet(e));
     ledger.appendChild(row);
+  }
+
+  /* Matches from other months, with a month tag; tap opens the expense. */
+  if (others.length) {
+    const label = document.createElement("p");
+    label.className = "day-label";
+    label.textContent = "In other months";
+    ledger.appendChild(label);
+    for (const e of others) {
+      const d = new Date(e.date);
+      const sc = scopeOf(e);
+      const row = document.createElement("button");
+      row.className = "entry";
+      row.innerHTML = `
+        <span class="cat-dot" style="background:${CAT_COLOR[e.category] || CAT_COLOR.Other}"></span>
+        <span class="entry-main">
+          <span class="entry-merchant"><span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span><span class="scope-pill ${SCOPE_CLASS[sc]}">${sc}</span></span>
+          <span class="entry-cat">${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()} · ${escapeHtml(e.category)}</span>
+        </span>
+        <span class="entry-amount">${fmtRM(e.amount)}</span>`;
+      row.addEventListener("click", () => openConfirmSheet(e));
+      ledger.appendChild(row);
+    }
+  }
+
+  const pl = $("pending-line");
+  if (pl) {
+    const n = state.expenses.filter(e => e.pending).length;
+    pl.hidden = n === 0;
+    if (n > 0) pl.textContent = n + " receipt" + (n > 1 ? "s" : "") + " waiting for Claude — not yet in the total";
   }
 }
 
@@ -2002,6 +2051,11 @@ async function init() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") syncInbox();
   });
+  /* While a receipt is waiting and the app is open, check for Claude's
+     results every minute — no pull-to-refresh needed. */
+  setInterval(() => {
+    if (document.visibilityState === "visible" && state.ghToken && state.expenses.some(e => e.pending)) syncInbox();
+  }, 60000);
 }
 
 /* Remove photo records whose work is done or long stale, so storage doesn't
