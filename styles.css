@@ -379,6 +379,32 @@ html, body {
 .cat-budget.over { color: var(--rust); }
 .cat-budget.pace { color: var(--ochre); }
 
+/* ---------- Settings structure ---------- */
+.settings-group-title {
+  font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); margin: 0 6px 6px;
+}
+.settings-card {
+  background: var(--paper-raised); border: 0.5px solid var(--divider-soft);
+  border-radius: 16px; padding: 14px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.settings-card .field input, .settings-card .field select { background: var(--paper); }
+.settings-divider { height: 0.5px; background: var(--divider); }
+
+/* ---------- Monthly repeat ---------- */
+.repeat-row {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-top: 14px; font-size: 13px; color: var(--ink-soft); cursor: pointer;
+}
+.repeat-row input { accent-color: var(--sage); width: 16px; height: 16px; }
+
+/* ---------- Month slide transition ---------- */
+@keyframes month-in-next { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
+@keyframes month-in-prev { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: none; } }
+.month-anim-next { animation: month-in-next .22s ease; }
+.month-anim-prev { animation: month-in-prev .22s ease; }
+
 /* ---------- Insight polish ---------- */
 .ins-row-sub { font-size: 11px; color: var(--muted); }
 .ins-merchant-row { cursor: pointer; }

@@ -26,6 +26,8 @@ let state = {
   totalHints: {},
   merchantScopes: {},
   catBudgets: {},
+  currency: "RM",   /* display only — no conversion */
+  recurring: [],    /* monthly expense templates */
   theme: "light",
   aiUrl: "",
   aiSecret: "",
@@ -505,7 +507,79 @@ function viewedMonth() {
 
 function fmtRM(n, withSign) {
   const s = (Math.round(n * 100) / 100).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return (withSign ? "RM " : "") + s;
+  return (withSign ? state.currency + " " : "") + s;
+}
+
+/* Timezone-safe "YYYY-MM" for a LOCAL date (toISOString would shift near midnight). */
+function monthKeyOf(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+}
+
+/* Monthly expense templates: catch up any months due since each template's
+   lastMonth, one entry per month on the template's day (clamped to the month). */
+async function materializeRecurring() {
+  try {
+    if (!state.recurring.length) return;
+    const now = new Date();
+    const curKey = monthKeyOf(now);
+    let added = 0, changed = false;
+    for (const t of state.recurring) {
+      let guard = 0;
+      while (t.lastMonth < curKey && guard++ < 6) {
+        const [y, mo] = t.lastMonth.split("-").map(Number); /* mo is 1-based */
+        const nxt = new Date(y, mo, 1); /* first day of the following month */
+        const dim = new Date(nxt.getFullYear(), nxt.getMonth() + 1, 0).getDate();
+        const when = new Date(nxt.getFullYear(), nxt.getMonth(), Math.min(t.day || 1, dim), 9, 0);
+        if (when > now) break; /* this month's day hasn't arrived yet */
+        const rec = {
+          amount: t.amount, merchant: t.merchant, category: t.category,
+          scope: t.scope || "Personal",
+          claimStatus: t.scope === "Company" ? "to-claim" : "",
+          date: when.toISOString(), items: [], note: t.note || "",
+          pending: false, recurringAuto: true, createdAt: new Date().toISOString()
+        };
+        rec.id = await DB.addExpense(rec);
+        state.expenses.push(rec);
+        t.lastMonth = monthKeyOf(nxt);
+        changed = true; added++;
+      }
+    }
+    if (changed) await DB.setSetting("recurringTemplates", state.recurring);
+    if (added) {
+      renderCurrent();
+      toast("Added " + added + " monthly expense" + (added > 1 ? "s" : ""));
+    }
+  } catch (e) { /* never block startup on this */ }
+}
+
+function renderRecurringList() {
+  const wrap = $("recurring-list");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  state.recurring.forEach((t, idx) => {
+    const row = document.createElement("div");
+    row.className = "rule-row";
+    const span = document.createElement("span");
+    span.textContent = t.merchant + " · " + fmtRM(t.amount, true) + " · day " + (t.day || 1);
+    const x = document.createElement("button");
+    x.className = "item-del";
+    x.textContent = "✕";
+    x.setAttribute("aria-label", "Stop repeating");
+    x.addEventListener("click", async () => {
+      state.recurring.splice(idx, 1);
+      await DB.setSetting("recurringTemplates", state.recurring);
+      renderRecurringList();
+      toast("Stopped — existing entries stay");
+    });
+    row.append(span, x);
+    wrap.appendChild(row);
+  });
+  if (!state.recurring.length) {
+    const p = document.createElement("p");
+    p.className = "settings-sub";
+    p.textContent = "None yet.";
+    wrap.appendChild(p);
+  }
 }
 
 /* If an action-toast (e.g. a pending undo-delete) is still waiting when a new
@@ -627,7 +701,7 @@ function renderHome() {
   } else {
     fill.style.background = "";
     if (state.budget > 0) {
-      $("budget-line").textContent = `of RM ${state.budget.toLocaleString("en-MY")} budget`;
+      $("budget-line").textContent = `of ${state.currency} ${state.budget.toLocaleString("en-MY")} budget`;
       const pct = Math.min(100, (total / state.budget) * 100);
       fill.style.width = pct + "%";
       fill.classList.toggle("over", total > state.budget);
@@ -1144,7 +1218,7 @@ function openStatement(m) {
   </style></head><body>
     <h1>Resit — monthly statement</h1>
     <p class="sub">${title} · generated ${new Date().toLocaleDateString("en-MY")}</p>
-    <p class="big">RM ${fmtRM(total)}</p>
+    <p class="big">${state.currency} ${fmtRM(total)}</p>
     <p class="sub">${exps.length} expenses · Personal ${fmtRM(st.Personal)} · Shared ${fmtRM(st.Shared)} · Company ${fmtRM(st.Company)}${toClaim > 0 ? " · still to claim " + fmtRM(toClaim) : ""}</p>
     <p class="sect">By category</p>
     <table><tr><th>Category</th><th class="num">Spent</th><th class="num">Budget</th><th class="num">±</th></tr>${catRows}</table>
@@ -1186,6 +1260,11 @@ function switchView(name) {
     renderPlan();
     renderBackupStatus();
     renderRules();
+    renderRecurringList();
+    const cs = $("currency-select");
+    if (cs) cs.value = state.currency;
+    const bl = $("budget-label");
+    if (bl) bl.textContent = "Monthly budget (" + state.currency + ")";
   }
   window.scrollTo(0, 0);
 }
@@ -1550,6 +1629,10 @@ function openConfirmSheet(expense) {
   const e = state.editing;
 
   $("confirm-title").textContent = e.id ? "Edit expense" : (e.fromReceipt ? "Check & save" : "New expense");
+  const cp = $("currency-prefix");
+  if (cp) cp.textContent = state.currency;
+  const rr = $("repeat-row");
+  if (rr) { rr.hidden = !!e.id; const cb = $("confirm-repeat"); if (cb) cb.checked = false; }
   $("confirm-amount").value = e.amount != null ? e.amount.toFixed(2) : "";
   $("confirm-merchant").value = e.merchant;
 
@@ -1754,6 +1837,18 @@ async function saveExpense() {
     queuePhotoForClaude(record.id, e._file);
   }
 
+  /* "Repeats every month": remember it as a template; future months are
+     added automatically on this day. */
+  const repeatCb = $("confirm-repeat");
+  if (!e.id && repeatCb && repeatCb.checked && record.amount > 0 && record.merchant) {
+    state.recurring.push({
+      merchant: record.merchant, amount: record.amount, category: record.category,
+      scope: scopeOf(record), day: d.getDate(), note: record.note,
+      lastMonth: monthKeyOf(d)
+    });
+    await DB.setSetting("recurringTemplates", state.recurring);
+  }
+
   rememberMerchantCategory(record.merchant, record.category);
   rememberMerchantScope(record.merchant, scopeOf(record));
   learnFromCorrections(e, record);
@@ -1771,12 +1866,26 @@ function renderCurrent() {
   if (state.view === "insights") renderInsights();
 }
 
+/* Month navigation with a directional slide, used by buttons and swipes. */
+function changeMonth(delta) {
+  state.monthOffset += delta;
+  const target = state.view === "insights" ? "insights-body" : "ledger";
+  renderCurrent();
+  const el = $(target);
+  if (!el) return;
+  el.classList.remove("month-anim-next", "month-anim-prev");
+  void el.offsetWidth; /* restart the animation */
+  el.classList.add(delta > 0 ? "month-anim-next" : "month-anim-prev");
+}
+
 /* ---------- Settings ---------- */
 
 /* One source of truth for export columns — CSV and Excel both build from this,
    so adding a column (or guarding a value) happens once. Numbers are coerced
    defensively so a malformed restored record can never crash an export. */
-const EXPORT_HEADERS = ["Date", "Time", "Merchant", "Category", "Type", "Claim", "Amount (RM)", "Note", "Items"];
+function exportHeaders() {
+  return ["Date", "Time", "Merchant", "Category", "Type", "Claim", "Amount (" + state.currency + ")", "Note", "Items"];
+}
 
 /* Expenses matching an optional export filter {from, to, scope, category, claim}. */
 function filteredExpenses(f) {
@@ -1813,7 +1922,7 @@ function expenseExportRecords(f) {
 async function exportCSV(filter) {
   const recs = expenseExportRecords(filter);
   if (!recs.length) { toast("Nothing to export" + (filter ? " for those filters" : " yet")); return 0; }
-  const rows = [EXPORT_HEADERS];
+  const rows = [exportHeaders()];
   for (const r of recs) rows.push([r.date, r.time, r.merchant, r.category, r.type, r.claim, r.amount.toFixed(2), r.note, r.items]);
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
   downloadBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), "resit-expenses.csv");
@@ -1841,7 +1950,7 @@ async function exportXLS(filter, baseName) {
       <td>${escapeHtml(r.items)}</td>
     </tr>`;
   }
-  const th = EXPORT_HEADERS.map(h => `<th>${h}</th>`).join("");
+  const th = exportHeaders().map(h => `<th>${h}</th>`).join("");
   const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
   <head><meta charset="utf-8"><style>
     table{border-collapse:collapse;font-family:Calibri,sans-serif;font-size:11pt}
@@ -2003,6 +2112,8 @@ async function init() {
     state.totalHints = await DB.getSetting("totalHints", {});
     state.merchantScopes = await DB.getSetting("merchantScopes", {});
     state.catBudgets = await DB.getSetting("catBudgets", {});
+    state.currency = await DB.getSetting("currency", "RM");
+    state.recurring = await DB.getSetting("recurringTemplates", []);
     state.theme = await DB.getSetting("theme", "light");
     state.aiUrl = await DB.getSetting("aiUrl", "");
     state.aiSecret = await DB.getSetting("aiSecret", "");
@@ -2037,6 +2148,7 @@ async function init() {
   applyTheme();
   darkMedia.addEventListener("change", () => { if (state.theme === "auto") applyTheme(); });
   renderHome();
+  materializeRecurring(); /* add any monthly expenses that came due */
 
   /* Ask the browser to protect our storage from eviction under storage
      pressure — the single most important line for "your data stays safe". */
@@ -2075,10 +2187,10 @@ async function init() {
     renderBackupStatus();
   });
 
-  $("month-prev").addEventListener("click", () => { state.monthOffset--; renderHome(); });
-  $("month-next").addEventListener("click", () => { state.monthOffset++; renderHome(); });
-  $("ins-month-prev").addEventListener("click", () => { state.monthOffset--; renderInsights(); });
-  $("ins-month-next").addEventListener("click", () => { state.monthOffset++; renderInsights(); });
+  $("month-prev").addEventListener("click", () => changeMonth(-1));
+  $("month-next").addEventListener("click", () => changeMonth(1));
+  $("ins-month-prev").addEventListener("click", () => changeMonth(-1));
+  $("ins-month-next").addEventListener("click", () => changeMonth(1));
 
   $("nav-home").addEventListener("click", () => switchView("home"));
   $("nav-insights").addEventListener("click", () => switchView("insights"));
@@ -2129,8 +2241,7 @@ async function init() {
       return;
     }
     if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 2) return;
-    if (state.view === "home") { state.monthOffset += dx < 0 ? 1 : -1; renderHome(); }
-    else if (state.view === "insights") { state.monthOffset += dx < 0 ? 1 : -1; renderInsights(); }
+    if (state.view === "home" || state.view === "insights") changeMonth(dx < 0 ? 1 : -1);
   }, { passive: true });
 
   $("fab-camera").addEventListener("click", openChooser);
@@ -2175,6 +2286,15 @@ async function init() {
     state.budget = v;
     await DB.setSetting("budget", v);
     toast("Budget saved");
+  });
+  const csel = $("currency-select");
+  if (csel) csel.addEventListener("change", async () => {
+    state.currency = csel.value || "RM";
+    await DB.setSetting("currency", state.currency);
+    const bl = $("budget-label");
+    if (bl) bl.textContent = "Monthly budget (" + state.currency + ")";
+    renderCurrent();
+    toast("Showing amounts in " + state.currency);
   });
   $("export-csv").addEventListener("click", () => exportCSV());
   on("export-xls", () => exportXLS());

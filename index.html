@@ -77,69 +77,113 @@
     <span class="spacer"></span>
   </header>
   <section class="settings-body">
-    <div class="field">
-      <span class="field-label">Appearance</span>
-      <div class="chip-row" style="justify-content: flex-start; margin-top: 4px;" id="theme-chips"></div>
-    </div>
-    <label class="field">
-      <span class="field-label">Monthly budget (RM)</span>
-      <input type="number" id="budget-input" inputmode="decimal" min="0" step="50">
-    </label>
-    <details class="adv-details">
-      <summary>Category budgets (optional)</summary>
-      <div class="cat-budgets" id="cat-budgets"></div>
-    </details>
-    <details class="adv-details">
-      <summary>Learned rules</summary>
-      <p class="settings-sub">What Resit has learned from your habits — shop categories, types and preferred names. Remove one to unlearn it.</p>
-      <div class="rules-list" id="rules-list"></div>
-    </details>
-    <div class="field">
-      <span class="field-label">Claude inbox (free — your receipts get checked by Claude on your PC)</span>
-      <input type="password" id="gh-token" placeholder="GitHub token (github_pat_...)">
-      <div class="btn-pair">
-        <button class="ghost-btn small" id="gh-test">Test connection</button>
-        <button class="ghost-btn small" id="sync-now">Check for Claude's updates</button>
+
+    <div class="settings-group">
+      <p class="settings-group-title">General</p>
+      <div class="settings-card">
+        <div class="field">
+          <span class="field-label">Appearance</span>
+          <div class="chip-row" style="justify-content: flex-start; margin-top: 4px;" id="theme-chips"></div>
+        </div>
+        <div class="settings-divider"></div>
+        <label class="field">
+          <span class="field-label">Currency (display only — amounts aren't converted)</span>
+          <select id="currency-select">
+            <option>RM</option><option>SGD</option><option>USD</option><option>EUR</option>
+            <option>GBP</option><option>AUD</option><option>IDR</option><option>THB</option>
+            <option>PHP</option><option>VND</option><option>INR</option><option>JPY</option>
+            <option>KRW</option><option>TWD</option><option>HKD</option><option>CNY</option><option>BND</option>
+          </select>
+        </label>
+        <div class="settings-divider"></div>
+        <label class="field">
+          <span class="field-label" id="budget-label">Monthly budget (RM)</span>
+          <input type="number" id="budget-input" inputmode="decimal" min="0" step="50">
+        </label>
+        <details class="adv-details">
+          <summary>Category budgets (optional)</summary>
+          <div class="cat-budgets" id="cat-budgets"></div>
+        </details>
       </div>
-      <p class="sync-status" id="sync-status"></p>
     </div>
-    <div class="field" id="cloud-field" hidden>
-      <span class="field-label">Smarter receipt reading (cloud)</span>
-      <p class="settings-sub">When on, receipts your phone can't read clearly are sent to Google's Gemini AI (via Resit's private server) for a sharper result, then discarded — nothing is stored. Off keeps everything on your phone.</p>
-      <div class="btn-pair">
-        <button class="ghost-btn small" id="cloud-toggle">Turn on</button>
-        <a class="ghost-btn small cloud-privacy" href="privacy.html" target="_blank" rel="noopener">Privacy</a>
+
+    <div class="settings-group">
+      <p class="settings-group-title">Receipt reading</p>
+      <div class="settings-card">
+        <div class="field">
+          <span class="field-label">Claude inbox (free — your receipts get checked by Claude on your PC)</span>
+          <input type="password" id="gh-token" placeholder="GitHub token (github_pat_...)">
+          <div class="btn-pair">
+            <button class="ghost-btn small" id="gh-test">Test connection</button>
+            <button class="ghost-btn small" id="sync-now">Check for Claude's updates</button>
+          </div>
+          <p class="sync-status" id="sync-status"></p>
+        </div>
+        <div class="field" id="cloud-field" hidden>
+          <div class="settings-divider" style="margin-bottom: 14px;"></div>
+          <span class="field-label">Smarter receipt reading (cloud)</span>
+          <p class="settings-sub">When on, receipts your phone can't read clearly are sent to Google's Gemini AI (via Resit's private server) for a sharper result, then discarded — nothing is stored. Off keeps everything on your phone.</p>
+          <div class="btn-pair">
+            <button class="ghost-btn small" id="cloud-toggle">Turn on</button>
+            <a class="ghost-btn small cloud-privacy" href="privacy.html" target="_blank" rel="noopener">Privacy</a>
+          </div>
+          <p class="sync-status" id="cloud-status"></p>
+        </div>
+        <div class="settings-divider"></div>
+        <div class="field">
+          <span class="field-label">Plan</span>
+          <p class="sync-status" id="plan-status" style="text-align:left;margin-top:2px;"></p>
+          <button class="ghost-btn small" id="plan-btn" style="margin-top:8px;">Upgrade to Pro</button>
+        </div>
       </div>
-      <p class="sync-status" id="cloud-status"></p>
     </div>
-    <div class="field">
-      <span class="field-label">Plan</span>
-      <p class="sync-status" id="plan-status" style="text-align:left;margin-top:2px;"></p>
-      <button class="ghost-btn small" id="plan-btn" style="margin-top:8px;">Upgrade to Pro</button>
+
+    <div class="settings-group">
+      <p class="settings-group-title">Monthly expenses</p>
+      <div class="settings-card">
+        <p class="settings-sub" style="margin-top: 0;">Bills that repeat every month (rent, subscriptions). Added automatically on their day — set one up by ticking "Repeats every month" when entering an expense.</p>
+        <div class="rules-list" id="recurring-list"></div>
+      </div>
     </div>
-    <div class="field">
-      <span class="field-label">Your data</span>
-      <div class="btn-pair">
-        <button class="ghost-btn small" id="backup-data">Back up (.json)</button>
-        <button class="ghost-btn small" id="restore-data">Restore from backup</button>
+
+    <div class="settings-group">
+      <p class="settings-group-title">Your data</p>
+      <div class="settings-card">
+        <div class="btn-pair">
+          <button class="ghost-btn small" id="backup-data">Back up (.json)</button>
+          <button class="ghost-btn small" id="restore-data">Restore from backup</button>
+        </div>
+        <div class="btn-pair">
+          <button class="ghost-btn small" id="export-csv">Export CSV</button>
+          <button class="ghost-btn small" id="export-xls">Export Excel</button>
+        </div>
+        <button class="ghost-btn small" id="export-filtered">Filtered export / claim report…</button>
+        <p class="sync-status" id="backup-status" style="margin-top: 2px;"></p>
       </div>
-      <div class="btn-pair">
-        <button class="ghost-btn small" id="export-csv">Export CSV</button>
-        <button class="ghost-btn small" id="export-xls">Export Excel</button>
-      </div>
-      <button class="ghost-btn small" id="export-filtered" style="margin-top: 8px;">Filtered export / claim report…</button>
-      <p class="sync-status" id="backup-status"></p>
     </div>
-    <details class="adv-details">
-      <summary>Advanced</summary>
-      <div class="field" style="margin-top: 12px;">
-        <span class="field-label">Cloud reader URL (optional override)</span>
-        <input type="url" id="ai-url" placeholder="https://resit-relay.&lt;you&gt;.workers.dev" style="margin-bottom: 8px;">
-        <input type="password" id="ai-secret" placeholder="Access code (only for the old relay)">
-        <button class="ghost-btn small" id="ai-test" style="margin-top: 8px;">Test connection</button>
+
+    <div class="settings-group">
+      <p class="settings-group-title">Learning &amp; advanced</p>
+      <div class="settings-card">
+        <details class="adv-details">
+          <summary>Learned rules</summary>
+          <p class="settings-sub">What Resit has learned from your habits — shop categories, types and preferred names. Remove one to unlearn it.</p>
+          <div class="rules-list" id="rules-list"></div>
+        </details>
+        <div class="settings-divider"></div>
+        <details class="adv-details">
+          <summary>Advanced</summary>
+          <div class="field" style="margin-top: 12px;">
+            <span class="field-label">Cloud reader URL (optional override)</span>
+            <input type="url" id="ai-url" placeholder="https://resit-relay.&lt;you&gt;.workers.dev" style="margin-bottom: 8px;">
+            <input type="password" id="ai-secret" placeholder="Access code (only for the old relay)">
+            <button class="ghost-btn small" id="ai-test" style="margin-top: 8px;">Test connection</button>
+          </div>
+          <button class="ghost-btn small" id="copy-scan" style="margin-top: 12px;">Copy last scan text</button>
+        </details>
       </div>
-      <button class="ghost-btn small" id="copy-scan" style="margin-top: 12px;">Copy last scan text</button>
-    </details>
+    </div>
+
     <button class="ghost-btn danger" id="erase-data">Erase all data</button>
     <p class="settings-note"><span id="app-version"></span>Resit keeps everything on this phone and learns from your corrections — categories, shop names, and where each shop prints its total. Nothing leaves your phone unless you turn on cloud reading or use the Claude inbox.</p>
   </section>
@@ -201,7 +245,7 @@
     </header>
     <div class="photo-block" id="photo-block"></div>
     <div class="confirm-amount-wrap">
-      <span class="rm-prefix">RM</span>
+      <span class="rm-prefix" id="currency-prefix">RM</span>
       <input class="confirm-amount" id="confirm-amount" inputmode="decimal" type="text" placeholder="0.00">
     </div>
     <input class="confirm-merchant" id="confirm-merchant" type="text" placeholder="Merchant" list="merchant-list" autocomplete="off">
@@ -218,6 +262,7 @@
     <div class="chip-row" id="category-chips"></div>
     <div class="items-block" id="items-block"></div>
     <textarea class="confirm-note" id="confirm-note" rows="1" placeholder="Note (optional)"></textarea>
+    <label class="repeat-row" id="repeat-row"><input type="checkbox" id="confirm-repeat"><span>Repeats every month</span></label>
     <button class="save-btn" id="save-btn">Save</button>
     <p class="edit-hint">Tap anything to edit</p>
   </div>
