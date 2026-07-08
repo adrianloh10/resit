@@ -379,6 +379,12 @@ html, body {
 .cat-budget.over { color: var(--rust); }
 .cat-budget.pace { color: var(--ochre); }
 
+/* ---------- Recurring + rules ---------- */
+.recur-up { font-size: 10.5px; color: var(--rust); }
+.rules-list { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
+.rule-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 0.5px solid var(--divider); }
+.rule-row span { font-size: 12.5px; color: var(--ink-soft); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* ---------- Quick add ---------- */
 .quickadd-label { font-size: 11px; color: var(--muted); margin: -4px 0 6px; }
 .quickadd-row { justify-content: flex-start; margin: 0 0 14px; }

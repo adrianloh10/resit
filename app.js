@@ -24,6 +24,7 @@ let state = {
   merchantCats: {},
   merchantNames: {},
   totalHints: {},
+  merchantScopes: {},
   catBudgets: {},
   theme: "light",
   aiUrl: "",
@@ -407,6 +408,50 @@ function rememberMerchantCategory(merchant, category) {
   DB.setSetting("merchantCats", state.merchantCats);
 }
 
+/* Learn merchant -> Personal/Shared/Company. Applied (Pro) after the same
+   scope is saved twice in a row for a brand. */
+function rememberMerchantScope(merchant, scope) {
+  const b = brandOf(normMerchant(merchant));
+  if (!b || b.length < 3 || !SCOPES.includes(scope)) return;
+  const cur = state.merchantScopes[b];
+  state.merchantScopes[b] = cur && cur.scope === scope ? { scope, n: cur.n + 1 } : { scope, n: 1 };
+  DB.setSetting("merchantScopes", state.merchantScopes);
+}
+
+function scopeRuleFor(merchant) {
+  const rule = state.merchantScopes[brandOf(normMerchant(merchant || ""))];
+  return rule && rule.n >= 2 && SCOPES.includes(rule.scope) ? rule.scope : null;
+}
+
+/* Everything the app has learned, shown in Settings so it can be unlearned. */
+function renderRules() {
+  const wrap = $("rules-list");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  const add = (key, text, map, setting) => {
+    const row = document.createElement("div");
+    row.className = "rule-row";
+    const span = document.createElement("span");
+    span.textContent = text;
+    const x = document.createElement("button");
+    x.className = "item-del";
+    x.textContent = "✕";
+    x.setAttribute("aria-label", "Forget this rule");
+    x.addEventListener("click", async () => { delete map[key]; await DB.setSetting(setting, map); renderRules(); });
+    row.append(span, x);
+    wrap.appendChild(row);
+  };
+  for (const [k, v] of Object.entries(state.merchantCats)) add(k, k + " → " + v, state.merchantCats, "merchantCats");
+  for (const [k, v] of Object.entries(state.merchantScopes)) { if (v.n >= 2) add(k, k + " → " + v.scope, state.merchantScopes, "merchantScopes"); }
+  for (const [k, v] of Object.entries(state.merchantNames)) add(k, k + " → “" + v + "”", state.merchantNames, "merchantNames");
+  if (!wrap.children.length) {
+    const p = document.createElement("p");
+    p.className = "settings-sub";
+    p.textContent = "Nothing learned yet — rules appear as you save and correct expenses.";
+    wrap.appendChild(p);
+  }
+}
+
 /* ---------- Learning from corrections ----------
    When a scanned field is corrected before saving, remember the lesson:
    - the name you prefer for this shop
@@ -773,6 +818,7 @@ function renderScopeChips() {
     b.textContent = s;
     b.addEventListener("click", () => {
       state.editing.scope = s;
+      state.editing.userPickedScope = true; /* manual choice beats auto-rules */
       /* New Company expenses default to "to claim"; Personal never claims. */
       if (s === "Company" && !state.editing.id && !state.editing.claimStatus) state.editing.claimStatus = "to-claim";
       renderScopeChips();
@@ -800,6 +846,37 @@ function renderClaimChips() {
     b.addEventListener("click", () => { e.claimStatus = val; renderClaimChips(); });
     row.appendChild(b);
   }
+}
+
+/* Recurring-charge radar (Pro, fully on-device): a brand with 3+ charges of
+   similar amount (median ±15%) spaced roughly monthly (median gap 21-40 days)
+   is a subscription/regular. */
+function detectRecurring() {
+  const groups = {};
+  for (const e of state.expenses) {
+    if (e.pending || !(e.amount > 0)) continue;
+    const b = brandOf(normMerchant(e.merchant));
+    if (!b || b.length < 3) continue;
+    (groups[b] = groups[b] || []).push(e);
+  }
+  const out = [];
+  for (const [brand, list] of Object.entries(groups)) {
+    if (list.length < 3) continue;
+    list.sort((a, b) => new Date(a.date) - new Date(b.date));
+    const amounts = list.map(e => e.amount).sort((a, b) => a - b);
+    const median = amounts[Math.floor(amounts.length / 2)];
+    const similar = list.filter(e => Math.abs(e.amount - median) <= median * 0.15);
+    if (similar.length < 3) continue;
+    const gaps = [];
+    for (let i = 1; i < similar.length; i++) gaps.push((new Date(similar[i].date) - new Date(similar[i - 1].date)) / 86400000);
+    gaps.sort((a, b) => a - b);
+    const mgap = gaps[Math.floor(gaps.length / 2)];
+    if (mgap < 21 || mgap > 40) continue;
+    const latest = similar[similar.length - 1];
+    const prevAmt = similar[similar.length - 2].amount;
+    out.push({ brand, merchant: latest.merchant, amount: latest.amount, count: similar.length, increased: latest.amount > prevAmt * 1.02, prevAmount: prevAmt });
+  }
+  return out.sort((a, b) => b.amount - a.amount);
 }
 
 /* Respects the Personal/Shared/Company filter so every insights aggregate
@@ -896,6 +973,21 @@ function renderInsights() {
   }
   html += `</div>`;
 
+  /* Subscriptions & regulars — Pro radar (teaser row for free users). */
+  if (isPro()) {
+    const rec = detectRecurring();
+    if (rec.length) {
+      const monthly = rec.reduce((s, r) => s + r.amount, 0);
+      html += `<p class="ins-section-label">Subscriptions &amp; regulars · ~${fmtRM(monthly, true)}/mo</p>`;
+      for (const r of rec.slice(0, 8)) {
+        html += `<div class="ins-row"><span class="ins-row-name">↻ ${escapeHtml(r.merchant)}${r.increased ? ` <span class="recur-up">↑ was ${fmtRM(r.prevAmount)}</span>` : ""}</span><span class="ins-row-val">${fmtRM(r.amount)}/mo</span></div>`;
+      }
+    }
+  } else {
+    html += `<p class="ins-section-label">Subscriptions &amp; regulars</p>
+      <div class="ins-row"><span class="ins-row-name" style="color:var(--muted)">Spot charges that repeat every month</span><button class="settings-link" id="ins-radar-upgrade">Pro</button></div>`;
+  }
+
   html += `<p class="ins-section-label">By category</p>`;
   for (const [cat, amt] of cats) {
     const pct = Math.round((amt / total) * 100);
@@ -924,9 +1016,66 @@ function renderInsights() {
     html += `<div class="ins-row"><span class="ins-row-name">${escapeHtml(name)}</span><span class="ins-row-val">${fmtRM(amt)}</span></div>`;
   }
 
-  html += `<div class="home-settings-row"><button class="settings-link" id="open-settings">Settings</button></div>`;
+  html += `<div class="home-settings-row"><button class="settings-link" id="ins-statement">Monthly statement</button><button class="settings-link" id="open-settings">Settings</button></div>`;
   body.innerHTML = html;
   $("open-settings").addEventListener("click", () => switchView("settings"));
+  const st = $("ins-statement");
+  if (st) st.addEventListener("click", () => { if (isPro()) openStatement(m); else showUpgrade("Monthly statements are a Pro feature."); });
+  const ru = $("ins-radar-upgrade");
+  if (ru) ru.addEventListener("click", () => showUpgrade("The recurring-charge radar is a Pro feature."));
+}
+
+/* Printable, paper-styled statement for the viewed month — opens in a new tab
+   and triggers the print dialog (share sheet -> save as PDF on the phone). */
+function openStatement(m) {
+  const exps = state.expenses.filter(e => { const d = new Date(e.date); return d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth() && !e.pending; });
+  if (!exps.length) { toast("Nothing this month to report"); return; }
+  const total = exps.reduce((s, e) => s + e.amount, 0);
+  const title = MONTH_NAMES[m.getMonth()] + " " + m.getFullYear();
+  const st = { Personal: 0, Shared: 0, Company: 0 };
+  const byCat = {}, byMer = {};
+  let toClaim = 0;
+  for (const e of exps) {
+    st[scopeOf(e)] += e.amount;
+    byCat[e.category] = (byCat[e.category] || 0) + e.amount;
+    const k = e.merchant || "Unnamed";
+    (byMer[k] = byMer[k] || { amt: 0, n: 0 }); byMer[k].amt += e.amount; byMer[k].n++;
+    if (e.claimStatus === "to-claim") toClaim += e.amount;
+  }
+  const catRows = Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([c, a]) => {
+    const cb = state.catBudgets[c];
+    return `<tr><td>${escapeHtml(c)}</td><td class="num">${fmtRM(a)}</td><td class="num">${cb > 0 ? fmtRM(cb) : "—"}</td><td class="num">${cb > 0 ? (a > cb ? "+" + fmtRM(a - cb) : fmtRM(a - cb)) : ""}</td></tr>`;
+  }).join("");
+  const merRows = Object.entries(byMer).sort((a, b) => b[1].amt - a[1].amt).slice(0, 10).map(([n, v]) =>
+    `<tr><td>${escapeHtml(n)}</td><td class="num">${v.n}×</td><td class="num">${fmtRM(v.amt)}</td></tr>`).join("");
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resit — ${title}</title><style>
+    body{font-family:Georgia,serif;background:#F7F3EC;color:#2B2722;max-width:640px;margin:0 auto;padding:36px 28px}
+    h1{font-size:21px;font-weight:normal;margin:0}
+    .sub{color:#78705E;font-size:13px;margin:4px 0 22px}
+    .big{font-family:Consolas,monospace;font-size:34px;margin:6px 0 2px}
+    table{width:100%;border-collapse:collapse;margin:8px 0 22px;font-size:13px}
+    th{ text-align:left;color:#78705E;font-weight:normal;border-bottom:1px solid #B6AE9E;padding:4px 6px}
+    td{padding:5px 6px;border-bottom:0.5px solid #DFD7C6}
+    .num{text-align:right;font-family:Consolas,monospace}
+    .sect{color:#78705E;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin:24px 0 2px}
+    .foot{color:#A99D88;font-size:11px;margin-top:30px;text-align:center}
+    @media print{body{background:#fff}}
+  </style></head><body>
+    <h1>Resit — monthly statement</h1>
+    <p class="sub">${title} · generated ${new Date().toLocaleDateString("en-MY")}</p>
+    <p class="big">RM ${fmtRM(total)}</p>
+    <p class="sub">${exps.length} expenses · Personal ${fmtRM(st.Personal)} · Shared ${fmtRM(st.Shared)} · Company ${fmtRM(st.Company)}${toClaim > 0 ? " · still to claim " + fmtRM(toClaim) : ""}</p>
+    <p class="sect">By category</p>
+    <table><tr><th>Category</th><th class="num">Spent</th><th class="num">Budget</th><th class="num">±</th></tr>${catRows}</table>
+    <p class="sect">Top places</p>
+    <table><tr><th>Merchant</th><th class="num">Visits</th><th class="num">Total</th></tr>${merRows}</table>
+    <p class="foot">Generated on-device by Resit — no data leaves your phone.</p>
+    <script>setTimeout(function(){window.print()},400)<\/script>
+  </body></html>`;
+  const w = window.open("", "_blank");
+  if (!w) { toast("Allow pop-ups to open the statement"); return; }
+  w.document.write(html);
+  w.document.close();
 }
 
 function escapeHtml(s) {
@@ -955,6 +1104,7 @@ function switchView(name) {
     renderCloudSetting();
     renderPlan();
     renderBackupStatus();
+    renderRules();
   }
   window.scrollTo(0, 0);
 }
@@ -1524,6 +1674,7 @@ async function saveExpense() {
   }
 
   rememberMerchantCategory(record.merchant, record.category);
+  rememberMerchantScope(record.merchant, scopeOf(record));
   learnFromCorrections(e, record);
 
   closeConfirmSheet(true);
@@ -1743,6 +1894,7 @@ async function importBackup(file) {
   state.merchantCats = await DB.getSetting("merchantCats", {});
   state.merchantNames = await DB.getSetting("merchantNames", {});
   state.totalHints = await DB.getSetting("totalHints", {});
+  state.merchantScopes = await DB.getSetting("merchantScopes", {});
   state.catBudgets = await DB.getSetting("catBudgets", {});
   state.theme = await DB.getSetting("theme", "light");
   applyTheme();
@@ -1768,6 +1920,7 @@ async function init() {
     state.merchantCats = await DB.getSetting("merchantCats", {});
     state.merchantNames = await DB.getSetting("merchantNames", {});
     state.totalHints = await DB.getSetting("totalHints", {});
+    state.merchantScopes = await DB.getSetting("merchantScopes", {});
     state.catBudgets = await DB.getSetting("catBudgets", {});
     state.theme = await DB.getSetting("theme", "light");
     state.aiUrl = await DB.getSetting("aiUrl", "");
@@ -1886,11 +2039,25 @@ async function init() {
 
   $("confirm-merchant").addEventListener("input", () => {
     const e = state.editing;
-    if (!e || e.userPicked || e.id) return;
+    if (!e || e.id) return;
     const v = $("confirm-merchant").value;
     if (v.trim().length < 3) return;
-    const g = learnedCategory(v) || window.ReceiptOCR.guessCategory(v, v);
-    if (g && g !== "Other" && g !== e.category) { e.category = g; renderCategoryChips(); }
+    if (!e.userPicked) {
+      const g = learnedCategory(v) || window.ReceiptOCR.guessCategory(v, v);
+      if (g && g !== "Other" && g !== e.category) { e.category = g; renderCategoryChips(); }
+    }
+    /* Pro auto-rule: a brand tagged the same type twice pre-sets it here. */
+    if (isPro() && !e.userPickedScope) {
+      const rs = scopeRuleFor(v);
+      if (rs && rs !== scopeOf(e)) {
+        e.scope = rs;
+        if (rs === "Company" && !e.claimStatus) e.claimStatus = "to-claim";
+        if (rs === "Personal") e.claimStatus = "";
+        renderScopeChips();
+        renderClaimChips();
+        toast("Type set to " + rs + " — learned from before");
+      }
+    }
   });
 
   $("confirm-back").addEventListener("click", () => closeConfirmSheet());
