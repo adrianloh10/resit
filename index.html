@@ -158,6 +158,8 @@
 <div class="overlay sheet-overlay" id="chooser-overlay" hidden>
   <div class="confirm-sheet chooser-sheet">
     <p class="sheet-title" style="margin: 6px 0 14px;">Add expense</p>
+    <p class="quickadd-label" id="quickadd-label" hidden>Quick add</p>
+    <div class="chip-row quickadd-row" id="quickadd-row" hidden></div>
     <button class="chooser-btn" id="choose-camera">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h2l1.5-2h7L17 7h2a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.2"/></svg>
       <span>Snap receipt with camera</span>
@@ -196,7 +198,8 @@
       <span class="rm-prefix">RM</span>
       <input class="confirm-amount" id="confirm-amount" inputmode="decimal" type="text" placeholder="0.00">
     </div>
-    <input class="confirm-merchant" id="confirm-merchant" type="text" placeholder="Merchant">
+    <input class="confirm-merchant" id="confirm-merchant" type="text" placeholder="Merchant" list="merchant-list" autocomplete="off">
+    <datalist id="merchant-list"></datalist>
     <div class="confirm-datetime">
       <input type="date" id="confirm-date">
       <input type="time" id="confirm-time">

@@ -379,6 +379,11 @@ html, body {
 .cat-budget.over { color: var(--rust); }
 .cat-budget.pace { color: var(--ochre); }
 
+/* ---------- Quick add ---------- */
+.quickadd-label { font-size: 11px; color: var(--muted); margin: -4px 0 6px; }
+.quickadd-row { justify-content: flex-start; margin: 0 0 14px; }
+.quickadd-chip { background: var(--paper-raised); }
+
 /* ---------- Claims ---------- */
 .claim-pill {
   font-size: 9.5px; padding: 1px 6px; border-radius: 999px;

@@ -1067,7 +1067,65 @@ async function pickImage(source) {
   (source === "camera" ? $("camera-input") : $("gallery-input")).click();
 }
 
+/* Frequent manual spends (kopi, parking, tol) — the receipts-less half of
+   Malaysian spending. Merchants logged 3+ times become one-tap chips. */
+function computeFavourites() {
+  const groups = {};
+  for (const e of state.expenses) {
+    if (e.pending || !(e.amount > 0)) continue;
+    const n = normMerchant(e.merchant);
+    if (!n || n === "receipt" || n === "expense") continue;
+    (groups[n] = groups[n] || []).push(e);
+  }
+  return Object.values(groups)
+    .filter(list => list.length >= 3)
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 4)
+    .map(list => {
+      const latest = list.reduce((m, e) => new Date(e.date) > new Date(m.date) ? e : m);
+      /* Most frequent amount; ties go to the most recent. */
+      const counts = {};
+      for (const e of list) { const k = e.amount.toFixed(2); counts[k] = (counts[k] || 0) + 1; }
+      const amount = parseFloat(Object.entries(counts).sort((a, b) => b[1] - a[1] || (a[0] === latest.amount.toFixed(2) ? 1 : -1))[0][0]);
+      return { merchant: latest.merchant, amount, category: latest.category, scope: scopeOf(latest) };
+    });
+}
+
+function renderQuickAdd() {
+  const row = $("quickadd-row");
+  const label = $("quickadd-label");
+  if (!row || !label) return;
+  const favs = computeFavourites();
+  row.innerHTML = "";
+  label.hidden = row.hidden = favs.length === 0;
+  for (const f of favs) {
+    const b = document.createElement("button");
+    b.className = "chip quickadd-chip";
+    b.textContent = f.merchant + " · " + fmtRM(f.amount, true);
+    b.addEventListener("click", async () => {
+      $("chooser-overlay").hidden = true;
+      const record = {
+        amount: f.amount, merchant: f.merchant, category: f.category, scope: f.scope,
+        claimStatus: f.scope === "Company" ? "to-claim" : "",
+        date: new Date().toISOString(), items: [], note: "", pending: false,
+        createdAt: new Date().toISOString()
+      };
+      record.id = await DB.addExpense(record);
+      state.expenses.push(record);
+      state.monthOffset = 0;
+      switchView("home");
+      toastAction("Added " + f.merchant + " " + fmtRM(f.amount, true), "Undo", async () => {
+        await DB.deleteExpense(record.id);
+        state.expenses = state.expenses.filter(x => x.id !== record.id);
+        renderCurrent();
+      }, null);
+    });
+    row.appendChild(b);
+  }
+}
+
 function openChooser() {
+  renderQuickAdd();
   $("chooser-overlay").hidden = false;
 }
 
@@ -1075,6 +1133,12 @@ function openChooser() {
    receipt is tagged Personal/Shared/Company before it's saved. Resolves to the
    chosen scope, or null if cancelled. */
 function pickScope() {
+  /* Batch capture ("Snap another"): reuse the last scope without re-asking. */
+  if (state._batchScope) {
+    const s = state._batchScope;
+    state._batchScope = null;
+    return Promise.resolve(s);
+  }
   return new Promise(resolve => {
     const ov = $("scope-pick-overlay");
     if (!ov) { resolve("Personal"); return; }
@@ -1098,7 +1162,7 @@ async function handleImage(file) {
      as pending and let Claude fill in everything when it reviews the photo. */
   if (state.ghToken) {
     const scope = await pickScope();
-    if (!scope) return; /* cancelled — don't save */
+    if (!scope) { toast("Photo discarded"); return; } /* cancelled — don't save */
     const thumb = await fileToThumb(file, 700);
     const record = {
       amount: 0,
@@ -1119,7 +1183,9 @@ async function handleImage(file) {
     queuePhotoForClaude(record.id, file);
     state.monthOffset = 0;
     switchView("home");
-    toast("Saved — Claude will fill it in");
+    /* Batch loop: one tap to snap the next receipt, reusing this scope. */
+    toastAction("Saved — Claude will fill it in", "Snap another",
+      () => { state._batchScope = scope; pickImage("camera"); }, null, 6000);
     return;
   }
   state.ocrCancelled = false;
@@ -1206,6 +1272,18 @@ function openConfirmSheet(expense) {
   $("confirm-title").textContent = e.id ? "Edit expense" : (e.fromReceipt ? "Check & save" : "New expense");
   $("confirm-amount").value = e.amount != null ? e.amount.toFixed(2) : "";
   $("confirm-merchant").value = e.merchant;
+
+  /* Autocomplete from the shops you already log (most frequent first). */
+  const dl = $("merchant-list");
+  if (dl) {
+    const freq = {};
+    for (const x of state.expenses) {
+      const n = (x.merchant || "").trim();
+      if (n && n !== "Receipt") freq[n] = (freq[n] || 0) + 1;
+    }
+    dl.innerHTML = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 20)
+      .map(([n]) => `<option value="${escapeHtml(n)}">`).join("");
+  }
   const d = new Date(e.date);
   $("confirm-date").value = d.toISOString().slice(0, 10);
   $("confirm-time").value = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
