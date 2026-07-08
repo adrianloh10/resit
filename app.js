@@ -505,9 +505,11 @@ function viewedMonth() {
   return new Date(now.getFullYear(), now.getMonth() + state.monthOffset, 1);
 }
 
-function fmtRM(n, withSign) {
+/* Amounts always carry the display currency (second arg kept for old call
+   sites; it no longer changes anything). */
+function fmtRM(n, _withSign) {
   const s = (Math.round(n * 100) / 100).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return (withSign ? state.currency + " " : "") + s;
+  return state.currency + " " + s;
 }
 
 /* Timezone-safe "YYYY-MM" for a LOCAL date (toISOString would shift near midnight). */
@@ -686,8 +688,9 @@ function renderHome() {
      the headline total. "" = All. */
   const scoped = state.scopeFilter ? allExps.filter(e => scopeOf(e) === state.scopeFilter) : allExps;
   const total = scoped.reduce((s, e) => s + e.amount, 0);
-  const [whole, cents] = fmtRM(total).split(".");
-  $("month-total").innerHTML = `${whole}<span class="cents">.${cents}</span>`;
+  const bare = fmtRM(total).slice(state.currency.length + 1);
+  const [whole, cents] = bare.split(".");
+  $("month-total").innerHTML = `<span class="cur-prefix">${escapeHtml(state.currency)}</span> ${whole}<span class="cents">.${cents}</span>`;
 
   const fill = $("budget-fill");
   if (state.scopeFilter) {
@@ -865,6 +868,14 @@ function renderFilterChips(monthExps) {
 
 /* Personal / Shared / Company filter with each type's running monthly total
    shown right on the chip — tap to filter the list and the headline total. */
+/* Compact money for tight chips: cents dropped once >= 1,000, k over 100k. */
+function fmtChip(n) {
+  const r = Math.round(n * 100) / 100;
+  if (r >= 100000) return state.currency + " " + Math.round(r / 1000) + "k";
+  if (r >= 1000) return state.currency + " " + Math.round(r).toLocaleString("en-MY");
+  return fmtRM(r);
+}
+
 function renderScopeFilter(monthExps, targetId, rerender) {
   const row = $(targetId || "scope-filter");
   if (!row) return;
@@ -876,7 +887,7 @@ function renderScopeFilter(monthExps, targetId, rerender) {
   const mk = (label, value, amount, cls) => {
     const b = document.createElement("button");
     b.className = "scope-chip " + cls + (state.scopeFilter === value ? " selected" : "");
-    b.innerHTML = `<span class="scope-chip-name">${label}</span><span class="scope-chip-amt">${fmtRM(amount)}</span>`;
+    b.innerHTML = `<span class="scope-chip-name">${label}</span><span class="scope-chip-amt">${fmtChip(amount)}</span>`;
     b.addEventListener("click", () => { state.scopeFilter = (state.scopeFilter === value) ? "" : value; redo(); });
     row.appendChild(b);
   };
@@ -1058,18 +1069,24 @@ function renderInsights() {
   }
   html += `</div>`;
 
-  /* Rhythm: ink-density day grid for the viewed month. */
+  /* Rhythm: a real month calendar — darker ink = more spent that day.
+     Hover shows the amount (title); tapping shows it as a toast on phones. */
   const dim2 = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
   const perDay = Array(dim2 + 1).fill(0);
   for (const e of exps) perDay[new Date(e.date).getDate()] += e.amount;
   const maxDay = Math.max(...perDay);
   if (maxDay > 0) {
     const offset = (new Date(m.getFullYear(), m.getMonth(), 1).getDay() + 6) % 7; /* Monday-first */
+    const mon3 = MONTH_NAMES[m.getMonth()].slice(0, 3);
     html += `<p class="ins-section-label">Rhythm</p><div class="rhythm-grid">`;
+    for (const h of ["M", "T", "W", "T", "F", "S", "S"]) html += `<span class="rh-head">${h}</span>`;
     for (let i = 0; i < offset; i++) html += `<span class="rh-day empty"></span>`;
     for (let d = 1; d <= dim2; d++) {
-      const op = perDay[d] > 0 ? (0.12 + 0.78 * (perDay[d] / maxDay)).toFixed(2) : 0;
-      html += `<span class="rh-day"${op ? ` style="background:var(--ink);opacity:${op}" title="${d}: ${fmtRM(perDay[d], true)}"` : ""}></span>`;
+      const amt = perDay[d];
+      const op = amt > 0 ? 0.10 + 0.80 * (amt / maxDay) : 0;
+      const label = d + " " + mon3 + " · " + (amt > 0 ? fmtRM(amt) : "nothing spent");
+      html += `<button type="button" class="rh-day${amt > 0 ? " spent" : ""}${op > 0.5 ? " deep" : ""}"` +
+        ` style="--rh:${op.toFixed(2)}" title="${label}" data-label="${label}"><i>${d}</i></button>`;
     }
     html += `</div>`;
     let we = 0, weDays = 0, wd = 0, wdDays = 0;
@@ -1145,6 +1162,10 @@ function renderInsights() {
   if (st) st.addEventListener("click", () => { if (isPro()) openStatement(m); else showUpgrade("Monthly statements are a Pro feature."); });
   const ru = $("ins-radar-upgrade");
   if (ru) ru.addEventListener("click", () => showUpgrade("The recurring-charge radar is a Pro feature."));
+  /* Tap a rhythm day -> show that day's spend (phones have no hover). */
+  for (const day of body.querySelectorAll(".rh-day[data-label]")) {
+    day.addEventListener("click", () => toast(day.dataset.label));
+  }
   /* Tap a top place -> home, pre-filtered to that shop. */
   for (const row of body.querySelectorAll(".ins-merchant-row")) {
     row.addEventListener("click", () => {
@@ -1218,7 +1239,7 @@ function openStatement(m) {
   </style></head><body>
     <h1>Resit — monthly statement</h1>
     <p class="sub">${title} · generated ${new Date().toLocaleDateString("en-MY")}</p>
-    <p class="big">${state.currency} ${fmtRM(total)}</p>
+    <p class="big">${fmtRM(total)}</p>
     <p class="sub">${exps.length} expenses · Personal ${fmtRM(st.Personal)} · Shared ${fmtRM(st.Shared)} · Company ${fmtRM(st.Company)}${toClaim > 0 ? " · still to claim " + fmtRM(toClaim) : ""}</p>
     <p class="sect">By category</p>
     <table><tr><th>Category</th><th class="num">Spent</th><th class="num">Budget</th><th class="num">±</th></tr>${catRows}</table>

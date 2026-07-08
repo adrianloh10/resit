@@ -121,7 +121,12 @@ html, body {
   padding: 10px 20px calc(14px + env(safe-area-inset-bottom));
   background: linear-gradient(to top, var(--paper) 75%, transparent);
   z-index: 10;
+  /* The bar itself must not eat taps meant for content beneath its
+     transparent gradient (e.g. the Settings/Statement links) — only its
+     actual buttons are clickable. */
+  pointer-events: none;
 }
+.bottom-nav .nav-btn, .bottom-nav .fab { pointer-events: auto; }
 .nav-btn { background: none; border: none; color: var(--faint); width: 48px; height: 48px; cursor: pointer; }
 .nav-btn.active { color: var(--ink); }
 .nav-btn svg { width: 22px; height: 22px; }
@@ -410,9 +415,21 @@ html, body {
 .ins-merchant-row { cursor: pointer; }
 .odd-pill { font-size: 9.5px; padding: 1px 6px; border-radius: 999px; border: 0.5px solid currentColor; color: var(--rust); white-space: nowrap; }
 .rhythm-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 8px; }
-.rh-day { height: 16px; border-radius: 3px; background: var(--divider); }
-.rh-day.empty { background: none; }
+.rh-head { text-align: center; font-size: 10px; color: var(--faint); padding-bottom: 2px; }
+.rh-day {
+  position: relative; height: 34px; border-radius: 8px;
+  background: var(--divider); border: none; padding: 0; cursor: pointer;
+  font-family: var(--sans); font-size: 10.5px; color: var(--ink-soft);
+}
+.rh-day i { position: relative; z-index: 1; font-style: normal; }
+.rh-day.spent::before {
+  content: ""; position: absolute; inset: 0; border-radius: 8px;
+  background: var(--ink); opacity: var(--rh, 0);
+}
+.rh-day.deep { color: var(--paper); }
+.rh-day.empty { background: none; cursor: default; }
 .rhythm-cap { text-align: center; font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+.cur-prefix { font-size: 18px; color: var(--muted); letter-spacing: 0; }
 
 /* ---------- Recurring + rules ---------- */
 .recur-up { font-size: 10.5px; color: var(--rust); }
@@ -506,7 +523,7 @@ html, body {
 }
 .scope-chip-name { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .scope-chip-amt {
-  font-size: 12.5px; font-family: var(--mono); color: var(--ink);
+  font-size: 11px; font-family: var(--mono); color: var(--ink);
   max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .scope-chip.selected .scope-chip-name,
