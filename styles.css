@@ -377,6 +377,17 @@ html, body {
 .trend-lbl { font-size: 10.5px; color: var(--muted); margin-top: 5px; }
 .cat-budget { font-size: 10.5px; color: var(--sage); }
 .cat-budget.over { color: var(--rust); }
+.cat-budget.pace { color: var(--ochre); }
+
+/* ---------- Pacing + scope strip ---------- */
+.pacing-line { text-align: center; font-size: 12px; color: var(--muted); margin: 8px 28px 0; }
+.pacing-line.warn { color: var(--rust); }
+.scope-strip { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin: -12px 0 4px; }
+.scope-strip i { display: block; height: 6px; }
+.scope-strip-legend { text-align: center; font-size: 11px; color: var(--muted); margin-bottom: 18px; }
+.scope-strip-legend .scope-personal { color: var(--clay); }
+.scope-strip-legend .scope-shared { color: var(--moss); }
+.scope-strip-legend .scope-company { color: var(--ochre); }
 
 /* ---------- Upgrade sheet ---------- */
 .upgrade-price { font-family: var(--mono); font-size: 22px; color: var(--ink); margin: 2px 0 10px; }

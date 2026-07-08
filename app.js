@@ -510,6 +510,34 @@ function monthExpenses() {
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
+/* Pacing: turn the budget bar into a forward look. Current month + All view
+   only — "RM left · RM/day for N days · on track for ~RM projection". */
+function renderPacing(total) {
+  const el = $("pacing-line");
+  if (!el) return;
+  if (state.scopeFilter || state.monthOffset !== 0 || !(state.budget > 0)) { el.hidden = true; return; }
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const dayOfMonth = now.getDate();
+  const daysLeft = daysInMonth - dayOfMonth + 1; /* incl. today */
+  const left = state.budget - total;
+  let text, warn = false;
+  if (left <= 0) {
+    text = fmtRM(-left, true) + " over budget";
+    warn = true;
+  } else {
+    text = fmtRM(left, true) + " left · " + fmtRM(left / daysLeft, true) + "/day for " + daysLeft + " day" + (daysLeft > 1 ? "s" : "");
+    if (dayOfMonth >= 3) {
+      const projection = (total / dayOfMonth) * daysInMonth;
+      text += " · on track for ~" + fmtRM(projection, true);
+      warn = projection > state.budget;
+    }
+  }
+  el.textContent = text;
+  el.className = "pacing-line" + (warn ? " warn" : "");
+  el.hidden = false;
+}
+
 function renderHome() {
   const m = viewedMonth();
   const now = new Date();
@@ -547,6 +575,7 @@ function renderHome() {
       fill.style.width = "0";
     }
   }
+  renderPacing(total);
 
   /* Possible-duplicate detection: same merchant + amount + day. Flag all but
      the first in each group — non-destructive, just a visual hint. */
@@ -647,9 +676,10 @@ function renderFilterChips(monthExps) {
 
 /* Personal / Shared / Company filter with each type's running monthly total
    shown right on the chip — tap to filter the list and the headline total. */
-function renderScopeFilter(monthExps) {
-  const row = $("scope-filter");
+function renderScopeFilter(monthExps, targetId, rerender) {
+  const row = $(targetId || "scope-filter");
   if (!row) return;
+  const redo = rerender || renderHome;
   const totals = { Personal: 0, Shared: 0, Company: 0 };
   let all = 0;
   for (const e of monthExps) { totals[scopeOf(e)] += e.amount; all += e.amount; }
@@ -658,7 +688,7 @@ function renderScopeFilter(monthExps) {
     const b = document.createElement("button");
     b.className = "scope-chip " + cls + (state.scopeFilter === value ? " selected" : "");
     b.innerHTML = `<span class="scope-chip-name">${label}</span><span class="scope-chip-amt">${fmtRM(amount)}</span>`;
-    b.addEventListener("click", () => { state.scopeFilter = (state.scopeFilter === value) ? "" : value; renderHome(); });
+    b.addEventListener("click", () => { state.scopeFilter = (state.scopeFilter === value) ? "" : value; redo(); });
     row.appendChild(b);
   };
   mk("All", "", all, "scope-all");
@@ -682,8 +712,11 @@ function renderScopeChips() {
   }
 }
 
+/* Respects the Personal/Shared/Company filter so every insights aggregate
+   (trend, YTD, chart) answers for the selected scope. */
 function totalForMonth(year, monthIndex) {
   return state.expenses.reduce((s, e) => {
+    if (state.scopeFilter && scopeOf(e) !== state.scopeFilter) return s;
     const d = new Date(e.date);
     return d.getFullYear() === year && d.getMonth() === monthIndex ? s + e.amount : s;
   }, 0);
@@ -694,12 +727,14 @@ function renderInsights() {
   const now = new Date();
   $("ins-month-label").textContent = MONTH_NAMES[m.getMonth()] + (m.getFullYear() === now.getFullYear() ? "" : " " + m.getFullYear());
 
-  const exps = monthExpenses();
+  const allExps = monthExpenses();
+  renderScopeFilter(allExps, "ins-scope-filter", renderInsights);
+  const exps = state.scopeFilter ? allExps.filter(e => scopeOf(e) === state.scopeFilter) : allExps;
   const total = exps.reduce((s, e) => s + e.amount, 0);
   const body = $("insights-body");
 
   if (!exps.length) {
-    body.innerHTML = `<p class="empty-note" style="margin-top:40px">Nothing this month yet.</p>`;
+    body.innerHTML = `<p class="empty-note" style="margin-top:40px">Nothing ${state.scopeFilter ? "for " + state.scopeFilter : ""} this month yet.</p>`;
     return;
   }
 
@@ -721,6 +756,19 @@ function renderInsights() {
       <p class="big-amount" style="font-size:34px">${fmtRM(total)}</p>
       <p class="budget-line">${exps.length} expenses · ${dayCount} days · avg ${fmtRM(total / Math.max(1, dayCount), true)}/day</p>
     </div>`;
+
+  /* Stacked Personal/Shared/Company strip (All view only). */
+  if (!state.scopeFilter && total > 0) {
+    const st = { Personal: 0, Shared: 0, Company: 0 };
+    for (const e of exps) st[scopeOf(e)] += e.amount;
+    const present = SCOPES.filter(s => st[s] > 0);
+    if (present.length > 1) {
+      html += `<div class="scope-strip">` + present.map(s =>
+        `<i style="width:${(st[s] / total * 100).toFixed(1)}%;background:${SCOPE_FILL[s]}"></i>`).join("") + `</div>
+        <p class="scope-strip-legend">` + present.map(s =>
+        `<span class="${SCOPE_CLASS[s]}">${s} ${Math.round(st[s] / total * 100)}%</span>`).join(" · ") + `</p>`;
+    }
+  }
 
   /* Month-over-month + year-to-date */
   const prev = new Date(m.getFullYear(), m.getMonth() - 1, 1);
@@ -763,7 +811,14 @@ function renderInsights() {
     const pct = Math.round((amt / total) * 100);
     const cb = state.catBudgets[cat];
     const over = cb > 0 && amt > cb;
-    const budgetNote = cb > 0 ? `<span class="cat-budget ${over ? "over" : ""}">${over ? "over " + fmtRM(amt - cb, true) : fmtRM(cb - amt, true) + " left"}</span>` : "";
+    /* Current-month pace check: flag a category heading past its budget. */
+    let paceOver = false;
+    const isCurMonth = m.getFullYear() === now.getFullYear() && m.getMonth() === now.getMonth();
+    if (cb > 0 && !over && isCurMonth && now.getDate() >= 3) {
+      const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      paceOver = (amt / now.getDate()) * dim > cb;
+    }
+    const budgetNote = cb > 0 ? `<span class="cat-budget ${over ? "over" : paceOver ? "pace" : ""}">${over ? "over " + fmtRM(amt - cb, true) : paceOver ? "on pace to pass " + fmtRM(cb, true) : fmtRM(cb - amt, true) + " left"}</span>` : "";
     html += `
       <div class="cat-bar-row">
         <div class="cat-bar-head">
