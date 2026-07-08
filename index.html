@@ -39,6 +39,11 @@
     <input type="search" id="search-input" placeholder="Search merchant, note or item…" autocomplete="off">
     <div class="chip-row filter-chips" id="filter-chips"></div>
   </div>
+  <div class="backup-nudge" id="backup-nudge" hidden>
+    <span id="backup-nudge-text">Your expenses haven't been backed up lately.</span>
+    <button class="backup-nudge-act" id="backup-nudge-btn">Back up now</button>
+    <button class="backup-nudge-x" id="backup-nudge-close" aria-label="Dismiss">&#10005;</button>
+  </div>
   <section class="ledger" id="ledger"></section>
   <p class="empty-note" id="empty-note">No expenses yet.<br>Tap the camera to snap your first receipt.</p>
 </main>
@@ -110,6 +115,7 @@
         <button class="ghost-btn small" id="export-csv">Export CSV</button>
         <button class="ghost-btn small" id="export-xls">Export Excel</button>
       </div>
+      <p class="sync-status" id="backup-status"></p>
     </div>
     <details class="adv-details">
       <summary>Advanced</summary>

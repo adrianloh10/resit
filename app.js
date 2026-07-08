@@ -34,6 +34,8 @@ let state = {
   pro: false,        /* Pro entitlement (unlimited cloud reads) */
   cloudMonth: "",    /* "YYYY-MM" the free cloud counter belongs to */
   cloudUsed: 0,      /* free cloud reads used this month */
+  lastBackupAt: null,
+  backupNudgeSnooze: "",
   search: "",
   filterCat: "",
   scopeFilter: "",  /* "", "Personal", "Shared", "Company" */
@@ -66,7 +68,9 @@ const FREE_CLOUD_MONTHLY = 15;
 const PAY_URL = "";
 const PRICE_LABEL = "RM 59 / year";
 function thisMonth() { return new Date().toISOString().slice(0, 7); }
-function isPro() { return !!state.pro; }
+/* Pro: paid entitlement — or the owner's own install (the private Claude-inbox
+   token only exists on Adrian's devices), so he can test Pro features. */
+function isPro() { return !!state.pro || !!state.ghToken; }
 function cloudUsedThisMonth() { return state.cloudMonth === thisMonth() ? (state.cloudUsed || 0) : 0; }
 function cloudQuotaLeft() { return isPro() ? Infinity : Math.max(0, FREE_CLOUD_MONTHLY - cloudUsedThisMonth()); }
 async function bumpCloudUsed() {
@@ -455,12 +459,46 @@ function fmtRM(n, withSign) {
   return (withSign ? "RM " : "") + s;
 }
 
+/* If an action-toast (e.g. a pending undo-delete) is still waiting when a new
+   toast arrives, commit its expiry work first so nothing is silently dropped. */
+function flushToastAction() {
+  const t = $("toast");
+  if (t._onExpire) { const f = t._onExpire; t._onExpire = null; f(); }
+}
+
 function toast(msg) {
   const t = $("toast");
+  flushToastAction();
   t.textContent = msg;
   t.hidden = false;
   clearTimeout(t._timer);
   t._timer = setTimeout(() => { t.hidden = true; }, 2600);
+}
+
+/* Toast with a tappable action ("Deleted — Undo"). onExpire runs when the
+   toast times out (or is displaced) without the action being tapped. */
+function toastAction(msg, actionLabel, onAction, onExpire, ms) {
+  const t = $("toast");
+  flushToastAction();
+  clearTimeout(t._timer);
+  t.textContent = msg + " ";
+  const b = document.createElement("button");
+  b.className = "toast-action";
+  b.textContent = actionLabel;
+  t._onExpire = onExpire || null;
+  b.addEventListener("click", () => {
+    if (!t._onExpire && !onExpire) { /* already resolved */ }
+    t._onExpire = null;
+    clearTimeout(t._timer);
+    t.hidden = true;
+    onAction();
+  });
+  t.appendChild(b);
+  t.hidden = false;
+  t._timer = setTimeout(() => {
+    t.hidden = true;
+    flushToastAction();
+  }, ms || 5000);
 }
 
 /* ---------- Rendering ---------- */
@@ -542,7 +580,11 @@ function renderHome() {
   const empty = $("empty-note");
   if (!allExps.length) {
     empty.hidden = false;
-    empty.innerHTML = "No expenses yet.<br>Tap the camera to snap your first receipt.";
+    /* First-run onboarding copy only when the app is truly empty; an empty
+       other month just says so. */
+    empty.innerHTML = state.expenses.length === 0
+      ? "No expenses yet.<br>Tap the camera to snap your first receipt."
+      : "Nothing in " + MONTH_NAMES[m.getMonth()] + (m.getFullYear() === now.getFullYear() ? "" : " " + m.getFullYear()) + ".";
   } else if (!exps.length) {
     empty.hidden = false;
     empty.innerHTML = "No matches" + (q ? " for “" + escapeHtml(state.search.trim()) + "”" : "") + ".";
@@ -767,6 +809,7 @@ function switchView(name) {
     renderCatBudgets();
     renderCloudSetting();
     renderPlan();
+    renderBackupStatus();
   }
   window.scrollTo(0, 0);
 }
@@ -1082,18 +1125,33 @@ function openConfirmSheet(expense) {
     del.id = "delete-btn";
     del.className = "delete-btn";
     del.textContent = "Delete expense";
-    del.addEventListener("click", async () => {
-      await DB.deleteExpense(e.id);
+    del.addEventListener("click", () => {
+      /* Soft delete with undo: drop it from the list right away, but only
+         commit the database delete when the undo window passes. */
+      const victim = state.expenses.find(x => x.id === e.id);
       state.expenses = state.expenses.filter(x => x.id !== e.id);
-      closeConfirmSheet();
+      closeConfirmSheet(true);
       renderCurrent();
-      toast("Deleted");
+      toastAction("Deleted", "Undo",
+        () => { if (victim) { state.expenses.push(victim); renderCurrent(); } },
+        () => { DB.deleteExpense(e.id); });
     });
     $("save-btn").after(del);
   }
 
   $("confirm-overlay").hidden = false;
+  state._sheetSnapshot = sheetFingerprint();
   if (!e.amount) setTimeout(() => $("confirm-amount").focus(), 50);
+}
+
+/* What the confirm sheet currently holds — used to detect unsaved edits. */
+function sheetFingerprint() {
+  const e = state.editing;
+  return [
+    $("confirm-amount").value, $("confirm-merchant").value,
+    $("confirm-date").value, $("confirm-time").value, $("confirm-note").value,
+    e ? e.category : "", e ? scopeOf(e) : "", e ? JSON.stringify(e.items || []) : ""
+  ].join("|");
 }
 
 function renderPhotoBlock() {
@@ -1182,7 +1240,13 @@ function renderCategoryChips() {
   }
 }
 
-function closeConfirmSheet() {
+function closeConfirmSheet(force) {
+  /* Don't silently discard typed-but-unsaved content on an accidental
+     backdrop tap or X. Saves and deletes pass force=true. */
+  if (!force && state.editing && state._sheetSnapshot !== undefined && sheetFingerprint() !== state._sheetSnapshot) {
+    if (!confirm("Discard this expense's unsaved changes?")) return;
+  }
+  state._sheetSnapshot = undefined;
   $("confirm-overlay").hidden = true;
   state.editing = null;
 }
@@ -1235,7 +1299,7 @@ async function saveExpense() {
   rememberMerchantCategory(record.merchant, record.category);
   learnFromCorrections(e, record);
 
-  closeConfirmSheet();
+  closeConfirmSheet(true);
   const saved = new Date(record.date);
   const now = new Date();
   state.monthOffset = (saved.getFullYear() - now.getFullYear()) * 12 + (saved.getMonth() - now.getMonth());
@@ -1325,13 +1389,51 @@ async function exportXLS() {
    so the file is safe to store and small. */
 async function exportBackup() {
   const settingsAll = await DB.getAllSettings();
-  const SKIP = new Set(["ghToken", "aiSecret", "lastScan"]);
+  /* Never export: secrets, the Pro entitlement (a shared backup file must not
+     grant Pro), this device's identity, or transient counters. */
+  const SKIP = new Set(["ghToken", "aiSecret", "lastScan", "pro", "deviceId", "lastBackupAt", "backupNudgeSnooze"]);
   const settings = settingsAll.filter(s => s && s.key && !SKIP.has(s.key));
   const expenses = state.expenses.map(({ photo, ...rest }) => rest);
   const backup = { app: "resit", type: "backup", version: 1, exportedAt: new Date().toISOString(), expenses, settings };
   const stamp = new Date().toISOString().slice(0, 10);
   downloadBlob(new Blob([JSON.stringify(backup)], { type: "application/json" }), "resit-backup-" + stamp + ".json");
+  state.lastBackupAt = new Date().toISOString();
+  await DB.setSetting("lastBackupAt", state.lastBackupAt);
+  renderBackupStatus();
   toast("Backed up " + expenses.length + " expenses");
+}
+
+/* "Last backup: N days ago" in Settings + a gentle home nudge when backups
+   are stale (20+ expenses and none in 30+ days). Dismissing snoozes 7 days. */
+function daysSinceBackup() {
+  if (!state.lastBackupAt) return null;
+  return Math.floor((Date.now() - new Date(state.lastBackupAt).getTime()) / 86400000);
+}
+
+function backupIsStale() {
+  if (state.expenses.length < 20) return false;
+  const d = daysSinceBackup();
+  return d === null || d >= 30;
+}
+
+function renderBackupStatus() {
+  const el = $("backup-status");
+  if (el) {
+    const d = daysSinceBackup();
+    el.textContent = d === null ? "Never backed up yet"
+      : d === 0 ? "Backed up today"
+      : "Last backup: " + d + " day" + (d > 1 ? "s" : "") + " ago";
+    el.className = "sync-status" + (backupIsStale() ? " bad" : "");
+  }
+  const nudge = $("backup-nudge");
+  if (nudge) {
+    const snoozed = state.backupNudgeSnooze && Date.now() < new Date(state.backupNudgeSnooze).getTime();
+    nudge.hidden = !(backupIsStale() && !snoozed);
+    if (!nudge.hidden) {
+      const d = daysSinceBackup();
+      $("backup-nudge-text").textContent = d === null ? "Your expenses have never been backed up." : "Last backup was " + d + " days ago.";
+    }
+  }
 }
 
 /* Build a clean, storable expense from arbitrary backup JSON. Every field is
@@ -1380,7 +1482,10 @@ async function importBackup(file) {
   try {
     await DB.replaceAllExpenses(clean);
     if (Array.isArray(data.settings)) {
-      for (const s of data.settings) { if (s && s.key) await DB.setSetting(s.key, s.value); }
+      /* A backup file must never carry entitlement, secrets, or another
+         device's identity into this install (old backups may contain them). */
+      const REJECT = new Set(["pro", "deviceId", "ghToken", "aiSecret"]);
+      for (const s of data.settings) { if (s && s.key && !REJECT.has(s.key)) await DB.setSetting(s.key, s.value); }
     }
   } catch (err) {
     /* IndexedDB rolls the transaction back on error, so current data is intact. */
@@ -1432,6 +1537,8 @@ async function init() {
     state.pro = await DB.getSetting("pro", false);
     state.cloudMonth = await DB.getSetting("cloudMonth", "");
     state.cloudUsed = await DB.getSetting("cloudUsed", 0);
+    state.lastBackupAt = await DB.getSetting("lastBackupAt", null);
+    state.backupNudgeSnooze = await DB.getSetting("backupNudgeSnooze", "");
     state.expenses = await DB.getAllExpenses();
     sessionStorage.removeItem("dbRetry");
   } catch (err) {
@@ -1449,6 +1556,20 @@ async function init() {
   applyTheme();
   darkMedia.addEventListener("change", () => { if (state.theme === "auto") applyTheme(); });
   renderHome();
+
+  /* Ask the browser to protect our storage from eviction under storage
+     pressure — the single most important line for "your data stays safe". */
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+
+  renderBackupStatus();
+  const nb = $("backup-nudge-btn");
+  if (nb) nb.addEventListener("click", () => { switchView("settings"); });
+  const nx = $("backup-nudge-close");
+  if (nx) nx.addEventListener("click", async () => {
+    state.backupNudgeSnooze = new Date(Date.now() + 7 * 86400000).toISOString();
+    await DB.setSetting("backupNudgeSnooze", state.backupNudgeSnooze);
+    renderBackupStatus();
+  });
 
   $("month-prev").addEventListener("click", () => { state.monthOffset--; renderHome(); });
   $("month-next").addEventListener("click", () => { state.monthOffset++; renderHome(); });
@@ -1527,7 +1648,7 @@ async function init() {
     if (g && g !== "Other" && g !== e.category) { e.category = g; renderCategoryChips(); }
   });
 
-  $("confirm-back").addEventListener("click", closeConfirmSheet);
+  $("confirm-back").addEventListener("click", () => closeConfirmSheet());
   $("confirm-overlay").addEventListener("click", ev => { if (ev.target === $("confirm-overlay")) closeConfirmSheet(); });
   $("save-btn").addEventListener("click", saveExpense);
 
@@ -1618,13 +1739,9 @@ async function init() {
   $("erase-data").addEventListener("click", async () => {
     if (!confirm("Erase all expenses and settings? This cannot be undone.")) return;
     await DB.eraseAll();
-    state.expenses = [];
-    state.budget = 3000;
-    state.merchantCats = {};
-    state.merchantNames = {};
-    state.totalHints = {};
-    switchView("home");
-    toast("All data erased");
+    /* Reload for a truly clean slate — resetting state field-by-field here
+       kept drifting out of date as new state was added. */
+    location.reload();
   });
 
   /* Service worker + auto-update: when a new version installs, the SW takes
