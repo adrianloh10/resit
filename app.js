@@ -37,6 +37,8 @@ let state = {
   cloudUsed: 0,      /* free cloud reads used this month */
   lastBackupAt: null,
   backupNudgeSnooze: "",
+  licenseKey: "",
+  lastKeyCheck: "",
   search: "",
   filterCat: "",
   scopeFilter: "",  /* "", "Personal", "Shared", "Company" */
@@ -102,11 +104,13 @@ async function unlockPro() {
   try {
     const res = await fetch(url.replace(/\/+$/, "") + "/unlock", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code })
+      body: JSON.stringify({ code, deviceId: state.deviceId })
     });
     if (res.ok) {
       state.pro = true;
       await DB.setSetting("pro", true);
+      state.licenseKey = code;
+      await DB.setSetting("licenseKey", code);
       const ov = $("upgrade-overlay"); if (ov) ov.hidden = true;
       renderPlan();
       toast("Pro unlocked — thank you!");
@@ -1786,7 +1790,7 @@ async function exportBackup() {
   const settingsAll = await DB.getAllSettings();
   /* Never export: secrets, the Pro entitlement (a shared backup file must not
      grant Pro), this device's identity, or transient counters. */
-  const SKIP = new Set(["ghToken", "aiSecret", "lastScan", "pro", "deviceId", "lastBackupAt", "backupNudgeSnooze"]);
+  const SKIP = new Set(["ghToken", "aiSecret", "lastScan", "pro", "deviceId", "lastBackupAt", "backupNudgeSnooze", "licenseKey", "lastKeyCheck"]);
   const settings = settingsAll.filter(s => s && s.key && !SKIP.has(s.key));
   const expenses = state.expenses.map(({ photo, ...rest }) => rest);
   const backup = { app: "resit", type: "backup", version: 1, exportedAt: new Date().toISOString(), expenses, settings };
@@ -1880,7 +1884,7 @@ async function importBackup(file) {
     if (Array.isArray(data.settings)) {
       /* A backup file must never carry entitlement, secrets, or another
          device's identity into this install (old backups may contain them). */
-      const REJECT = new Set(["pro", "deviceId", "ghToken", "aiSecret"]);
+      const REJECT = new Set(["pro", "deviceId", "ghToken", "aiSecret", "licenseKey", "lastKeyCheck"]);
       for (const s of data.settings) { if (s && s.key && !REJECT.has(s.key)) await DB.setSetting(s.key, s.value); }
     }
   } catch (err) {
@@ -1937,6 +1941,8 @@ async function init() {
     state.cloudUsed = await DB.getSetting("cloudUsed", 0);
     state.lastBackupAt = await DB.getSetting("lastBackupAt", null);
     state.backupNudgeSnooze = await DB.getSetting("backupNudgeSnooze", "");
+    state.licenseKey = await DB.getSetting("licenseKey", "");
+    state.lastKeyCheck = await DB.getSetting("lastKeyCheck", "");
     state.expenses = await DB.getAllExpenses();
     sessionStorage.removeItem("dbRetry");
   } catch (err) {
@@ -1958,6 +1964,29 @@ async function init() {
   /* Ask the browser to protect our storage from eviction under storage
      pressure — the single most important line for "your data stays safe". */
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+
+  /* Weekly, silently re-verify a redeemed license key so a revoked key
+     eventually downgrades. Network errors change nothing. */
+  (async () => {
+    if (!state.pro || !state.licenseKey || !navigator.onLine || !cloudEndpoint()) return;
+    const last = state.lastKeyCheck ? new Date(state.lastKeyCheck).getTime() : 0;
+    if (Date.now() - last < 7 * 86400000) return;
+    try {
+      const res = await fetch(cloudEndpoint().replace(/\/+$/, "") + "/unlock", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: state.licenseKey, deviceId: state.deviceId })
+      });
+      if (res.status === 403) {
+        state.pro = false;
+        await DB.setSetting("pro", false);
+        renderPlan();
+        toast("Your Pro key is no longer valid");
+      } else if (res.ok) {
+        state.lastKeyCheck = new Date().toISOString();
+        await DB.setSetting("lastKeyCheck", state.lastKeyCheck);
+      }
+    } catch (e) { /* offline/transient — keep current state */ }
+  })();
 
   renderBackupStatus();
   const nb = $("backup-nudge-btn");
