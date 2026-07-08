@@ -35,6 +35,10 @@
     <div class="budget-track"><div class="budget-fill" id="budget-fill"></div></div>
     <p class="pacing-line" id="pacing-line" hidden></p>
     <div class="scope-filter" id="scope-filter"></div>
+    <div class="claim-line" id="claim-line" hidden>
+      <span id="claim-line-text"></span>
+      <button class="claim-line-btn" id="claim-mark-btn">Mark this month claimed</button>
+    </div>
   </header>
   <div class="search-bar" id="search-bar" hidden>
     <input type="search" id="search-input" placeholder="Search merchant, note or item…" autocomplete="off">
@@ -117,6 +121,7 @@
         <button class="ghost-btn small" id="export-csv">Export CSV</button>
         <button class="ghost-btn small" id="export-xls">Export Excel</button>
       </div>
+      <button class="ghost-btn small" id="export-filtered" style="margin-top: 8px;">Filtered export / claim report…</button>
       <p class="sync-status" id="backup-status"></p>
     </div>
     <details class="adv-details">
@@ -198,6 +203,8 @@
     </div>
     <p class="chip-group-label">Type</p>
     <div class="chip-row" id="scope-chips"></div>
+    <p class="chip-group-label" id="claim-label" hidden>Claim</p>
+    <div class="chip-row" id="claim-chips" hidden></div>
     <p class="chip-group-label">Category</p>
     <div class="chip-row" id="category-chips"></div>
     <div class="items-block" id="items-block"></div>
@@ -229,6 +236,50 @@
 
 <div class="overlay photo-overlay" id="photo-overlay" hidden>
   <img id="photo-full" alt="Receipt photo">
+</div>
+
+<div class="overlay sheet-overlay" id="export-overlay" hidden>
+  <div class="confirm-sheet">
+    <header class="sheet-header">
+      <button class="icon-btn" id="export-back" aria-label="Close">&#10005;</button>
+      <p class="sheet-title">Filtered export</p>
+      <span class="spacer"></span>
+    </header>
+    <div class="field" style="margin-top: 10px;">
+      <span class="field-label">From / to (leave empty for everything)</span>
+      <div class="export-dates">
+        <input type="date" id="exp-from">
+        <input type="date" id="exp-to">
+      </div>
+    </div>
+    <div class="field">
+      <span class="field-label">Type</span>
+      <select id="exp-scope">
+        <option value="">All</option>
+        <option>Personal</option>
+        <option>Shared</option>
+        <option>Company</option>
+      </select>
+    </div>
+    <div class="field">
+      <span class="field-label">Category</span>
+      <select id="exp-cat"><option value="">All</option></select>
+    </div>
+    <div class="field">
+      <span class="field-label">Claim status</span>
+      <select id="exp-claim">
+        <option value="">All</option>
+        <option value="to-claim">To claim</option>
+        <option value="claimed">Claimed</option>
+      </select>
+    </div>
+    <button class="save-btn" id="exp-claim-preset" style="margin-top: 14px;">Claim report (Excel)</button>
+    <div class="btn-pair" style="margin-top: 10px;">
+      <button class="ghost-btn small" id="exp-csv">Export CSV</button>
+      <button class="ghost-btn small" id="exp-xls">Export Excel</button>
+    </div>
+    <p class="edit-hint">The claim report exports everything still to claim, then offers to mark it claimed.</p>
+  </div>
 </div>
 
 <div class="overlay sheet-overlay" id="upgrade-overlay" hidden>

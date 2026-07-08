@@ -379,6 +379,31 @@ html, body {
 .cat-budget.over { color: var(--rust); }
 .cat-budget.pace { color: var(--ochre); }
 
+/* ---------- Claims ---------- */
+.claim-pill {
+  font-size: 9.5px; padding: 1px 6px; border-radius: 999px;
+  border: 0.5px solid currentColor; white-space: nowrap;
+}
+.claim-pill.to { color: var(--ochre); }
+.claim-pill.done { color: var(--sage); }
+.claim-line {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-top: 10px; padding: 8px 12px;
+  background: var(--paper-raised); border: 0.5px solid var(--divider-soft);
+  border-radius: 12px; font-size: 12.5px; color: var(--ink-soft);
+}
+.claim-line span { font-family: var(--mono); color: var(--ochre); }
+.claim-line-btn {
+  background: none; border: none; color: var(--ink-soft); font-family: var(--sans);
+  font-size: 12px; cursor: pointer; text-decoration: underline; white-space: nowrap; padding: 2px;
+}
+.export-dates { display: flex; gap: 8px; }
+.export-dates input, .field select {
+  width: 100%; background: var(--paper-raised); border: 0.5px solid var(--divider-soft);
+  border-radius: 12px; padding: 10px 12px; font-size: 14px; font-family: var(--sans);
+  color: var(--ink); outline: none;
+}
+
 /* ---------- Pacing + scope strip ---------- */
 .pacing-line { text-align: center; font-size: 12px; color: var(--muted); margin: 8px 28px 0; }
 .pacing-line.warn { color: var(--rust); }

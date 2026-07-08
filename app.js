@@ -538,6 +538,18 @@ function renderPacing(total) {
   el.hidden = false;
 }
 
+/* "RM X to claim" — outstanding Shared/Company money across ALL months (owed
+   money doesn't reset monthly), with a per-month mark-claimed shortcut. */
+function renderClaimLine() {
+  const el = $("claim-line");
+  if (!el) return;
+  const owed = state.expenses.filter(e => e.claimStatus === "to-claim").reduce((s, e) => s + e.amount, 0);
+  if (!(owed > 0)) { el.hidden = true; return; }
+  $("claim-line-text").textContent = fmtRM(owed, true) + " to claim back";
+  $("claim-mark-btn").hidden = !monthExpenses().some(e => e.claimStatus === "to-claim");
+  el.hidden = false;
+}
+
 function renderHome() {
   const m = viewedMonth();
   const now = new Date();
@@ -576,6 +588,7 @@ function renderHome() {
     }
   }
   renderPacing(total);
+  renderClaimLine();
 
   /* Possible-duplicate detection: same merchant + amount + day. Flag all but
      the first in each group — non-destructive, just a visual hint. */
@@ -637,6 +650,8 @@ function renderHome() {
       ledger.appendChild(label);
     }
     const dup = dupIds.has(e.id) ? `<span class="dup-flag">duplicate?</span> · ` : "";
+    const claim = e.claimStatus === "to-claim" ? `<span class="claim-pill to">to claim</span> · `
+      : e.claimStatus === "claimed" ? `<span class="claim-pill done">claimed ✓</span> · ` : "";
     const camera = e.photo ? `<span class="has-photo" aria-hidden="true">▦ </span>` : "";
     const sc = scopeOf(e);
     const scopePill = `<span class="scope-pill ${SCOPE_CLASS[sc]}">${sc}</span>`;
@@ -649,7 +664,7 @@ function renderHome() {
       <span class="cat-dot" style="background:${CAT_COLOR[e.category] || CAT_COLOR.Other}"></span>
       <span class="entry-main">
         <span class="entry-merchant">${camera}<span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span>${scopePill}</span>
-        <span class="entry-cat">${dup}${e.pending ? "waiting for Claude · " : ""}${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
+        <span class="entry-cat">${dup}${claim}${e.pending ? "waiting for Claude · " : ""}${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
       </span>
       ${amountHtml}`;
     row.addEventListener("click", () => openConfirmSheet(e));
@@ -707,8 +722,34 @@ function renderScopeChips() {
     const sel = s === cur;
     b.className = "chip scope-opt " + SCOPE_CLASS[s] + (sel ? " selected" : "");
     b.textContent = s;
-    b.addEventListener("click", () => { state.editing.scope = s; renderScopeChips(); });
+    b.addEventListener("click", () => {
+      state.editing.scope = s;
+      /* New Company expenses default to "to claim"; Personal never claims. */
+      if (s === "Company" && !state.editing.id && !state.editing.claimStatus) state.editing.claimStatus = "to-claim";
+      renderScopeChips();
+      renderClaimChips();
+    });
     chips.appendChild(b);
+  }
+}
+
+/* Claim status picker — only meaningful for Shared/Company expenses. */
+function renderClaimChips() {
+  const e = state.editing;
+  const label = $("claim-label"), row = $("claim-chips");
+  if (!label || !row) return;
+  const show = !!e && scopeOf(e) !== "Personal";
+  label.hidden = !show;
+  row.hidden = !show;
+  if (!show) { if (e) e.claimStatus = ""; return; }
+  row.innerHTML = "";
+  const cur = e.claimStatus || "";
+  for (const [val, lbl] of [["", "Not a claim"], ["to-claim", "To claim"], ["claimed", "Claimed"]]) {
+    const b = document.createElement("button");
+    b.className = "chip" + (cur === val ? " selected" : "");
+    b.textContent = lbl;
+    b.addEventListener("click", () => { e.claimStatus = val; renderClaimChips(); });
+    row.appendChild(b);
   }
 }
 
@@ -1064,6 +1105,8 @@ async function handleImage(file) {
       merchant: "Receipt",
       category: "Other",
       scope: scope,
+      /* Company receipts are almost always claimed back — default them in. */
+      claimStatus: scope === "Company" ? "to-claim" : "",
       date: new Date().toISOString(),
       items: [],
       note: "",
@@ -1169,6 +1212,7 @@ function openConfirmSheet(expense) {
   $("confirm-note").value = e.note || "";
 
   renderScopeChips();
+  renderClaimChips();
   renderCategoryChips();
   renderPhotoBlock();
   renderItemsEditor();
@@ -1205,7 +1249,7 @@ function sheetFingerprint() {
   return [
     $("confirm-amount").value, $("confirm-merchant").value,
     $("confirm-date").value, $("confirm-time").value, $("confirm-note").value,
-    e ? e.category : "", e ? scopeOf(e) : "", e ? JSON.stringify(e.items || []) : ""
+    e ? e.category : "", e ? scopeOf(e) : "", e ? (e.claimStatus || "") : "", e ? JSON.stringify(e.items || []) : ""
   ].join("|");
 }
 
@@ -1331,6 +1375,7 @@ async function saveExpense() {
       .map(i => ({ name: (i.name || "").trim(), price: Math.round((i.price || 0) * 100) / 100 })),
     note: $("confirm-note").value.trim(),
     scope: scopeOf(e),
+    claimStatus: scopeOf(e) === "Personal" ? "" : (e.claimStatus || ""),
     pending: !(amount > 0) && canPend,
     photo: photo || undefined,
     createdAt: e.createdAt || new Date().toISOString()
@@ -1372,10 +1417,23 @@ function renderCurrent() {
 /* One source of truth for export columns — CSV and Excel both build from this,
    so adding a column (or guarding a value) happens once. Numbers are coerced
    defensively so a malformed restored record can never crash an export. */
-const EXPORT_HEADERS = ["Date", "Time", "Merchant", "Category", "Type", "Amount (RM)", "Note", "Items"];
-function expenseExportRecords() {
-  return [...state.expenses]
-    .sort((a, b) => new Date(a.date) - new Date(b.date))
+const EXPORT_HEADERS = ["Date", "Time", "Merchant", "Category", "Type", "Claim", "Amount (RM)", "Note", "Items"];
+
+/* Expenses matching an optional export filter {from, to, scope, category, claim}. */
+function filteredExpenses(f) {
+  let list = [...state.expenses];
+  if (f) {
+    if (f.from) { const t = new Date(f.from + "T00:00:00"); list = list.filter(e => new Date(e.date) >= t); }
+    if (f.to) { const t = new Date(f.to + "T23:59:59"); list = list.filter(e => new Date(e.date) <= t); }
+    if (f.scope) list = list.filter(e => scopeOf(e) === f.scope);
+    if (f.category) list = list.filter(e => e.category === f.category);
+    if (f.claim) list = list.filter(e => (e.claimStatus || "") === f.claim);
+  }
+  return list.sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
+function expenseExportRecords(f) {
+  return filteredExpenses(f)
     .map(e => {
       const d = new Date(e.date);
       const amount = Number(e.amount) || 0;
@@ -1385,6 +1443,7 @@ function expenseExportRecords() {
         merchant: e.merchant || "",
         category: e.category || "",
         type: scopeOf(e),
+        claim: e.claimStatus === "to-claim" ? "To claim" : e.claimStatus === "claimed" ? "Claimed" : "",
         amount,
         note: e.note || "",
         items: (e.items || []).map(i => `${(i && i.name) || ""} ${(Number(i && i.price) || 0).toFixed(2)}`.trim()).join("; ")
@@ -1392,20 +1451,21 @@ function expenseExportRecords() {
     });
 }
 
-async function exportCSV() {
-  const recs = expenseExportRecords();
-  if (!recs.length) { toast("Nothing to export yet"); return; }
+async function exportCSV(filter) {
+  const recs = expenseExportRecords(filter);
+  if (!recs.length) { toast("Nothing to export" + (filter ? " for those filters" : " yet")); return 0; }
   const rows = [EXPORT_HEADERS];
-  for (const r of recs) rows.push([r.date, r.time, r.merchant, r.category, r.type, r.amount.toFixed(2), r.note, r.items]);
+  for (const r of recs) rows.push([r.date, r.time, r.merchant, r.category, r.type, r.claim, r.amount.toFixed(2), r.note, r.items]);
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
   downloadBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), "resit-expenses.csv");
+  return recs.length;
 }
 
 /* Styled Excel export — dependency-free. An HTML table with Excel's XML
    namespace opens directly in Excel/Sheets with formatting intact. */
-async function exportXLS() {
-  const recs = expenseExportRecords();
-  if (!recs.length) { toast("Nothing to export yet"); return; }
+async function exportXLS(filter, baseName) {
+  const recs = expenseExportRecords(filter);
+  if (!recs.length) { toast("Nothing to export" + (filter ? " for those filters" : " yet")); return 0; }
   let body = "";
   let total = 0;
   for (const r of recs) {
@@ -1416,6 +1476,7 @@ async function exportXLS() {
       <td>${escapeHtml(r.merchant)}</td>
       <td>${escapeHtml(r.category)}</td>
       <td>${escapeHtml(r.type)}</td>
+      <td>${escapeHtml(r.claim)}</td>
       <td style="mso-number-format:'0.00';text-align:right">${r.amount.toFixed(2)}</td>
       <td>${escapeHtml(r.note)}</td>
       <td>${escapeHtml(r.items)}</td>
@@ -1432,11 +1493,12 @@ async function exportXLS() {
   <body><table>
     <thead><tr>${th}</tr></thead>
     <tbody>${body}
-      <tr class="total"><td colspan="5">Total (${recs.length} expenses)</td>
+      <tr class="total"><td colspan="6">Total (${recs.length} expenses)</td>
       <td style="mso-number-format:'0.00';text-align:right">${total.toFixed(2)}</td><td></td><td></td></tr>
     </tbody>
   </table></body></html>`;
-  downloadBlob(new Blob(["﻿" + html], { type: "application/vnd.ms-excel;charset=utf-8" }), "resit-expenses.xls");
+  downloadBlob(new Blob(["﻿" + html], { type: "application/vnd.ms-excel;charset=utf-8" }), (baseName || "resit-expenses") + ".xls");
+  return recs.length;
 }
 
 /* Full backup: everything needed to rebuild the app on a new phone. Secrets
@@ -1510,6 +1572,7 @@ function sanitizeRestoredExpense(e, fallbackId) {
     merchant: e.merchant ? String(e.merchant).slice(0, 80) : "Expense",
     category: CAT_COLOR[e.category] ? e.category : "Other",
     scope: SCOPES.includes(e.scope) ? e.scope : "Personal",
+    claimStatus: e.claimStatus === "to-claim" || e.claimStatus === "claimed" ? e.claimStatus : "",
     date: dateOk ? new Date(e.date).toISOString() : new Date().toISOString(),
     items,
     note: e.note ? String(e.note).slice(0, 200) : "",
@@ -1713,8 +1776,43 @@ async function init() {
     await DB.setSetting("budget", v);
     toast("Budget saved");
   });
-  $("export-csv").addEventListener("click", exportCSV);
-  on("export-xls", exportXLS);
+  $("export-csv").addEventListener("click", () => exportCSV());
+  on("export-xls", () => exportXLS());
+
+  /* Filtered export sheet + claim report */
+  const expCat = $("exp-cat");
+  if (expCat) for (const c of CATS) { const o = document.createElement("option"); o.value = c.name; o.textContent = c.name; expCat.appendChild(o); }
+  const readExportFilter = () => ({
+    from: $("exp-from").value, to: $("exp-to").value,
+    scope: $("exp-scope").value, category: $("exp-cat").value, claim: $("exp-claim").value
+  });
+  on("export-filtered", () => { const ov = $("export-overlay"); if (ov) ov.hidden = false; });
+  on("export-back", () => { $("export-overlay").hidden = true; });
+  on("export-overlay", ev => { if (ev.target === $("export-overlay")) $("export-overlay").hidden = true; });
+  on("exp-csv", async () => { if (await exportCSV(readExportFilter())) $("export-overlay").hidden = true; });
+  on("exp-xls", async () => { if (await exportXLS(readExportFilter(), "resit-filtered")) $("export-overlay").hidden = true; });
+  on("exp-claim-preset", async () => {
+    const f = readExportFilter();
+    f.claim = "to-claim";
+    const matches = filteredExpenses(f);
+    if (!matches.length) { toast("No to-claim expenses in that range"); return; }
+    await exportXLS(f, "resit-claim-report");
+    $("export-overlay").hidden = true;
+    setTimeout(async () => {
+      if (!confirm("Claim report exported (" + matches.length + " expenses). Mark them all as claimed?")) return;
+      for (const e of matches) { e.claimStatus = "claimed"; await DB.updateExpense(e); }
+      renderCurrent();
+      toast("Marked claimed");
+    }, 400);
+  });
+  on("claim-mark-btn", async () => {
+    const list = monthExpenses().filter(e => e.claimStatus === "to-claim");
+    if (!list.length) return;
+    if (!confirm("Mark " + list.length + " expense(s) this month as claimed?")) return;
+    for (const e of list) { e.claimStatus = "claimed"; await DB.updateExpense(e); }
+    renderCurrent();
+    toast("Marked claimed");
+  });
   on("backup-data", exportBackup);
   on("restore-data", () => { const r = $("restore-input"); if (r) r.click(); });
   const ri = $("restore-input");
