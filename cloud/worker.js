@@ -137,16 +137,19 @@ export default {
       const code = u && typeof u.code === "string" ? u.code.trim() : "";
       if (!code) return json({ error: "Invalid code" }, 403, cors);
       if (env.PRO_UNLOCK && code === env.PRO_UNLOCK) return json({ ok: true }, 200, cors);
-      if (env.DB) {
-        try {
-          await ensureLicenseTable(env.DB);
-          const row = await env.DB.prepare("SELECT revoked FROM license_keys WHERE key=?1").bind(code).first();
-          if (row && !row.revoked) {
-            await env.DB.prepare("UPDATE license_keys SET used_at=COALESCE(used_at, ?1), device_id=?2 WHERE key=?3")
-              .bind(new Date().toISOString(), String(u.deviceId || "").slice(0, 64), code).run();
-            return json({ ok: true }, 200, cors);
-          }
-        } catch (e) { /* fall through to invalid */ }
+      /* A transient store problem must NEVER read as "Invalid code" — the app
+         permanently downgrades on that message. */
+      if (!env.DB) return json({ error: "Temporarily unavailable" }, 503, cors);
+      try {
+        await ensureLicenseTable(env.DB);
+        const row = await env.DB.prepare("SELECT revoked FROM license_keys WHERE key=?1").bind(code).first();
+        if (row && !row.revoked) {
+          await env.DB.prepare("UPDATE license_keys SET used_at=COALESCE(used_at, ?1), device_id=?2 WHERE key=?3")
+            .bind(new Date().toISOString(), String(u.deviceId || "").slice(0, 64), code).run();
+          return json({ ok: true }, 200, cors);
+        }
+      } catch (e) {
+        return json({ error: "Temporarily unavailable" }, 503, cors);
       }
       return json({ error: "Invalid code" }, 403, cors);
     }

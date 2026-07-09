@@ -35,6 +35,8 @@ let state = {
   deviceId: "",
   cloudConsent: "",  /* "", "yes", "no" — explicit opt-in for cloud reading */
   pro: false,        /* Pro entitlement (unlimited cloud reads) */
+  ghProven: false,   /* ghToken verified against the private inbox repo */
+  skipResults: [],   /* deleted-while-pending expenses whose results to discard */
   cloudMonth: "",    /* "YYYY-MM" the free cloud counter belongs to */
   cloudUsed: 0,      /* free cloud reads used this month */
   lastBackupAt: null,
@@ -73,9 +75,11 @@ const FREE_CLOUD_MONTHLY = 15;
 const PAY_URL = "";
 const PRICE_LABEL = "RM 59 / year";
 function thisMonth() { return new Date().toISOString().slice(0, 7); }
-/* Pro: paid entitlement — or the owner's own install (the private Claude-inbox
-   token only exists on Adrian's devices), so he can test Pro features. */
-function isPro() { return !!state.pro || !!state.ghToken; }
+/* Pro: paid entitlement — or a PROVEN owner install. ghProven is only set
+   after the token successfully reads the owner's PRIVATE inbox repo (a random
+   string gets 401, a stranger's own PAT gets 404), so pasting text into the
+   token field cannot unlock Pro. */
+function isPro() { return !!state.pro || !!state.ghProven; }
 function cloudUsedThisMonth() { return state.cloudMonth === thisMonth() ? (state.cloudUsed || 0) : 0; }
 function cloudQuotaLeft() { return isPro() ? Infinity : Math.max(0, FREE_CLOUD_MONTHLY - cloudUsedThisMonth()); }
 async function bumpCloudUsed() {
@@ -274,6 +278,14 @@ async function fetchClaudeResults() {
 }
 
 async function applyClaudeResult(data) {
+  /* The user deleted this receipt while it was pending — consume the result
+     without recreating the expense. */
+  const skipKey = String(data.expenseId);
+  if (state.skipResults.includes(skipKey)) {
+    state.skipResults = state.skipResults.filter(k => k !== skipKey);
+    DB.setSetting("skipResults", state.skipResults);
+    return true;
+  }
   /* Don't clobber an expense the user is editing right now — skip and retry
      on the next sync (the result file is left in place by the caller). */
   if (state.editing && data.expenseId != null && String(state.editing.id) === String(data.expenseId)) {
@@ -543,10 +555,12 @@ async function materializeRecurring() {
         rec.id = await DB.addExpense(rec);
         state.expenses.push(rec);
         t.lastMonth = monthKeyOf(nxt);
+        /* Persist immediately — if the app dies mid-loop, the entry that was
+           just added must not be re-added on the next launch. */
+        await DB.setSetting("recurringTemplates", state.recurring);
         changed = true; added++;
       }
     }
-    if (changed) await DB.setSetting("recurringTemplates", state.recurring);
     if (added) {
       renderCurrent();
       toast("Added " + added + " monthly expense" + (added > 1 ? "s" : ""));
@@ -668,10 +682,10 @@ function renderPacing(total) {
 function renderClaimLine() {
   const el = $("claim-line");
   if (!el) return;
-  const owed = state.expenses.filter(e => e.claimStatus === "to-claim").reduce((s, e) => s + e.amount, 0);
+  const owed = state.expenses.filter(e => e.claimStatus === "to-claim" && !e.pending).reduce((s, e) => s + e.amount, 0);
   if (!(owed > 0)) { el.hidden = true; return; }
   $("claim-line-text").textContent = fmtRM(owed, true) + " to claim back";
-  $("claim-mark-btn").hidden = !monthExpenses().some(e => e.claimStatus === "to-claim");
+  $("claim-mark-btn").hidden = !monthExpenses().some(e => e.claimStatus === "to-claim" && !e.pending);
   el.hidden = false;
 }
 
@@ -927,7 +941,9 @@ function renderClaimChips() {
   const show = !!e && scopeOf(e) !== "Personal";
   label.hidden = !show;
   row.hidden = !show;
-  if (!show) { if (e) e.claimStatus = ""; return; }
+  /* Don't wipe claimStatus here — toggling scope back and forth must not
+     destroy it; saveExpense clears it for Personal at save time. */
+  if (!show) return;
   row.innerHTML = "";
   const cur = e.claimStatus || "";
   for (const [val, lbl] of [["", "Not a claim"], ["to-claim", "To claim"], ["claimed", "Claimed"]]) {
@@ -1442,6 +1458,7 @@ async function pickImage(source) {
   if (isNative()) {
     const file = await captureNative(source);
     if (file) handleImage(file);
+    else state._batchScope = null; /* cancelled — don't let a stale batch scope linger */
     return;
   }
   (source === "camera" ? $("camera-input") : $("gallery-input")).click();
@@ -1466,7 +1483,9 @@ function computeFavourites() {
       /* Most frequent amount; ties go to the most recent. */
       const counts = {};
       for (const e of list) { const k = e.amount.toFixed(2); counts[k] = (counts[k] || 0) + 1; }
-      const amount = parseFloat(Object.entries(counts).sort((a, b) => b[1] - a[1] || (a[0] === latest.amount.toFixed(2) ? 1 : -1))[0][0]);
+      const lk = latest.amount.toFixed(2);
+      const amount = parseFloat(Object.entries(counts)
+        .sort((a, b) => b[1] - a[1] || ((b[0] === lk) ? 1 : 0) - ((a[0] === lk) ? 1 : 0))[0][0]);
       return { merchant: latest.merchant, amount, category: latest.category, scope: scopeOf(latest) };
     });
 }
@@ -1537,7 +1556,7 @@ function pickScope() {
 }
 
 async function handleImage(file) {
-  if (!file) return;
+  if (!file) { state._batchScope = null; return; }
   /* Claude inbox mode: no on-device reading, no animation — save instantly
      as pending and let Claude fill in everything when it reviews the photo. */
   if (state.ghToken) {
@@ -1571,6 +1590,7 @@ async function handleImage(file) {
   state.ocrCancelled = false;
   $("processing-overlay").hidden = false;
   $("processing-text").textContent = "Reading receipt…";
+  $("processing-sub").textContent = "This happens on your phone";
   try {
     const parsed = await window.ReceiptOCR.scanReceipt(file, msg => { $("processing-text").textContent = msg; });
     if (state.ocrCancelled) return;
@@ -1591,6 +1611,7 @@ async function handleImage(file) {
         if (consented) {
           $("processing-overlay").hidden = false;
           $("processing-text").textContent = "Reading with cloud…";
+          $("processing-sub").textContent = "Sent to Google Gemini, then discarded";
           try {
             const ai = await cloudRead(file);
             if (state.ocrCancelled) return;
@@ -1695,7 +1716,19 @@ function openConfirmSheet(expense) {
       renderCurrent();
       toastAction("Deleted", "Undo",
         () => { if (victim) { state.expenses.push(victim); renderCurrent(); } },
-        () => { DB.deleteExpense(e.id); });
+        async () => {
+          await DB.deleteExpense(e.id);
+          /* A deleted pending receipt must stay deleted: discard its queued
+             photo and remember to ignore any Claude result that arrives. */
+          if (victim && victim.pending) {
+            state.skipResults.push(String(e.id));
+            DB.setSetting("skipResults", state.skipResults);
+            try {
+              const ph = (await DB.getAllPhotos()).find(p => String(p.expenseId) === String(e.id));
+              if (ph) await DB.deletePhoto(ph.id);
+            } catch (err) {}
+          }
+        });
     });
     $("save-btn").after(del);
   }
@@ -1711,6 +1744,7 @@ function sheetFingerprint() {
   return [
     $("confirm-amount").value, $("confirm-merchant").value,
     $("confirm-date").value, $("confirm-time").value, $("confirm-note").value,
+    ($("confirm-repeat") && $("confirm-repeat").checked) ? "1" : "0",
     e ? e.category : "", e ? scopeOf(e) : "", e ? (e.claimStatus || "") : "", e ? JSON.stringify(e.items || []) : ""
   ].join("|");
 }
@@ -1916,7 +1950,9 @@ function filteredExpenses(f) {
     if (f.to) { const t = new Date(f.to + "T23:59:59"); list = list.filter(e => new Date(e.date) <= t); }
     if (f.scope) list = list.filter(e => scopeOf(e) === f.scope);
     if (f.category) list = list.filter(e => e.category === f.category);
-    if (f.claim) list = list.filter(e => (e.claimStatus || "") === f.claim);
+    /* Claim filters exclude still-pending receipts — their amount is 0 until
+       Claude fills them in, so they must not appear on a claim report. */
+    if (f.claim) list = list.filter(e => !e.pending && (e.claimStatus || "") === f.claim);
   }
   return list.sort((a, b) => new Date(a.date) - new Date(b.date));
 }
@@ -1997,7 +2033,7 @@ async function exportBackup() {
   const settingsAll = await DB.getAllSettings();
   /* Never export: secrets, the Pro entitlement (a shared backup file must not
      grant Pro), this device's identity, or transient counters. */
-  const SKIP = new Set(["ghToken", "aiSecret", "lastScan", "pro", "deviceId", "lastBackupAt", "backupNudgeSnooze", "licenseKey", "lastKeyCheck"]);
+  const SKIP = new Set(["ghToken", "aiSecret", "lastScan", "pro", "deviceId", "lastBackupAt", "backupNudgeSnooze", "licenseKey", "lastKeyCheck", "ghProven", "skipResults"]);
   const settings = settingsAll.filter(s => s && s.key && !SKIP.has(s.key));
   const expenses = state.expenses.map(({ photo, ...rest }) => rest);
   const backup = { app: "resit", type: "backup", version: 1, exportedAt: new Date().toISOString(), expenses, settings };
@@ -2091,7 +2127,7 @@ async function importBackup(file) {
     if (Array.isArray(data.settings)) {
       /* A backup file must never carry entitlement, secrets, or another
          device's identity into this install (old backups may contain them). */
-      const REJECT = new Set(["pro", "deviceId", "ghToken", "aiSecret", "licenseKey", "lastKeyCheck"]);
+      const REJECT = new Set(["pro", "deviceId", "ghToken", "aiSecret", "licenseKey", "lastKeyCheck", "ghProven", "skipResults"]);
       for (const s of data.settings) { if (s && s.key && !REJECT.has(s.key)) await DB.setSetting(s.key, s.value); }
     }
   } catch (err) {
@@ -2107,6 +2143,10 @@ async function importBackup(file) {
   state.totalHints = await DB.getSetting("totalHints", {});
   state.merchantScopes = await DB.getSetting("merchantScopes", {});
   state.catBudgets = await DB.getSetting("catBudgets", {});
+  const rcur = await DB.getSetting("currency", "RM");
+  state.currency = /^[A-Z]{2,4}$/.test(rcur) ? rcur : "RM";
+  state.recurring = await DB.getSetting("recurringTemplates", []);
+  state.cloudConsent = await DB.getSetting("cloudConsent", "");
   state.theme = await DB.getSetting("theme", "light");
   applyTheme();
   switchView("home");
@@ -2133,8 +2173,12 @@ async function init() {
     state.totalHints = await DB.getSetting("totalHints", {});
     state.merchantScopes = await DB.getSetting("merchantScopes", {});
     state.catBudgets = await DB.getSetting("catBudgets", {});
-    state.currency = await DB.getSetting("currency", "RM");
+    /* Currency is injected into markup — only accept plain 2-4 letter codes. */
+    const cur = await DB.getSetting("currency", "RM");
+    state.currency = /^[A-Z]{2,4}$/.test(cur) ? cur : "RM";
     state.recurring = await DB.getSetting("recurringTemplates", []);
+    state.ghProven = await DB.getSetting("ghProven", false);
+    state.skipResults = await DB.getSetting("skipResults", []);
     state.theme = await DB.getSetting("theme", "light");
     state.aiUrl = await DB.getSetting("aiUrl", "");
     state.aiSecret = await DB.getSetting("aiSecret", "");
@@ -2187,16 +2231,42 @@ async function init() {
         body: JSON.stringify({ code: state.licenseKey, deviceId: state.deviceId })
       });
       if (res.status === 403) {
-        state.pro = false;
-        await DB.setSetting("pro", false);
-        renderPlan();
-        toast("Your Pro key is no longer valid");
+        /* Only a definitive "Invalid code" downgrades — any other 403/5xx is
+           a server-side hiccup and must never cost a paying user their Pro. */
+        const body = await res.json().catch(() => ({}));
+        if (body && body.error === "Invalid code") {
+          state.pro = false;
+          await DB.setSetting("pro", false);
+          renderPlan();
+          toast("Your Pro key is no longer valid");
+        }
       } else if (res.ok) {
         state.lastKeyCheck = new Date().toISOString();
         await DB.setSetting("lastKeyCheck", state.lastKeyCheck);
       }
     } catch (e) { /* offline/transient — keep current state */ }
   })();
+
+  /* Silently (re)prove the inbox token so the owner install keeps Pro across
+     the ghProven migration, and a revoked token loses it. */
+  (async () => {
+    if (!state.ghToken || !navigator.onLine) return;
+    try {
+      const res = await fetch("https://api.github.com/repos/" + GH_REPO + "/contents/inbox", { headers: ghHeaders() });
+      if (res.ok !== state.ghProven && (res.ok || res.status === 401 || res.status === 404)) {
+        state.ghProven = res.ok;
+        await DB.setSetting("ghProven", state.ghProven);
+        renderPlan();
+      }
+    } catch (e) { /* offline — keep current state */ }
+  })();
+
+  /* Commit any pending undo-delete before the page goes away, so a quick
+     app close can't resurrect a "deleted" expense. */
+  window.addEventListener("pagehide", flushToastAction);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushToastAction();
+  });
 
   renderBackupStatus();
   const nb = $("backup-nudge-btn");
@@ -2245,7 +2315,9 @@ async function init() {
   /* Swipe left/right anywhere on home or insights to change month. */
   let swipe = null;
   document.addEventListener("touchstart", ev => {
-    if (state.view === "settings" || !$("confirm-overlay").hidden || !$("chooser-overlay").hidden) { swipe = null; return; }
+    /* No month-swiping under ANY open overlay (confirm, chooser, consent,
+       scope picker, upgrade, export, photo). */
+    if (state.view === "settings" || document.querySelector(".overlay:not([hidden])")) { swipe = null; return; }
     const t = ev.changedTouches[0];
     swipe = { x: t.clientX, y: t.clientY, scroll: window.scrollY };
   }, { passive: true });
@@ -2347,7 +2419,7 @@ async function init() {
     }, 400);
   });
   on("claim-mark-btn", async () => {
-    const list = monthExpenses().filter(e => e.claimStatus === "to-claim");
+    const list = monthExpenses().filter(e => e.claimStatus === "to-claim" && !e.pending);
     if (!list.length) return;
     if (!confirm("Mark " + list.length + " expense(s) this month as claimed?")) return;
     for (const e of list) { e.claimStatus = "claimed"; await DB.updateExpense(e); }
@@ -2362,6 +2434,10 @@ async function init() {
   $("gh-token").addEventListener("change", async () => {
     state.ghToken = $("gh-token").value.trim();
     await DB.setSetting("ghToken", state.ghToken);
+    /* Entitlement resets until the new token proves inbox access. */
+    state.ghProven = false;
+    await DB.setSetting("ghProven", false);
+    renderPlan();
   });
   $("gh-test").addEventListener("click", async () => {
     const token = $("gh-token").value.trim();
@@ -2371,7 +2447,13 @@ async function init() {
     toast("Testing…");
     try {
       const res = await fetch("https://api.github.com/repos/" + GH_REPO + "/contents/inbox", { headers: ghHeaders() });
-      if (res.ok) { toast("Connected — Claude inbox is ready"); syncInbox(); }
+      if (res.ok) {
+        state.ghProven = true;
+        await DB.setSetting("ghProven", true);
+        renderPlan();
+        toast("Connected — Claude inbox is ready");
+        syncInbox();
+      }
       else if (res.status === 401) toast("Token not valid — check it was copied fully");
       else if (res.status === 404) toast("Token can't see resit-inbox — check its repository access");
       else toast("Connection failed (" + res.status + ")");
