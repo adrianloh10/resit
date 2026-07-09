@@ -38,20 +38,19 @@ setTimeout(function () { var b = document.getElementById("boot"); if (b) b.class
 <main id="view-home" class="view">
   <header class="home-header">
     <div class="month-row">
-      <button class="icon-btn" id="open-settings-btn" aria-label="Settings">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/></svg>
-      </button>
       <button class="icon-btn" id="month-prev" aria-label="Previous month">&#8249;</button>
       <p class="month-label" id="month-label" title="Tap to jump to this month">June</p>
       <button class="icon-btn" id="month-next" aria-label="Next month">&#8250;</button>
-      <button class="icon-btn" id="search-toggle" aria-label="Search">
-        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-      </button>
     </div>
     <p class="big-amount" id="month-total">0<span class="cents">.00</span></p>
-    <p class="budget-line" id="budget-line">of RM 3,000 budget</p>
-    <div class="budget-track"><div class="budget-fill" id="budget-fill"></div></div>
-    <p class="pacing-line" id="pacing-line" hidden></p>
+    <div class="hero-cols" id="hero-cols" hidden>
+      <span class="hero-col teal" id="hero-remaining-col">REMAINING<b id="hero-remaining"></b></span>
+      <span class="hero-col sienna">TOTAL BUDGET<b id="hero-budget"></b></span>
+    </div>
+    <div class="budget-track" id="budget-track">
+      <div class="budget-fill" id="budget-fill"></div>
+      <span class="track-status" id="track-status"></span>
+    </div>
     <p class="pending-line" id="pending-line" hidden></p>
     <div class="scope-filter" id="scope-filter"></div>
     <div class="claim-line" id="claim-line" hidden>
@@ -75,13 +74,9 @@ setTimeout(function () { var b = document.getElementById("boot"); if (b) b.class
 <main id="view-insights" class="view" hidden>
   <header class="home-header">
     <div class="month-row">
-      <button class="icon-btn" id="ins-open-settings" aria-label="Settings">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/></svg>
-      </button>
       <button class="icon-btn" id="ins-month-prev" aria-label="Previous month">&#8249;</button>
-      <p class="month-label" id="ins-month-label">June</p>
+      <p class="month-label" id="ins-month-label" title="Tap to jump to this month">June</p>
       <button class="icon-btn" id="ins-month-next" aria-label="Next month">&#8250;</button>
-      <span class="spacer"></span>
     </div>
     <div class="scope-filter" id="ins-scope-filter"></div>
   </header>
@@ -208,7 +203,7 @@ setTimeout(function () { var b = document.getElementById("boot"); if (b) b.class
 </main>
 
 <nav class="bottom-nav" id="bottom-nav">
-  <button class="nav-btn active" id="nav-home" aria-label="Expenses">
+  <button class="nav-btn active" id="nav-home" aria-label="Menu">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 6h14M5 12h14M5 18h9"/></svg>
   </button>
   <button class="fab" id="fab-camera" aria-label="Snap receipt">
@@ -289,9 +284,9 @@ setTimeout(function () { var b = document.getElementById("boot"); if (b) b.class
 <div class="overlay sheet-overlay" id="scope-pick-overlay" hidden>
   <div class="confirm-sheet chooser-sheet">
     <p class="sheet-title" style="margin: 6px 0 14px;">Who's this expense for?</p>
-    <button class="chooser-btn" id="scope-pick-personal"><span class="scope-pick-dot" style="background: var(--clay)"></span><span>Personal</span></button>
-    <button class="chooser-btn" id="scope-pick-shared"><span class="scope-pick-dot" style="background: var(--moss)"></span><span>Shared</span></button>
-    <button class="chooser-btn" id="scope-pick-company"><span class="scope-pick-dot" style="background: var(--ochre)"></span><span>Company</span></button>
+    <button class="chooser-btn" id="scope-pick-personal"><span class="scope-pick-dot" style="background: var(--teal)"></span><span>Personal</span></button>
+    <button class="chooser-btn" id="scope-pick-shared"><span class="scope-pick-dot" style="background: var(--gold)"></span><span>Shared</span></button>
+    <button class="chooser-btn" id="scope-pick-company"><span class="scope-pick-dot" style="background: var(--sienna-red)"></span><span>Company</span></button>
     <button class="ghost-btn small" id="scope-pick-cancel" style="margin-top: 6px; border: none;">Cancel</button>
   </div>
 </div>
@@ -367,6 +362,24 @@ setTimeout(function () { var b = document.getElementById("boot"); if (b) b.class
     <button class="save-btn" id="upgrade-buy">Upgrade</button>
     <button class="ghost-btn" id="upgrade-code" style="margin-top: 10px;">I have an unlock code</button>
     <button class="ghost-btn" id="upgrade-close" style="margin-top: 10px; border: none;">Not now</button>
+  </div>
+</div>
+
+<div class="overlay sheet-overlay" id="menu-overlay" hidden>
+  <div class="confirm-sheet chooser-sheet">
+    <p class="sheet-title" style="margin: 6px 0 14px;">Menu</p>
+    <button class="chooser-btn" id="menu-home">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 6h14M5 12h14M5 18h9"/></svg>
+      <span>Expenses</span>
+    </button>
+    <button class="chooser-btn" id="menu-search">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <span>Search</span>
+    </button>
+    <button class="chooser-btn" id="menu-settings">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/></svg>
+      <span>Settings</span>
+    </button>
   </div>
 </div>
 

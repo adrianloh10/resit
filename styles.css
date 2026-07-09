@@ -1,41 +1,57 @@
 :root {
-  --paper: #F7F3EC;
-  --paper-raised: #FFFDF8;
-  --ink: #2B2722;
-  --ink-soft: #5E5749;
-  --muted: #78705E;
-  --faint: #A99D88;
-  --divider: #DFD7C6;
-  --divider-soft: #D0C7B4;
-  --terracotta: #B05B36;
-  --ochre: #C2A14D;
-  --sage: #75825F;
-  --clay: #9A6B4F;
-  --moss: #5C6B52;
-  --rust: #8C4A32;
+  /* Premium parchment & coffee-sienna system: parchment base, sienna accents,
+     deep teal = positive/primary, terracotta = progress, muted gold = secondary. */
+  --paper: #F4EDDE;
+  --paper-raised: #FCF8EE;
+  --ink: #2C2318;
+  --ink-soft: #5C4C3A;
+  --muted: #7E6C55;
+  --faint: #AC9B80;
+  --divider: #E2D7C0;
+  --divider-soft: #D3C5A9;
+  --sienna: #7A4526;
+  --sienna-deep: #4A2E1B;
+  --sienna-red: #99341F;
+  --teal: #11655F;
+  --gold: #A8823B;
+  --terracotta: #B4572F;
+  --terracotta-deep: #8F3F1E;
+  --ochre: #A8823B;
+  --sage: #2E6B58;
+  --clay: #7A4526;
+  --moss: #A8823B;
+  --rust: #99341F;
   --sand: #A89368;
   --stone: #7D7466;
+  --nav-cream: #EAD9BE;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 html[data-theme="dark"] {
-  --paper: #25211A;
-  --paper-raised: #2E2921;
-  --ink: #EFE7D8;
-  --ink-soft: #D2C8B5;
-  --muted: #9D937F;
-  --faint: #6E6555;
-  --divider: #3A342A;
-  --divider-soft: #483F31;
+  --paper: #221B12;
+  --paper-raised: #2C2418;
+  --ink: #F0E6D2;
+  --ink-soft: #D4C5AC;
+  --muted: #A09070;
+  --faint: #6E6250;
+  --divider: #3A3122;
+  --divider-soft: #4A3E2B;
+  --sienna: #C08A5E;
+  --sienna-deep: #3A2716;
+  --sienna-red: #D06A4E;
+  --teal: #4FA79F;
+  --gold: #CBA45C;
   --terracotta: #C9714A;
-  --ochre: #CDAC5C;
-  --sage: #8C9A76;
-  --clay: #B08163;
-  --moss: #7C8B70;
-  --rust: #B25E42;
+  --terracotta-deep: #A34F28;
+  --ochre: #CBA45C;
+  --sage: #6FA893;
+  --clay: #C08A5E;
+  --moss: #CBA45C;
+  --rust: #D06A4E;
   --sand: #B9A375;
   --stone: #95897A;
+  --nav-cream: #E7D5B8;
 }
 /* "only light" opts out of Android Chrome's force-dark, which would
    otherwise re-darken the intentionally light paper theme. */
@@ -70,74 +86,119 @@ html, body {
 }
 
 /* ---------- Home header ---------- */
-.month-row { display: flex; align-items: center; justify-content: space-between; }
-.month-label { font-size: 15px; color: var(--muted); text-align: center; flex: 1; }
+.month-row { display: flex; align-items: center; justify-content: center; gap: 18px; }
+.month-label {
+  font-size: 14px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--ink); text-align: center; min-width: 110px;
+}
 .icon-btn {
-  background: none; border: none; color: var(--ink); font-size: 24px;
+  background: none; border: none; color: var(--sienna); font-size: 26px;
   width: 40px; height: 40px; line-height: 1; cursor: pointer; border-radius: 50%;
 }
 .icon-btn:active { background: var(--divider); }
 
 .big-amount {
   font-family: var(--mono);
-  font-size: 44px;
+  font-size: 52px;
   font-weight: 400;
-  letter-spacing: -1.5px;
+  letter-spacing: -2px;
   text-align: center;
-  margin-top: 6px;
+  margin-top: 18px;
 }
-.big-amount .cents { font-size: 22px; color: var(--muted); }
-.budget-line { text-align: center; font-size: 13px; color: var(--muted); margin-top: 2px; }
-.budget-track { height: 3px; background: var(--divider); border-radius: 2px; margin: 16px 28px 0; }
-.budget-fill { height: 3px; background: var(--terracotta); border-radius: 2px; width: 0; transition: width .4s ease; }
-.budget-fill.over { background: var(--rust); }
+.big-amount .cents { font-size: 24px; color: var(--muted); }
 
-/* ---------- Ledger ---------- */
-.ledger { margin-top: 26px; }
-.day-label { font-size: 12px; color: var(--muted); margin: 18px 0 2px; }
+/* REMAINING (teal) | TOTAL BUDGET (sienna) under the hero figure. */
+.hero-cols { display: flex; justify-content: center; gap: 12px; margin-top: 14px; }
+.hero-col {
+  flex: 1; max-width: 200px; text-align: center;
+  font-size: 10px; font-weight: 700; letter-spacing: .12em; color: var(--muted);
+}
+.hero-col b { display: block; font-family: var(--mono); font-size: 15px; font-weight: 600; letter-spacing: 0; margin-top: 3px; }
+.hero-col.teal b { color: var(--teal); }
+.hero-col.sienna b { color: var(--sienna); }
+.hero-col.teal.neg b { color: var(--rust); }
+
+/* Sleek progress bar with the status written inside it. */
+.budget-track {
+  position: relative; height: 26px; background: var(--divider);
+  border-radius: 13px; margin: 14px 8px 0; overflow: hidden;
+}
+.budget-fill { height: 100%; background: var(--terracotta); border-radius: 13px; width: 0; transition: width .4s ease; }
+.budget-fill.over { background: var(--rust); }
+.track-status {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; letter-spacing: .14em; color: #FDF6E9;
+  text-shadow: 0 0 6px rgba(60, 30, 10, .35); pointer-events: none;
+}
+
+/* ---------- Ledger (cards) ---------- */
+.ledger { margin-top: 22px; }
+.day-label {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--faint); margin: 20px 4px 8px;
+}
 .entry {
-  display: flex; align-items: center; gap: 10px;
-  padding: 11px 0;
-  border-bottom: 0.5px solid var(--divider);
-  width: 100%; background: none; border-top: none; border-left: none; border-right: none;
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 14px; margin-bottom: 9px;
+  background: var(--paper-raised);
+  border: 0.5px solid var(--divider);
+  border-radius: 15px;
+  width: 100%;
   font-family: var(--sans); text-align: left; cursor: pointer;
 }
-.cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.entry:active { background: var(--divider); }
+.cat-dot { display: none; }
+.cat-icon {
+  width: 36px; height: 36px; border-radius: 11px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--paper); color: var(--sienna);
+}
+.cat-icon svg { width: 18px; height: 18px; }
 .entry-main { flex: 1; min-width: 0; }
-/* Flex row so a long merchant name truncates with an ellipsis while the
-   photo marker and Personal/Shared/Company pill stay visible — the name can
-   never paint over the amount column. */
-.entry-merchant { font-size: 14.5px; color: var(--ink); display: flex; align-items: center; gap: 6px; min-width: 0; }
+.entry-merchant { font-size: 14.5px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 6px; min-width: 0; }
 .merchant-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.entry-cat { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
-.entry-amount { font-family: var(--mono); font-size: 14.5px; color: var(--ink); }
+.entry-cat { margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 7px; font-size: 11px; color: var(--muted); }
+.entry-cat .mut { color: var(--faint); }
+.acct-tag {
+  font-size: 9px; font-weight: 700; letter-spacing: .08em;
+  padding: 2.5px 7px; border-radius: 6px; white-space: nowrap;
+}
+.acct-tag.t-personal { color: var(--teal); background: rgba(17, 101, 95, .13); }
+.acct-tag.t-shared { color: var(--gold); background: rgba(168, 130, 59, .16); }
+.acct-tag.t-company { color: var(--sienna-red); background: rgba(153, 52, 31, .12); }
+html[data-theme="dark"] .acct-tag.t-personal { background: rgba(79, 167, 159, .18); }
+html[data-theme="dark"] .acct-tag.t-shared { background: rgba(203, 164, 92, .18); }
+html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18); }
+.entry-amount { font-family: var(--mono); font-size: 14.5px; font-weight: 600; color: var(--ink); }
 .empty-note { text-align: center; color: var(--muted); font-size: 14px; line-height: 1.7; margin-top: 80px; }
 
-/* ---------- Bottom nav ---------- */
+/* ---------- Bottom nav (floating dark sienna panel) ---------- */
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0;
-  max-width: 520px; margin: 0 auto;
-  display: flex; align-items: center; justify-content: space-around;
-  padding: 10px 20px calc(14px + env(safe-area-inset-bottom));
-  background: linear-gradient(to top, var(--paper) 75%, transparent);
+  max-width: 480px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 30px;
+  background: var(--sienna-deep);
+  border-radius: 24px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  left: 16px; right: 16px;
   z-index: 10;
-  /* The bar itself must not eat taps meant for content beneath its
-     transparent gradient (e.g. the Settings/Statement links) — only its
-     actual buttons are clickable. */
+  /* Only the buttons take taps; the panel never swallows a stray touch
+     beyond its own opaque area. */
   pointer-events: none;
 }
 .bottom-nav .nav-btn, .bottom-nav .fab { pointer-events: auto; }
-.nav-btn { background: none; border: none; color: var(--faint); width: 48px; height: 48px; cursor: pointer; }
-.nav-btn.active { color: var(--ink); }
+.nav-btn { background: none; border: none; color: var(--nav-cream); opacity: .55; width: 52px; height: 52px; cursor: pointer; }
+.nav-btn.active { opacity: 1; }
 .nav-btn svg { width: 22px; height: 22px; }
 .fab {
-  width: 60px; height: 60px; border-radius: 50%;
-  background: var(--ink); color: var(--paper);
-  border: none; cursor: pointer;
+  width: 58px; height: 58px; border-radius: 50%;
+  background: var(--teal); color: #FDF6E9;
+  border: 3px solid var(--sienna-deep); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  margin-top: -26px;
+  margin-top: -30px;
 }
-.fab svg { width: 26px; height: 26px; }
+.fab svg { width: 25px; height: 25px; }
 .fab:active { transform: scale(0.94); }
 
 /* ---------- Overlays ---------- */
@@ -433,7 +494,7 @@ html, body {
 /* ---------- Insight polish ---------- */
 .ins-row-sub { font-size: 11px; color: var(--muted); }
 .ins-merchant-row { cursor: pointer; }
-.odd-pill { font-size: 9.5px; padding: 1px 6px; border-radius: 999px; border: 0.5px solid currentColor; color: var(--rust); white-space: nowrap; }
+.odd-pill { font-size: 9.5px; padding: 1px 6px; border-radius: 999px; border: 0.5px solid currentColor; color: var(--gold); white-space: nowrap; }
 .rhythm-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 8px; }
 .rh-head { text-align: center; font-size: 10px; color: var(--faint); padding-bottom: 2px; }
 .rh-day {
@@ -494,9 +555,9 @@ html, body {
 .scope-strip { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin: -12px 0 4px; }
 .scope-strip i { display: block; height: 6px; }
 .scope-strip-legend { text-align: center; font-size: 11px; color: var(--muted); margin-bottom: 18px; }
-.scope-strip-legend .scope-personal { color: var(--clay); }
-.scope-strip-legend .scope-shared { color: var(--moss); }
-.scope-strip-legend .scope-company { color: var(--ochre); }
+.scope-strip-legend .scope-personal { color: var(--teal); }
+.scope-strip-legend .scope-shared { color: var(--gold); }
+.scope-strip-legend .scope-company { color: var(--sienna-red); }
 
 /* ---------- Upgrade sheet ---------- */
 .upgrade-price { font-family: var(--mono); font-size: 22px; color: var(--ink); margin: 2px 0 10px; }
@@ -532,40 +593,30 @@ html, body {
 .consent-text { font-size: 13.5px; color: var(--ink-soft); line-height: 1.6; margin: 0 auto 18px; max-width: 460px; }
 
 /* ---------- Scope: Personal / Shared / Company ---------- */
-/* Home filter row — each type with its monthly total; tap to filter. */
-.scope-filter { display: flex; gap: 7px; margin: 16px 0 0; }
+/* Home filter row — clean rounded pills; selected sits on dark terracotta. */
+.scope-filter { display: flex; gap: 8px; margin: 18px 0 0; }
 .scope-chip {
   flex: 1 1 0; min-width: 0; overflow: hidden;
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 7px 6px; border-radius: 12px;
-  border: 1px solid var(--divider-soft); background: var(--paper-raised);
+  display: flex; align-items: center; justify-content: center;
+  padding: 9px 6px; border-radius: 999px;
+  border: 1px solid var(--sienna); background: none;
   cursor: pointer; font-family: var(--sans);
 }
-.scope-chip-name { font-size: 11px; color: var(--muted); white-space: nowrap; }
-.scope-chip-amt {
-  font-size: 11px; font-family: var(--mono); color: var(--ink);
-  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.scope-chip-name {
+  font-size: 11px; font-weight: 600; letter-spacing: .02em;
+  color: var(--sienna); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.scope-chip.selected .scope-chip-name,
-.scope-chip.selected .scope-chip-amt { color: var(--paper); }
-.scope-chip.scope-all.selected { background: var(--ink); border-color: var(--ink); }
-.scope-chip.scope-personal.selected { background: var(--clay); border-color: var(--clay); }
-.scope-chip.scope-shared.selected { background: var(--moss); border-color: var(--moss); }
-.scope-chip.scope-company.selected { background: var(--ochre); border-color: var(--ochre); }
+.scope-chip.selected { background: var(--terracotta-deep); border-color: var(--terracotta-deep); }
+.scope-chip.selected .scope-chip-name { color: #FDF6E9; }
 
-/* Per-entry colored tag in the ledger. */
-.scope-pill {
-  font-size: 9.5px; padding: 1px 6px; border-radius: 999px;
-  border: 0.5px solid currentColor; vertical-align: middle; white-space: nowrap;
-  flex-shrink: 0;
-}
-.scope-personal { color: var(--clay); }
-.scope-shared { color: var(--moss); }
-.scope-company { color: var(--ochre); }
+/* Scope colours: teal = Personal, gold = Shared, red-sienna = Company. */
+.scope-personal { color: var(--teal); }
+.scope-shared { color: var(--gold); }
+.scope-company { color: var(--sienna-red); }
 
 /* Confirm-sheet Type picker — colored when chosen. */
 .chip-group-label { font-size: 11px; color: var(--muted); text-align: center; margin-top: 16px; }
 .chip-group-label + .chip-row { margin-top: 7px; }
-.chip.scope-opt.selected.scope-personal { background: var(--clay); border-color: var(--clay); color: var(--paper); }
-.chip.scope-opt.selected.scope-shared { background: var(--moss); border-color: var(--moss); color: var(--paper); }
-.chip.scope-opt.selected.scope-company { background: var(--ochre); border-color: var(--ochre); color: var(--paper); }
+.chip.scope-opt.selected.scope-personal { background: var(--teal); border-color: var(--teal); color: #FDF6E9; }
+.chip.scope-opt.selected.scope-shared { background: var(--gold); border-color: var(--gold); color: #FDF6E9; }
+.chip.scope-opt.selected.scope-company { background: var(--sienna-red); border-color: var(--sienna-red); color: #FDF6E9; }

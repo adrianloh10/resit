@@ -10,8 +10,23 @@ const CAT_COLOR = Object.fromEntries(CATS.map(c => [c.name, c.color]));
    Each gets its own earth-tone accent. Default for new/old expenses: Personal. */
 const SCOPES = ["Personal", "Shared", "Company"];
 const SCOPE_CLASS = { Personal: "scope-personal", Shared: "scope-shared", Company: "scope-company" };
-const SCOPE_FILL = { Personal: "var(--clay)", Shared: "var(--moss)", Company: "var(--ochre)" };
+const SCOPE_FILL = { Personal: "var(--teal)", Shared: "var(--gold)", Company: "var(--sienna-red)" };
+const SCOPE_TAG = { Personal: "t-personal", Shared: "t-shared", Company: "t-company" };
 const scopeOf = e => (e && SCOPES.includes(e.scope)) ? e.scope : "Personal";
+
+/* Geometric line-art icons per category (stroke = currentColor). */
+const CAT_ICONS = {
+  Food: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 3v7a2.5 2.5 0 0 0 5 0V3M8.5 3v18"/><path d="M17 3c-1.6 2-2.2 4.6-2.2 7 0 2 .9 3.2 2.2 3.2V21"/></svg>`,
+  Groceries: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9.5" cy="19.5" r="1.4"/><circle cx="16.5" cy="19.5" r="1.4"/><path d="M3 4h2l2.3 10a2 2 0 0 0 2 1.6h6.9a2 2 0 0 0 1.9-1.5L20 8H6"/></svg>`,
+  Fuel: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v16M4 21h10M6.5 6.5h5v4h-5z"/><path d="M13 10h2a1.5 1.5 0 0 1 1.5 1.5v5a1.25 1.25 0 0 0 2.5 0V9.8a2 2 0 0 0-.6-1.4L17 7"/></svg>`,
+  Transport: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="13" rx="2.4"/><path d="M5 11h14M8.5 20l.8-3M15.5 20l-.8-3"/><circle cx="9" cy="14.2" r=".6"/><circle cx="15" cy="14.2" r=".6"/></svg>`,
+  Shopping: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2l-1 12a1.6 1.6 0 0 1-1.6 1.5H9a1.6 1.6 0 0 1-1.6-1.5z"/><path d="M9 10.5V7a3 3 0 0 1 6 0v3.5"/></svg>`,
+  Bills: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v4M15 3v4M7 7h10v4a5 5 0 0 1-10 0zM12 16v5"/></svg>`,
+  Health: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20S4.8 15.6 3 11.3A5 5 0 0 1 12 7a5 5 0 0 1 9 4.3C19.2 15.6 12 20 12 20z"/></svg>`,
+  Entertainment: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 5v14M16 5v14M4 9.5h4M4 14.5h4M16 9.5h4M16 14.5h4"/></svg>`,
+  Other: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12.6 12.6 20a1.8 1.8 0 0 1-2.6 0L3.6 13.6a1.8 1.8 0 0 1 0-2.6L11 3.6a1.8 1.8 0 0 1 1.3-.6H19a1.8 1.8 0 0 1 1.8 1.8v6.5c0 .5-.2 1-.6 1.3z"/><circle cx="15.5" cy="8.5" r="1.3"/></svg>`
+};
+const catIcon = c => CAT_ICONS[c] || CAT_ICONS.Other;
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 let state = {
@@ -649,34 +664,6 @@ function monthExpenses() {
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
-/* Pacing: turn the budget bar into a forward look. Current month + All view
-   only — "RM left · RM/day for N days · on track for ~RM projection". */
-function renderPacing(total) {
-  const el = $("pacing-line");
-  if (!el) return;
-  if (state.scopeFilter || state.monthOffset !== 0 || !(state.budget > 0)) { el.hidden = true; return; }
-  const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const dayOfMonth = now.getDate();
-  const daysLeft = daysInMonth - dayOfMonth + 1; /* incl. today */
-  const left = state.budget - total;
-  let text, warn = false;
-  if (left <= 0) {
-    text = fmtRM(-left, true) + " over budget";
-    warn = true;
-  } else {
-    text = fmtRM(left, true) + " left · " + fmtRM(left / daysLeft, true) + "/day for " + daysLeft + " day" + (daysLeft > 1 ? "s" : "");
-    if (dayOfMonth >= 3) {
-      const projection = (total / dayOfMonth) * daysInMonth;
-      text += " · on track for ~" + fmtRM(projection, true);
-      warn = projection > state.budget;
-    }
-  }
-  el.textContent = text;
-  el.className = "pacing-line" + (warn ? " warn" : "");
-  el.hidden = false;
-}
-
 /* "RM X to claim" — outstanding Shared/Company money across ALL months (owed
    money doesn't reset monthly), with a per-month mark-claimed shortcut. */
 function renderClaimLine() {
@@ -706,28 +693,50 @@ function renderHome() {
   const [whole, cents] = bare.split(".");
   $("month-total").innerHTML = `<span class="cur-prefix">${escapeHtml(state.currency)}</span> ${whole}<span class="cents">.${cents}</span>`;
 
+  /* Hero: REMAINING | TOTAL BUDGET columns + a status bar with the verdict
+     written inside it ("You are ON TRACK" / "PACING HIGH" / "OVER BUDGET").
+     With a type filter active, the bar shows that type's share instead. */
   const fill = $("budget-fill");
+  const track = $("budget-track");
+  const status = $("track-status");
+  const cols = $("hero-cols");
   if (state.scopeFilter) {
-    /* When filtering by type, the bar shows that type's share of the month. */
+    if (cols) cols.hidden = true;
     const monthTotal = allExps.reduce((s, e) => s + e.amount, 0);
     const share = monthTotal > 0 ? Math.round((total / monthTotal) * 100) : 0;
-    $("budget-line").textContent = `${state.scopeFilter} · ${share}% of this month`;
+    if (track) track.hidden = false;
     fill.style.width = share + "%";
     fill.classList.remove("over");
     fill.style.background = SCOPE_FILL[state.scopeFilter];
+    if (status) status.textContent = state.scopeFilter.toUpperCase() + " · " + share + "% OF MONTH";
   } else {
     fill.style.background = "";
     if (state.budget > 0) {
-      $("budget-line").textContent = `of ${state.currency} ${state.budget.toLocaleString("en-MY")} budget`;
+      if (cols) {
+        cols.hidden = false;
+        const left = state.budget - total;
+        $("hero-remaining").textContent = left >= 0 ? fmtRM(left) : "−" + fmtRM(-left);
+        $("hero-remaining-col").classList.toggle("neg", left < 0);
+        $("hero-budget").textContent = state.currency + " " + state.budget.toLocaleString("en-MY");
+      }
+      if (track) track.hidden = false;
       const pct = Math.min(100, (total / state.budget) * 100);
       fill.style.width = pct + "%";
       fill.classList.toggle("over", total > state.budget);
+      if (status) {
+        let label = "You are ON TRACK";
+        if (total > state.budget) label = "OVER BUDGET";
+        else if (state.monthOffset === 0 && now.getDate() >= 3) {
+          const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+          if ((total / now.getDate()) * dim > state.budget) label = "PACING HIGH";
+        }
+        status.textContent = label;
+      }
     } else {
-      $("budget-line").textContent = "no budget set";
-      fill.style.width = "0";
+      if (cols) cols.hidden = true;
+      if (track) track.hidden = true;
     }
   }
-  renderPacing(total);
   renderClaimLine();
 
   /* Possible-duplicate detection: same merchant + amount + day. Flag all but
@@ -806,28 +815,28 @@ function renderHome() {
       label.textContent = prefix + d.toLocaleDateString("en-MY", { weekday: "short", day: "numeric", month: "short" });
       ledger.appendChild(label);
     }
-    const dup = dupIds.has(e.id) ? `<span class="dup-flag">duplicate?</span> · ` : "";
-    const claim = e.claimStatus === "to-claim" ? `<span class="claim-pill to">to claim</span> · `
-      : e.claimStatus === "claimed" ? `<span class="claim-pill done">claimed ✓</span> · ` : "";
-    const odd = unusualIds.has(e.id) ? `<span class="odd-pill">higher than usual</span> · ` : "";
+    const dup = dupIds.has(e.id) ? `<span class="dup-flag">duplicate?</span>` : "";
+    const claim = e.claimStatus === "to-claim" ? `<span class="claim-pill to">to claim</span>`
+      : e.claimStatus === "claimed" ? `<span class="claim-pill done">claimed ✓</span>` : "";
+    const odd = unusualIds.has(e.id) ? `<span class="odd-pill">higher than usual</span>` : "";
     const camera = e.photo ? `<span class="has-photo" aria-hidden="true">▦ </span>` : "";
     const sc = scopeOf(e);
-    /* Type is shown by tinting the merchant name (Shared = moss, Company =
-       ochre; Personal keeps plain ink) instead of adding another box. */
-    const scopeClass = sc !== "Personal" ? " " + SCOPE_CLASS[sc] : "";
+    /* "Category | TYPE" account tag, colour-coded (teal/gold/red-sienna). */
+    const tag = `<span class="acct-tag ${SCOPE_TAG[sc]}">${escapeHtml(e.category)} | ${sc.toUpperCase()}</span>`;
     const amountHtml = e.pending
       ? `<span class="entry-amount waiting">waiting…</span>`
       : `<span class="entry-amount">${fmtRM(e.amount)}</span>`;
     /* A pending receipt older than a day is probably stuck — invite a manual fill. */
     const stale = e.pending && Date.now() - new Date(e.createdAt || e.date).getTime() > 86400000;
-    const pendingText = e.pending ? (stale ? "still waiting — tap to fill it in yourself · " : "waiting for Claude · ") : "";
+    const pending = e.pending ? `<span class="mut">${stale ? "still waiting — tap to fill it in yourself" : "waiting for Claude"}</span>` : "";
+    const note = e.note ? `<span class="mut">${escapeHtml(e.note)}</span>` : "";
     const row = document.createElement("button");
     row.className = "entry";
     row.innerHTML = `
-      <span class="cat-dot" style="background:${CAT_COLOR[e.category] || CAT_COLOR.Other}"></span>
+      <span class="cat-icon">${catIcon(e.category)}</span>
       <span class="entry-main">
-        <span class="entry-merchant">${camera}<span class="merchant-name${scopeClass}">${escapeHtml(e.merchant || "Expense")}</span></span>
-        <span class="entry-cat">${dup}${claim}${odd}${pendingText}${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
+        <span class="entry-merchant">${camera}<span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span></span>
+        <span class="entry-cat">${tag}${claim}${odd}${dup}${pending}${note}</span>
       </span>
       ${amountHtml}`;
     row.addEventListener("click", () => openConfirmSheet(e));
@@ -846,10 +855,10 @@ function renderHome() {
       const row = document.createElement("button");
       row.className = "entry";
       row.innerHTML = `
-        <span class="cat-dot" style="background:${CAT_COLOR[e.category] || CAT_COLOR.Other}"></span>
+        <span class="cat-icon">${catIcon(e.category)}</span>
         <span class="entry-main">
-          <span class="entry-merchant"><span class="merchant-name${sc !== "Personal" ? " " + SCOPE_CLASS[sc] : ""}">${escapeHtml(e.merchant || "Expense")}</span></span>
-          <span class="entry-cat">${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()} · ${escapeHtml(e.category)}</span>
+          <span class="entry-merchant"><span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span></span>
+          <span class="entry-cat"><span class="acct-tag ${SCOPE_TAG[sc]}">${escapeHtml(e.category)} | ${sc.toUpperCase()}</span><span class="mut">${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}</span></span>
         </span>
         <span class="entry-amount">${fmtRM(e.amount)}</span>`;
       row.addEventListener("click", () => openConfirmSheet(e));
@@ -896,19 +905,16 @@ function renderScopeFilter(monthExps, targetId, rerender) {
   const row = $(targetId || "scope-filter");
   if (!row) return;
   const redo = rerender || renderHome;
-  const totals = { Personal: 0, Shared: 0, Company: 0 };
-  let all = 0;
-  for (const e of monthExps) { totals[scopeOf(e)] += e.amount; all += e.amount; }
   row.innerHTML = "";
-  const mk = (label, value, amount, cls) => {
+  const mk = (label, value, cls) => {
     const b = document.createElement("button");
     b.className = "scope-chip " + cls + (state.scopeFilter === value ? " selected" : "");
-    b.innerHTML = `<span class="scope-chip-name">${label}</span><span class="scope-chip-amt">${fmtChip(amount)}</span>`;
+    b.innerHTML = `<span class="scope-chip-name">${label}</span>`;
     b.addEventListener("click", () => { state.scopeFilter = (state.scopeFilter === value) ? "" : value; redo(); });
     row.appendChild(b);
   };
-  mk("All", "", all, "scope-all");
-  for (const s of SCOPES) mk(s, s, totals[s], SCOPE_CLASS[s]);
+  mk("All", "", "scope-all");
+  for (const s of SCOPES) mk(s, s, SCOPE_CLASS[s]);
 }
 
 function renderScopeChips() {
@@ -2295,11 +2301,27 @@ async function init() {
   $("ins-month-prev").addEventListener("click", () => changeMonth(-1));
   $("ins-month-next").addEventListener("click", () => changeMonth(1));
 
-  $("nav-home").addEventListener("click", () => switchView("home"));
-  $("nav-insights").addEventListener("click", () => switchView("insights"));
   /* on(): elements may be absent for one update cycle while the cached
      index.html lags behind app.js — never let wiring crash init. */
   const on = (id, fn) => { const el = $(id); if (el) el.addEventListener("click", fn); };
+
+  /* Left nav button = menu (Expenses / Search / Settings); right = stats,
+     tapping it again returns home. */
+  $("nav-home").addEventListener("click", () => { const ov = $("menu-overlay"); if (ov) ov.hidden = false; else switchView("home"); });
+  $("nav-insights").addEventListener("click", () => switchView(state.view === "insights" ? "home" : "insights"));
+  const closeMenu = () => { const ov = $("menu-overlay"); if (ov) ov.hidden = true; };
+  on("menu-overlay", ev => { if (ev.target === $("menu-overlay")) closeMenu(); });
+  on("menu-home", () => { closeMenu(); switchView("home"); });
+  on("menu-settings", () => { closeMenu(); switchView("settings"); });
+  on("menu-search", () => {
+    closeMenu();
+    switchView("home");
+    const bar = $("search-bar");
+    if (bar) {
+      bar.hidden = false;
+      setTimeout(() => { const i = $("search-input"); if (i) i.focus(); }, 30);
+    }
+  });
   on("nav-settings", () => switchView("settings"));
   on("open-settings-btn", () => switchView("settings"));
   on("ins-open-settings", () => switchView("settings"));
