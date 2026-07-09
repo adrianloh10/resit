@@ -2214,6 +2214,19 @@ async function init() {
   renderHome();
   materializeRecurring(); /* add any monthly expenses that came due */
 
+  /* Startup fade (quiet fade): the boot overlay in index.html has been
+     playing while we loaded — keep it up ~0.9s total so the mark reads,
+     then fade it away. Same-session reloads skip it entirely. */
+  const boot = $("boot");
+  if (boot) {
+    sessionStorage.setItem("resitBooted", "1");
+    const wait = Math.max(0, 900 - (Date.now() - (window._bootStart || Date.now())));
+    setTimeout(() => {
+      boot.classList.add("done");
+      setTimeout(() => boot.remove(), 500);
+    }, wait);
+  }
+
   /* Ask the browser to protect our storage from eviction under storage
      pressure — the single most important line for "your data stays safe". */
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}

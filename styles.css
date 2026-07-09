@@ -302,6 +302,26 @@ html, body {
 
 .home-settings-row { display: flex; justify-content: center; margin-top: 10px; }
 
+/* ---------- Startup (quiet fade) ---------- */
+.boot {
+  position: fixed; inset: 0; z-index: 200;
+  background: var(--paper);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px;
+  transition: opacity .4s ease;
+}
+.boot svg { animation: boot-mark .8s ease-out both; }
+.boot-wm {
+  font-family: Georgia, "Times New Roman", serif; font-size: 22px; color: var(--ink);
+  margin: 0; opacity: 0;
+  animation: boot-wm .7s ease-out .3s forwards;
+}
+@keyframes boot-mark { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes boot-wm { to { opacity: .85; } }
+.boot.done { opacity: 0; pointer-events: none; }
+.boot.skip { display: none; }
+@media (prefers-reduced-motion: reduce) { .boot { display: none; } }
+
 /* ---------- Search & filter ---------- */
 .search-bar { margin-top: 14px; }
 .search-bar input {

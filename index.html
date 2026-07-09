@@ -17,6 +17,24 @@
 </head>
 <body>
 
+<!-- Startup: the receipt mark drifts in while the app loads, then fades away.
+     Skipped on same-session reloads and for reduced-motion users. -->
+<div class="boot" id="boot" aria-hidden="true">
+  <svg viewBox="26 14 44 62" width="84" aria-hidden="true">
+    <path d="M31 19h34v45l-5.7 6-5.6-6-5.7 6-5.6-6-5.7 6-5.7-6z" fill="var(--paper-raised)" stroke="var(--ink)" stroke-width="3.4" stroke-linejoin="round"/>
+    <line x1="39" y1="31" x2="57" y2="31" stroke="var(--ink)" stroke-width="2.6" stroke-linecap="round"/>
+    <line x1="39" y1="39" x2="57" y2="39" stroke="var(--ink)" stroke-width="2.6" stroke-linecap="round"/>
+    <line x1="39" y1="47" x2="50" y2="47" stroke="var(--ink)" stroke-width="2.6" stroke-linecap="round"/>
+    <line x1="39" y1="55" x2="53" y2="55" stroke="var(--terracotta)" stroke-width="3" stroke-linecap="round"/>
+  </svg>
+  <p class="boot-wm">Resit</p>
+</div>
+<script>
+window._bootStart = Date.now();
+if (sessionStorage.getItem("resitBooted")) document.getElementById("boot").className = "boot skip";
+setTimeout(function () { var b = document.getElementById("boot"); if (b) b.classList.add("done"); }, 4000);
+</script>
+
 <main id="view-home" class="view">
   <header class="home-header">
     <div class="month-row">
