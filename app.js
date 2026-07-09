@@ -812,7 +812,9 @@ function renderHome() {
     const odd = unusualIds.has(e.id) ? `<span class="odd-pill">higher than usual</span> · ` : "";
     const camera = e.photo ? `<span class="has-photo" aria-hidden="true">▦ </span>` : "";
     const sc = scopeOf(e);
-    const scopePill = `<span class="scope-pill ${SCOPE_CLASS[sc]}">${sc}</span>`;
+    /* Type is shown by tinting the merchant name (Shared = moss, Company =
+       ochre; Personal keeps plain ink) instead of adding another box. */
+    const scopeClass = sc !== "Personal" ? " " + SCOPE_CLASS[sc] : "";
     const amountHtml = e.pending
       ? `<span class="entry-amount waiting">waiting…</span>`
       : `<span class="entry-amount">${fmtRM(e.amount)}</span>`;
@@ -824,7 +826,7 @@ function renderHome() {
     row.innerHTML = `
       <span class="cat-dot" style="background:${CAT_COLOR[e.category] || CAT_COLOR.Other}"></span>
       <span class="entry-main">
-        <span class="entry-merchant">${camera}<span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span>${scopePill}</span>
+        <span class="entry-merchant">${camera}<span class="merchant-name${scopeClass}">${escapeHtml(e.merchant || "Expense")}</span></span>
         <span class="entry-cat">${dup}${claim}${odd}${pendingText}${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
       </span>
       ${amountHtml}`;
@@ -846,7 +848,7 @@ function renderHome() {
       row.innerHTML = `
         <span class="cat-dot" style="background:${CAT_COLOR[e.category] || CAT_COLOR.Other}"></span>
         <span class="entry-main">
-          <span class="entry-merchant"><span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span><span class="scope-pill ${SCOPE_CLASS[sc]}">${sc}</span></span>
+          <span class="entry-merchant"><span class="merchant-name${sc !== "Personal" ? " " + SCOPE_CLASS[sc] : ""}">${escapeHtml(e.merchant || "Expense")}</span></span>
           <span class="entry-cat">${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()} · ${escapeHtml(e.category)}</span>
         </span>
         <span class="entry-amount">${fmtRM(e.amount)}</span>`;
@@ -1028,12 +1030,9 @@ function renderInsights() {
   }
   const merchants = Object.values(byBrand).sort((a, b) => b.amt - a.amt).slice(0, 5);
 
-  const dayCount = new Set(exps.map(e => new Date(e.date).toDateString())).size;
-
   let html = `
     <div class="ins-total">
       <p class="big-amount" style="font-size:34px">${fmtRM(total)}</p>
-      <p class="budget-line">${exps.length} expenses · ${dayCount} days · avg ${fmtRM(total / Math.max(1, dayCount), true)}/day</p>
     </div>`;
 
   /* Stacked Personal/Shared/Company strip (All view only). */
@@ -1078,7 +1077,7 @@ function renderInsights() {
   for (const b of bars) {
     const h = maxM > 0 ? Math.max(3, Math.round(b.total / maxM * 64)) : 3;
     html += `<div class="trend-col">
-      <span class="trend-val">${b.total > 0 ? Math.round(b.total) : ""}</span>
+      <span class="trend-val">${b.total > 0 ? Math.round(b.total).toLocaleString("en-MY") : ""}</span>
       <div class="trend-bar ${b.current ? "cur" : ""}" style="height:${h}px"></div>
       <span class="trend-lbl">${b.label}</span>
     </div>`;
@@ -1094,7 +1093,7 @@ function renderInsights() {
   if (maxDay > 0) {
     const offset = (new Date(m.getFullYear(), m.getMonth(), 1).getDay() + 6) % 7; /* Monday-first */
     const mon3 = MONTH_NAMES[m.getMonth()].slice(0, 3);
-    html += `<p class="ins-section-label">Rhythm</p><div class="rhythm-grid">`;
+    html += `<p class="ins-section-label">Monthly spend</p><div class="rhythm-grid">`;
     for (const h of ["M", "T", "W", "T", "F", "S", "S"]) html += `<span class="rh-head">${h}</span>`;
     for (let i = 0; i < offset; i++) html += `<span class="rh-day empty"></span>`;
     for (let d = 1; d <= dim2; d++) {
