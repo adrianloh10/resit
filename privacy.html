@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Resit — Privacy</title>
 <style>
-  :root { --paper:#F7F3EC; --ink:#2B2722; --ink-soft:#5E5749; --muted:#78705E; --terracotta:#B05B36; --divider:#DFD7C6; }
+  :root { --paper:#F4EDDE; --ink:#2C2318; --ink-soft:#5C4C3A; --muted:#7E6C55; --terracotta:#B4572F; --divider:#E2D7C0; }
   html { color-scheme: only light; }
   body { background:var(--paper); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; line-height:1.65; margin:0; padding:32px 20px 64px; }
   main { max-width:640px; margin:0 auto; }
@@ -32,7 +32,7 @@
   <h2>Reading receipts</h2>
   <div class="box">
     <p style="margin-top:0"><strong>On-device (default):</strong> when you snap a receipt, your phone reads it locally. The photo does not leave your phone.</p>
-    <p style="margin-bottom:0"><strong>Cloud reading (only if you turn it on):</strong> if a receipt is hard to read and you have switched on "Smarter receipt reading" and agreed to the one-time prompt, the photo is sent to our reader service to extract the details, and is then <strong>discarded</strong>. The photo and the extracted text are <strong>not stored</strong> on the server. To run this, the image passes through Cloudflare (hosting) and Google's vision service (the reader). The only thing the service keeps is an anonymous per-device counter used to prevent abuse — it contains no personal information and no receipt content.</p>
+    <p style="margin-bottom:0"><strong>Cloud reading (only if you turn it on):</strong> if a receipt is hard to read and you have agreed to the one-time prompt, the photo is sent — over an encrypted connection — to our reader to extract the details. It is processed <strong>in memory only</strong>: the photo is <strong>never written to any disk, database or log</strong> on our side, is never used to identify you, and is discarded the moment the text comes back. Your receipt images live in exactly one place: <strong>your device</strong>. To run this, the image passes through Cloudflare (hosting) and Google Gemini (the reader), subject to Google's API data handling. The only record kept is an anonymous per-device counter used to prevent abuse — no personal information, no receipt content.</p>
   </div>
   <p>You can turn cloud reading off at any time in Settings; with it off, no photo ever leaves your phone.</p>
 

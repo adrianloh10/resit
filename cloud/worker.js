@@ -175,10 +175,10 @@ export default {
     let body;
     try { body = await request.json(); } catch (e) { return json({ error: "Bad request" }, 400, cors); }
     const { image, mediaType, deviceId, turnstileToken } = body || {};
-    /* Cap input size too (base64). The app already downscales to ~1568px
-       (~0.5-1MB); rejecting anything larger bounds the input-token cost and
+    /* Cap input size (base64). The app downscales to 1280px @ q0.8
+       (~150-400KB); rejecting anything larger bounds the input-token cost and
        blocks oversized uploads from a direct caller. */
-    if (!image || typeof image !== "string" || image.length > 4_000_000) {
+    if (!image || typeof image !== "string" || image.length > 2_500_000) {
       return json({ error: "Missing or oversized image" }, 400, cors);
     }
 
@@ -216,9 +216,9 @@ export default {
               temperature: 0,
               /* Hard per-receipt cost caps: bound the output length and switch
                  OFF the model's "thinking" tokens, so no single scan can run up
-                 a large bill. ~1024 tokens comfortably covers a receipt with up
-                 to ~20 line items. */
-              maxOutputTokens: 1024,
+                 a large bill. ~640 tokens covers a receipt with up to ~20 line
+                 items (fields + JSON syntax). */
+              maxOutputTokens: 640,
               thinkingConfig: { thinkingBudget: 0 }
             }
           })

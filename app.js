@@ -66,8 +66,8 @@ let state = {
   pro: false,        /* Pro entitlement (unlimited cloud reads) */
   ghProven: false,   /* ghToken verified against the private inbox repo */
   skipResults: [],   /* deleted-while-pending expenses whose results to discard */
-  cloudMonth: "",    /* "YYYY-MM" the free cloud counter belongs to */
-  cloudUsed: 0,      /* free cloud reads used this month */
+  scanDay: "",       /* local "YYYY-MM-DD" the free scan counter belongs to */
+  scanCount: 0,      /* scanned receipts used today (free tier: 1/day) */
   lastBackupAt: null,
   backupNudgeSnooze: "",
   licenseKey: "",
@@ -96,27 +96,32 @@ const CLOUD_OCR_URL = "https://resit.adrianloh10.workers.dev";
 function cloudEndpoint() { return (state.aiUrl && state.aiUrl.trim()) || CLOUD_OCR_URL; }
 
 /* ---------- Freemium ----------
-   Free = full on-device core + a small monthly cloud-read allowance.
-   Pro  = unlimited cloud reads (still bounded by the Worker's daily cap).
+   Free = ONE scanned receipt per day (auto-read, on-device or cloud); every
+   further expense that day is manual entry (photo still attached).
+   Pro  = unlimited scans (cloud reads still bounded by the Worker's daily cap).
    PAY_URL is the checkout link (Stripe / LemonSqueezy) — fill it after you set
    up a payment account; until then the upgrade button shows "coming soon". */
-const FREE_CLOUD_MONTHLY = 15;
+const FREE_SCANS_PER_DAY = 1;
 const PAY_URL = "";
 const PRICE_LABEL = "RM 59 / year";
-function thisMonth() { return new Date().toISOString().slice(0, 7); }
+/* Local-time day key (toISOString would flip the day near midnight UTC+8). */
+function todayKey() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
 /* Pro: paid entitlement — or a PROVEN owner install. ghProven is only set
    after the token successfully reads the owner's PRIVATE inbox repo (a random
    string gets 401, a stranger's own PAT gets 404), so pasting text into the
    token field cannot unlock Pro. */
 function isPro() { return !!state.pro || !!state.ghProven; }
-function cloudUsedThisMonth() { return state.cloudMonth === thisMonth() ? (state.cloudUsed || 0) : 0; }
-function cloudQuotaLeft() { return isPro() ? Infinity : Math.max(0, FREE_CLOUD_MONTHLY - cloudUsedThisMonth()); }
-async function bumpCloudUsed() {
-  const m = thisMonth();
-  if (state.cloudMonth !== m) { state.cloudMonth = m; state.cloudUsed = 0; }
-  state.cloudUsed = (state.cloudUsed || 0) + 1;
-  await DB.setSetting("cloudMonth", state.cloudMonth);
-  await DB.setSetting("cloudUsed", state.cloudUsed);
+function scansToday() { return state.scanDay === todayKey() ? (state.scanCount || 0) : 0; }
+function scanAllowed() { return isPro() || scansToday() < FREE_SCANS_PER_DAY; }
+async function bumpScanUsed() {
+  const k = todayKey();
+  if (state.scanDay !== k) { state.scanDay = k; state.scanCount = 0; }
+  state.scanCount = (state.scanCount || 0) + 1;
+  await DB.setSetting("scanDay", state.scanDay);
+  await DB.setSetting("scanCount", state.scanCount);
 }
 
 function showUpgrade(reason) {
@@ -159,10 +164,11 @@ function renderPlan() {
   const status = $("plan-status");
   const btn = $("plan-btn");
   if (isPro()) {
-    if (status) status.textContent = "Pro — unlimited cloud reads. Thank you!";
+    if (status) status.textContent = "Pro — unlimited receipt scans. Thank you!";
     if (btn) btn.hidden = true;
   } else {
-    if (status) status.textContent = "Free — " + cloudQuotaLeft() + " of " + FREE_CLOUD_MONTHLY + " cloud reads left this month.";
+    if (status) status.textContent = "Free — " + FREE_SCANS_PER_DAY + " scanned receipt per day (" +
+      (scanAllowed() ? "available today" : "used today — manual entry until tomorrow") + "). Manual entries are always unlimited.";
     if (btn) { btn.hidden = false; btn.textContent = "Upgrade to Pro"; }
   }
 }
@@ -1351,8 +1357,8 @@ function loadScaledJpeg(file, maxDim, quality) {
   });
 }
 
-function fileToJpegBase64(file, maxDim) {
-  return loadScaledJpeg(file, maxDim, 0.85).then(u => {
+function fileToJpegBase64(file, maxDim, quality) {
+  return loadScaledJpeg(file, maxDim, quality || 0.85).then(u => {
     if (!u) throw new Error("Could not read image");
     return u.split(",")[1];
   });
@@ -1371,7 +1377,9 @@ function fileToThumb(file, maxDim) {
 async function cloudRead(file) {
   const url = cloudEndpoint();
   if (!url) return null;
-  const image = await fileToJpegBase64(file, 1568);
+  /* Token budget: 1280px @ q0.8 keeps thermal-print text readable while
+     cutting the image-token cost well below the old 1568px upload. */
+  const image = await fileToJpegBase64(file, 1280, 0.8);
   const payload = { image, mediaType: "image/jpeg", deviceId: state.deviceId };
   if (state.aiSecret) payload.secret = state.aiSecret; /* back-compat with the old relay */
   const res = await fetch(url, {
@@ -1607,6 +1615,19 @@ async function handleImage(file) {
       () => { state._batchScope = scope; pickImage("camera"); }, null, 6000);
     return;
   }
+  /* Free tier: one auto-read per day. Further receipts still get their photo
+     attached, but the fields are entered manually (or go Pro). */
+  if (!scanAllowed()) {
+    const thumb = await fileToThumb(file, 700);
+    toastAction("Daily free scan used — enter this one manually", "Go Pro",
+      () => showUpgrade("Free includes " + FREE_SCANS_PER_DAY + " scanned receipt a day; Pro scans them all."), null, 5500);
+    openConfirmSheet({
+      amount: null, merchant: "", category: "Other", scope: "Personal",
+      date: new Date().toISOString(), items: [], note: "",
+      photo: thumb || undefined, fromReceipt: false
+    });
+    return;
+  }
   state.ocrCancelled = false;
   $("processing-overlay").hidden = false;
   $("processing-text").textContent = "Reading receipt…";
@@ -1620,26 +1641,18 @@ async function handleImage(file) {
        cloud reader is configured, and the user has opted in (asked once). */
     const weak = parsed.total === null || (parsed.totalConf || 0) <= 1;
     if (cloudEndpoint() && weak) {
-      if (cloudQuotaLeft() <= 0) {
-        /* Free monthly cloud allowance used up — keep the on-device result and
-           offer Pro. (Pro users never hit this.) */
-        $("processing-overlay").hidden = true;
-        showUpgrade("You've used your " + FREE_CLOUD_MONTHLY + " free cloud reads this month.");
-      } else {
-        const consented = await ensureCloudConsent();
-        if (state.ocrCancelled) return;
-        if (consented) {
-          $("processing-overlay").hidden = false;
-          $("processing-text").textContent = "Reading with cloud…";
-          $("processing-sub").textContent = "Sent to Google Gemini, then discarded";
-          try {
-            const ai = await cloudRead(file);
-            if (state.ocrCancelled) return;
-            mergeAIResult(parsed, ai);
-            if (!isPro() && ai && ai.readable !== false) await bumpCloudUsed();
-          } catch (err) {
-            toast(err.message || "Cloud reading failed");
-          }
+      const consented = await ensureCloudConsent();
+      if (state.ocrCancelled) return;
+      if (consented) {
+        $("processing-overlay").hidden = false;
+        $("processing-text").textContent = "Reading with cloud…";
+        $("processing-sub").textContent = "Read in memory by Google Gemini, never stored";
+        try {
+          const ai = await cloudRead(file);
+          if (state.ocrCancelled) return;
+          mergeAIResult(parsed, ai);
+        } catch (err) {
+          toast(err.message || "Cloud reading failed");
         }
       }
     }
@@ -1648,6 +1661,7 @@ async function handleImage(file) {
     if (!parsed.total && !parsed.merchant && !parsed.items.length) {
       toast(state.ghToken ? "Couldn't read it — save anyway, Claude will fill it in" : "Couldn't read that — try better lighting, or enter manually");
     }
+    if (!isPro()) await bumpScanUsed(); /* the day's auto-read is consumed */
     const draft = parsedToDraft(parsed);
     draft._file = file;
     openConfirmSheet(draft);
@@ -2210,8 +2224,8 @@ async function init() {
       await DB.setSetting("deviceId", state.deviceId);
     }
     state.pro = await DB.getSetting("pro", false);
-    state.cloudMonth = await DB.getSetting("cloudMonth", "");
-    state.cloudUsed = await DB.getSetting("cloudUsed", 0);
+    state.scanDay = await DB.getSetting("scanDay", "");
+    state.scanCount = await DB.getSetting("scanCount", 0);
     state.lastBackupAt = await DB.getSetting("lastBackupAt", null);
     state.backupNudgeSnooze = await DB.getSetting("backupNudgeSnooze", "");
     state.licenseKey = await DB.getSetting("licenseKey", "");
