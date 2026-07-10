@@ -168,7 +168,8 @@ function renderPlan() {
     if (btn) btn.hidden = true;
   } else {
     if (status) status.textContent = "Free — " + FREE_SCANS_PER_DAY + " scanned receipt per day (" +
-      (scanAllowed() ? "available today" : "used today — manual entry until tomorrow") + "). Manual entries are always unlimited.";
+      (scanAllowed() ? "available today" : "used today — manual entry until tomorrow") + "), unlimited manual entries. " +
+      "Pro adds unlimited scans, categories and claims.";
     if (btn) { btn.hidden = false; btn.textContent = "Upgrade to Pro"; }
   }
 }
@@ -401,6 +402,19 @@ function renderCatBudgets() {
   const wrap = $("cat-budgets");
   if (!wrap) return;
   wrap.innerHTML = "";
+  /* Categories are a Pro feature — free tier keeps the overall budget only. */
+  if (!isPro()) {
+    const p = document.createElement("p");
+    p.className = "settings-sub";
+    p.textContent = "Per-category budgets are part of Pro. ";
+    const b = document.createElement("button");
+    b.className = "settings-link";
+    b.textContent = "See Pro";
+    b.addEventListener("click", () => showUpgrade("Categories and category budgets are Pro features."));
+    p.appendChild(b);
+    wrap.appendChild(p);
+    return;
+  }
   for (const c of CATS) {
     const row = document.createElement("label");
     row.className = "cat-budget-row";
@@ -689,6 +703,7 @@ function monthExpenses() {
 function renderClaimLine() {
   const el = $("claim-line");
   if (!el) return;
+  if (!isPro()) { el.hidden = true; return; } /* claims are Pro */
   const owed = state.expenses.filter(e => e.claimStatus === "to-claim" && !e.pending).reduce((s, e) => s + e.amount, 0);
   if (!(owed > 0)) { el.hidden = true; return; }
   $("claim-line-text").textContent = fmtRM(owed, true) + " to claim back";
@@ -845,13 +860,14 @@ function renderHome() {
       ledger.appendChild(label);
     }
     const dup = dupIds.has(e.id) ? `<span class="dup-flag">duplicate?</span>` : "";
-    const claim = e.claimStatus === "to-claim" ? `<span class="claim-pill to">to claim</span>`
+    const claim = !isPro() ? "" : e.claimStatus === "to-claim" ? `<span class="claim-pill to">to claim</span>`
       : e.claimStatus === "claimed" ? `<span class="claim-pill done">claimed ✓</span>` : "";
     const odd = unusualIds.has(e.id) ? `<span class="odd-pill">higher than usual</span>` : "";
     const camera = e.photo ? `<span class="has-photo" aria-hidden="true">▦ </span>` : "";
     const sc = scopeOf(e);
-    /* "Category | TYPE" account tag, colour-coded (teal/gold/red-sienna). */
-    const tag = `<span class="acct-tag ${SCOPE_TAG[sc]}">${escapeHtml(e.category)} | ${sc.toUpperCase()}</span>`;
+    /* "Category | TYPE" account tag, colour-coded. Categories are Pro, so the
+       free tier's tag carries the type only. */
+    const tag = `<span class="acct-tag ${SCOPE_TAG[sc]}">${isPro() ? escapeHtml(e.category) + " | " : ""}${sc.toUpperCase()}</span>`;
     const amountHtml = e.pending
       ? `<span class="entry-amount waiting">waiting…</span>`
       : `<span class="entry-amount">${fmtRM(e.amount)}</span>`;
@@ -887,7 +903,7 @@ function renderHome() {
         <span class="cat-icon">${catIcon(e.category)}</span>
         <span class="entry-main">
           <span class="entry-merchant"><span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span></span>
-          <span class="entry-cat"><span class="acct-tag ${SCOPE_TAG[sc]}">${escapeHtml(e.category)} | ${sc.toUpperCase()}</span><span class="mut">${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}</span></span>
+          <span class="entry-cat"><span class="acct-tag ${SCOPE_TAG[sc]}">${isPro() ? escapeHtml(e.category) + " | " : ""}${sc.toUpperCase()}</span><span class="mut">${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}</span></span>
         </span>
         <span class="entry-amount">${fmtRM(e.amount)}</span>`;
       row.addEventListener("click", () => openConfirmSheet(e));
@@ -906,6 +922,8 @@ function renderHome() {
 function renderFilterChips(monthExps) {
   const row = $("filter-chips");
   if (!row) return;
+  /* Category filters ride on the Pro category feature. */
+  if (!isPro()) { row.innerHTML = ""; state.filterCat = ""; return; }
   const present = [...new Set(monthExps.map(e => e.category))];
   const cats = CATS.filter(c => present.includes(c.name)).map(c => c.name);
   row.innerHTML = "";
@@ -953,8 +971,8 @@ function renderScopeChips() {
     b.addEventListener("click", () => {
       state.editing.scope = s;
       state.editing.userPickedScope = true; /* manual choice beats auto-rules */
-      /* New Company expenses default to "to claim"; Personal never claims. */
-      if (s === "Company" && !state.editing.id && !state.editing.claimStatus) state.editing.claimStatus = "to-claim";
+      /* New Company expenses default to "to claim" (Pro); Personal never claims. */
+      if (isPro() && s === "Company" && !state.editing.id && !state.editing.claimStatus) state.editing.claimStatus = "to-claim";
       renderScopeChips();
       renderClaimChips();
     });
@@ -967,7 +985,8 @@ function renderClaimChips() {
   const e = state.editing;
   const label = $("claim-label"), row = $("claim-chips");
   if (!label || !row) return;
-  const show = !!e && scopeOf(e) !== "Personal";
+  /* Claims are a Pro feature (and only meaningful for Shared/Company). */
+  const show = !!e && scopeOf(e) !== "Personal" && isPro();
   label.hidden = !show;
   row.hidden = !show;
   /* Don't wipe claimStatus here — toggling scope back and forth must not
@@ -1159,6 +1178,10 @@ function renderInsights() {
   }
 
   html += `<p class="ins-section-label">By category</p>`;
+  if (!isPro()) {
+    /* Category breakdown is Pro — teaser row like the radar. */
+    html += `<div class="ins-row"><span class="ins-row-name" style="color:var(--muted)">See where the money goes, category by category</span><button class="settings-link" id="ins-cat-upgrade">Pro</button></div>`;
+  } else
   for (const [cat, amt] of cats) {
     const pct = Math.round((amt / total) * 100);
     const cb = state.catBudgets[cat];
@@ -1204,6 +1227,8 @@ function renderInsights() {
   if (st) st.addEventListener("click", () => { if (isPro()) openStatement(m); else showUpgrade("Monthly statements are a Pro feature."); });
   const ru = $("ins-radar-upgrade");
   if (ru) ru.addEventListener("click", () => showUpgrade("The recurring-charge radar is a Pro feature."));
+  const cu = $("ins-cat-upgrade");
+  if (cu) cu.addEventListener("click", () => showUpgrade("Category insights and budgets are Pro features."));
   /* Tap a rhythm day -> show that day's spend (phones have no hover). */
   for (const day of body.querySelectorAll(".rh-day[data-label]")) {
     day.addEventListener("click", () => toast(day.dataset.label));
@@ -1854,6 +1879,16 @@ function renderCategoryChips() {
   if (!e) return;
   const chips = $("category-chips");
   chips.innerHTML = "";
+  /* Categories are Pro: free entries are auto-filed quietly (data kept, so
+     upgrading unlocks it retroactively) but the picker is locked. */
+  if (!isPro()) {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.textContent = "Categories — Pro 🔒";
+    b.addEventListener("click", () => showUpgrade("Categories, category budgets and category insights are Pro features."));
+    chips.appendChild(b);
+    return;
+  }
   for (const c of CATS) {
     const b = document.createElement("button");
     const sel = c.name === e.category;
@@ -2468,6 +2503,7 @@ async function init() {
   on("exp-csv", async () => { if (await exportCSV(readExportFilter())) $("export-overlay").hidden = true; });
   on("exp-xls", async () => { if (await exportXLS(readExportFilter(), "resit-filtered")) $("export-overlay").hidden = true; });
   on("exp-claim-preset", async () => {
+    if (!isPro()) { $("export-overlay").hidden = true; showUpgrade("Claim tracking and claim reports are Pro features."); return; }
     const f = readExportFilter();
     f.claim = "to-claim";
     const matches = filteredExpenses(f);

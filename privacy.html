@@ -3,64 +3,153 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Resit — Privacy</title>
+<title>Resit — Privacy Notice / Notis Privasi</title>
 <style>
-  :root { --paper:#F4EDDE; --ink:#2C2318; --ink-soft:#5C4C3A; --muted:#7E6C55; --terracotta:#B4572F; --divider:#E2D7C0; }
+  :root { --paper:#F4EDDE; --ink:#2C2318; --ink-soft:#5C4C3A; --muted:#7E6C55; --terracotta:#B4572F; --sienna:#7A4526; --divider:#E2D7C0; }
   html { color-scheme: only light; }
   body { background:var(--paper); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; line-height:1.65; margin:0; padding:32px 20px 64px; }
-  main { max-width:640px; margin:0 auto; }
+  main { max-width:680px; margin:0 auto; }
   h1 { font-size:24px; font-weight:500; margin:0 0 4px; }
-  .sub { color:var(--muted); font-size:13px; margin:0 0 28px; }
-  h2 { font-size:16px; font-weight:500; margin:28px 0 6px; }
-  p, li { font-size:14.5px; color:var(--ink-soft); }
+  .sub { color:var(--muted); font-size:13px; margin:0 0 24px; }
+  h2 { font-size:16px; font-weight:600; margin:30px 0 6px; color:var(--sienna); }
+  h3 { font-size:14px; font-weight:600; margin:18px 0 4px; }
+  p, li, td, th { font-size:14px; color:var(--ink-soft); }
   ul { padding-left:20px; }
   a { color:var(--terracotta); }
-  .box { background:#FFFDF8; border:0.5px solid var(--divider); border-radius:12px; padding:14px 18px; margin-top:10px; }
+  table { border-collapse:collapse; width:100%; margin:8px 0; }
+  th, td { border:0.5px solid var(--divider); padding:7px 10px; text-align:left; vertical-align:top; }
+  th { background:#FCF8EE; font-weight:600; }
+  .box { background:#FCF8EE; border:0.5px solid var(--divider); border-radius:12px; padding:14px 18px; margin-top:10px; }
+  .lang-divider { border-top:2px solid var(--sienna); margin:48px 0 28px; padding-top:6px; }
   .back { display:inline-block; margin-top:32px; color:var(--muted); font-size:13px; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Resit — Privacy</h1>
-  <p class="sub">How Resit handles your data. Last updated: June 2026.</p>
 
-  <p>Resit is a personal expense tracker. The short version: <strong>your expenses live on your phone</strong>, not on a server. Nothing about you leaves your device unless you choose one of the optional features below.</p>
+<h1>Resit — Privacy Notice</h1>
+<p class="sub">Issued under section 7 of the Personal Data Protection Act 2010 (Malaysia), as amended by the Personal Data Protection (Amendment) Act 2024. Effective: 10 July 2026 · Version 2.0 · <a href="#bm">Bahasa Malaysia di bawah</a></p>
 
-  <h2>What stays on your phone</h2>
-  <p>Your expenses, receipt photos you keep, budgets, categories and settings are stored only in your phone's local app storage. We have no account system and no server holding your records. If you uninstall the app or tap <em>Erase all data</em> in Settings, that data is gone.</p>
+<div class="box">
+<p style="margin:0"><strong>The short version:</strong> Resit is built so that we hold as little of your data as possible. Your expenses, receipts and settings are stored <strong>only on your device</strong>. There are no accounts. Receipt photos are never written to any server — the optional cloud reading feature processes a photo in memory and discards it immediately. The only record our server keeps is an anonymous per-device usage counter.</p>
+</div>
 
-  <h2>Reading receipts</h2>
-  <div class="box">
-    <p style="margin-top:0"><strong>On-device (default):</strong> when you snap a receipt, your phone reads it locally. The photo does not leave your phone.</p>
-    <p style="margin-bottom:0"><strong>Cloud reading (only if you turn it on):</strong> if a receipt is hard to read and you have agreed to the one-time prompt, the photo is sent — over an encrypted connection — to our reader to extract the details. It is processed <strong>in memory only</strong>: the photo is <strong>never written to any disk, database or log</strong> on our side, is never used to identify you, and is discarded the moment the text comes back. Your receipt images live in exactly one place: <strong>your device</strong>. To run this, the image passes through Cloudflare (hosting) and Google Gemini (the reader), subject to Google's API data handling. The only record kept is an anonymous per-device counter used to prevent abuse — no personal information, no receipt content.</p>
-  </div>
-  <p>You can turn cloud reading off at any time in Settings; with it off, no photo ever leaves your phone.</p>
+<h2>1. Who we are (data controller)</h2>
+<p>Resit is operated by <strong>Adrian Loh</strong> (Malaysia) ("we", "us"), reachable at <a href="mailto:adrianloh10@gmail.com">adrianloh10@gmail.com</a>. For the limited processing described in this notice, we are the data controller under the Personal Data Protection Act 2010 ("PDPA").</p>
 
-  <h2>What we do not do</h2>
-  <ul>
-    <li>No accounts, no email, no login.</li>
-    <li>No advertising, no selling or sharing of your data.</li>
-    <li>No tracking or analytics of how you use the app.</li>
-    <li>No receipt photos or expense records stored on any server.</li>
-  </ul>
+<h2>2. What personal data is processed, and where it lives</h2>
+<table>
+  <tr><th>Data</th><th>Where it is stored</th><th>Notes</th></tr>
+  <tr><td>Expense records (amounts, merchants, categories, dates, notes, tags)</td><td><strong>Your device only</strong> (local app storage)</td><td>Never transmitted to us. Deleted when you erase data or uninstall.</td></tr>
+  <tr><td>Receipt photos</td><td><strong>Your device only</strong></td><td>Never stored on any server. See section 3 for the optional cloud read.</td></tr>
+  <tr><td>Settings, budgets, learned preferences</td><td><strong>Your device only</strong></td><td>—</td></tr>
+  <tr><td>Anonymous device identifier + daily usage counter</td><td>Our server (Cloudflare)</td><td>A random ID with a number — used solely to prevent abuse of cloud reading. It contains no name, contact detail, or receipt content and cannot identify you.</td></tr>
+  <tr><td>Pro licence key (if you buy Pro)</td><td>Our server (Cloudflare)</td><td>The key, an optional label you gave at purchase, and activation date — the minimum needed to honour your licence.</td></tr>
+</table>
+<p>We collect <strong>no</strong> names, contact details, location data, advertising identifiers or analytics. We do not build profiles and we never sell or share personal data for marketing.</p>
 
-  <h2>Permissions</h2>
-  <p>Resit asks for camera/photo access only so you can capture or pick a receipt. The image is used to read the receipt and nothing else.</p>
+<h2>3. Cloud receipt reading (optional, consent-based)</h2>
+<p>By default, receipts are read on your device and the photo never leaves it. If you switch on cloud reading <em>and</em> accept the in-app consent prompt, then when a receipt is too hard to read locally:</p>
+<ul>
+  <li>the photo is sent over an encrypted connection to our reader service (hosted on Cloudflare) and passed to <strong>Google Gemini</strong> to extract the text;</li>
+  <li>it is processed <strong>in memory only</strong> — never written to any disk, database or log on our side — and discarded as soon as the result returns;</li>
+  <li>no identity accompanies the photo (only the anonymous counter ID above);</li>
+  <li>Google processes the image as our processor subject to Google's API terms.</li>
+</ul>
+<p>You may withdraw this consent at any time in Settings → "Smarter receipt reading"; with it off, no photo ever leaves your phone. Withdrawal does not affect anything already processed (there is nothing retained to affect).</p>
 
-  <h2>Your choices</h2>
-  <ul>
-    <li><strong>Export / back up:</strong> you can export your data to a file you control.</li>
-    <li><strong>Delete:</strong> tap <em>Erase all data</em> in Settings, or uninstall the app, to remove everything.</li>
-    <li><strong>Cloud reading:</strong> opt in or out anytime in Settings.</li>
-  </ul>
+<h2>4. Purposes and legal basis</h2>
+<p>We process the limited data above only to: (a) read receipts you ask us to read (consent); (b) operate fair-use limits and prevent abuse (legitimate operation of the service); (c) honour Pro licences (performance of your purchase). We do not use your data for any other purpose.</p>
 
-  <h2>Children</h2>
-  <p>Resit is intended for general audiences and is not directed at children.</p>
+<h2>5. Disclosures to third parties</h2>
+<p>We disclose personal data only to the processors required to run the optional cloud features, and only to the extent described: <strong>Cloudflare, Inc.</strong> (hosting/relay) and <strong>Google LLC</strong> (Gemini receipt reading). We do not disclose personal data to any other party, except where required by Malaysian law or a competent authority.</p>
 
-  <h2>Contact</h2>
-  <p>Questions about privacy? Email <a href="mailto:adrianloh10@gmail.com">adrianloh10@gmail.com</a>.</p>
+<h2>6. Cross-border transfer</h2>
+<p>Cloud reads may be processed on Cloudflare and Google infrastructure outside Malaysia (including the United States). Transfers occur only with your consent (section 3), are limited to the single photo being read, and are protected by encryption in transit and the contractual safeguards of our processors, consistent with section 129 of the PDPA.</p>
 
-  <a class="back" href="./">← Back to Resit</a>
+<h2>7. Retention</h2>
+<p>Receipt photos sent for cloud reading: <strong>not retained</strong> (in-memory only). Anonymous usage counters: retained on a rolling daily basis for abuse prevention. Licence records: retained while your licence may be active. Data on your device is yours — it persists until you erase it in Settings or uninstall the app.</p>
+
+<h2>8. Security</h2>
+<p>All transmissions are encrypted (HTTPS/TLS). Server-side, the design itself is the main safeguard: nothing sensitive is stored. On your device, data lives in your phone's protected app storage; we recommend using your phone's screen lock and the in-app backup feature (backup files exclude secrets).</p>
+
+<h2>9. Your rights under the PDPA</h2>
+<p>Because your records live on your device, you exercise most rights directly in the app:</p>
+<ul>
+  <li><strong>Access & portability:</strong> view everything in the app; export your complete data as JSON/CSV/Excel at any time (Settings → Your data).</li>
+  <li><strong>Correction:</strong> edit any expense directly.</li>
+  <li><strong>Withdraw consent:</strong> turn cloud reading off in Settings at any time.</li>
+  <li><strong>Deletion:</strong> Settings → "Erase all data", or uninstall.</li>
+  <li>For anything we hold server-side (the anonymous counter or a licence record), contact us at the email above and we will respond within the timelines required by the PDPA (21 days for access/correction requests).</li>
+</ul>
+
+<h2>10. Data breach notification</h2>
+<p>In the unlikely event of a personal data breach on our side that causes or is likely to cause significant harm, we will notify the Personal Data Protection Commissioner without undue delay (within 72 hours) and affected users within 7 days, in line with the PDPA's mandatory breach notification requirements (in force since 1 June 2025).</p>
+
+<h2>11. Children</h2>
+<p>Resit is intended for general audiences and is not directed at children under 13. We do not knowingly process children's personal data.</p>
+
+<h2>12. Changes to this notice</h2>
+<p>We will post any changes here with a new effective date, and flag material changes in the app.</p>
+
+<h2>13. Complaints</h2>
+<p>Contact us first at <a href="mailto:adrianloh10@gmail.com">adrianloh10@gmail.com</a>. You may also lodge a complaint with the Personal Data Protection Department (JPDP), Malaysia — <a href="https://www.pdp.gov.my" rel="noopener">www.pdp.gov.my</a>.</p>
+
+<!-- ======================= BAHASA MALAYSIA ======================= -->
+<div class="lang-divider" id="bm"></div>
+
+<h1>Resit — Notis Privasi</h1>
+<p class="sub">Dikeluarkan di bawah seksyen 7 Akta Perlindungan Data Peribadi 2010, sebagaimana dipinda oleh Akta Perlindungan Data Peribadi (Pindaan) 2024. Berkuat kuasa: 10 Julai 2026 · Versi 2.0</p>
+
+<div class="box">
+<p style="margin:0"><strong>Ringkasnya:</strong> Resit direka supaya kami memegang sesedikit mungkin data anda. Perbelanjaan, resit dan tetapan anda disimpan <strong>hanya pada peranti anda</strong>. Tiada akaun. Foto resit tidak pernah disimpan pada mana-mana pelayan — ciri bacaan awan (pilihan) memproses foto dalam memori sahaja dan membuangnya serta-merta. Satu-satunya rekod pelayan kami ialah kaunter penggunaan tanpa nama bagi setiap peranti.</p>
+</div>
+
+<h2>1. Siapa kami (pengawal data)</h2>
+<p>Resit dikendalikan oleh <strong>Adrian Loh</strong> (Malaysia), boleh dihubungi di <a href="mailto:adrianloh10@gmail.com">adrianloh10@gmail.com</a>. Bagi pemprosesan terhad yang diterangkan dalam notis ini, kami ialah pengawal data di bawah Akta Perlindungan Data Peribadi 2010 ("PDPA").</p>
+
+<h2>2. Data peribadi yang diproses dan lokasi simpanannya</h2>
+<ul>
+  <li><strong>Rekod perbelanjaan, foto resit, tetapan dan bajet:</strong> disimpan pada peranti anda sahaja; tidak pernah dihantar kepada kami; terpadam apabila anda memadam data atau menyahpasang aplikasi.</li>
+  <li><strong>Pengecam peranti tanpa nama + kaunter penggunaan harian:</strong> disimpan pada pelayan kami (Cloudflare) semata-mata untuk mencegah penyalahgunaan ciri bacaan awan. Ia tidak mengandungi nama, butiran hubungan atau kandungan resit dan tidak boleh mengenal pasti anda.</li>
+  <li><strong>Kunci lesen Pro (jika dibeli):</strong> kunci, label pilihan dan tarikh pengaktifan — minimum yang diperlukan untuk melayani lesen anda.</li>
+</ul>
+<p>Kami <strong>tidak</strong> mengumpul nama, butiran hubungan, data lokasi, pengecam pengiklanan atau analitik; kami tidak menjual atau berkongsi data peribadi untuk pemasaran.</p>
+
+<h2>3. Bacaan resit awan (pilihan, berasaskan persetujuan)</h2>
+<p>Secara lalai, resit dibaca pada peranti anda dan foto tidak meninggalkannya. Jika anda mengaktifkan bacaan awan <em>dan</em> menerima gesaan persetujuan dalam aplikasi, foto yang sukar dibaca akan dihantar melalui sambungan tersulit kepada perkhidmatan pembaca kami (Cloudflare) dan diproses oleh <strong>Google Gemini</strong> — <strong>dalam memori sahaja</strong>, tidak pernah ditulis ke cakera, pangkalan data atau log di pihak kami, dan dibuang sebaik keputusan diterima. Anda boleh menarik balik persetujuan pada bila-bila masa di Tetapan; dengan ciri ini dimatikan, tiada foto meninggalkan telefon anda.</p>
+
+<h2>4. Tujuan</h2>
+<p>Data terhad di atas diproses hanya untuk: (a) membaca resit atas permintaan anda (persetujuan); (b) mengawal had penggunaan berpatutan dan mencegah penyalahgunaan; (c) melayani lesen Pro anda.</p>
+
+<h2>5. Pendedahan kepada pihak ketiga</h2>
+<p>Pendedahan hanya kepada pemproses yang diperlukan untuk ciri awan: <strong>Cloudflare, Inc.</strong> (pengehosan) dan <strong>Google LLC</strong> (bacaan Gemini) — dan tiada pihak lain, kecuali jika dikehendaki oleh undang-undang Malaysia.</p>
+
+<h2>6. Pemindahan rentas sempadan</h2>
+<p>Bacaan awan mungkin diproses pada infrastruktur Cloudflare dan Google di luar Malaysia (termasuk Amerika Syarikat), hanya dengan persetujuan anda, terhad kepada foto yang dibaca, dan dilindungi penyulitan serta perlindungan kontrak pemproses kami, selaras dengan seksyen 129 PDPA.</p>
+
+<h2>7. Pengekalan</h2>
+<p>Foto yang dihantar untuk bacaan awan: <strong>tidak dikekalkan</strong>. Kaunter tanpa nama: dikekalkan atas dasar harian bergolek. Rekod lesen: dikekalkan selagi lesen mungkin aktif. Data pada peranti anda kekal sehingga anda memadamnya.</p>
+
+<h2>8. Keselamatan</h2>
+<p>Semua penghantaran disulitkan (HTTPS/TLS). Di pihak pelayan, reka bentuk itu sendiri adalah perlindungan utama: tiada data sensitif disimpan.</p>
+
+<h2>9. Hak anda di bawah PDPA</h2>
+<p>Oleh sebab rekod anda berada pada peranti anda, kebanyakan hak dilaksanakan terus dalam aplikasi: <strong>akses & kemudahalihan</strong> (eksport JSON/CSV/Excel), <strong>pembetulan</strong> (sunting terus), <strong>penarikan persetujuan</strong> (Tetapan), <strong>pemadaman</strong> ("Padam semua data" atau nyahpasang). Bagi apa-apa yang kami pegang di pelayan, hubungi kami melalui e-mel di atas; kami akan membalas dalam tempoh yang ditetapkan PDPA (21 hari bagi permintaan akses/pembetulan).</p>
+
+<h2>10. Pemberitahuan pelanggaran data</h2>
+<p>Sekiranya berlaku pelanggaran data peribadi di pihak kami yang menyebabkan atau berkemungkinan menyebabkan kemudaratan ketara, kami akan memberitahu Pesuruhjaya Perlindungan Data Peribadi tanpa kelengahan (dalam 72 jam) dan pengguna terjejas dalam 7 hari, selaras dengan kehendak pemberitahuan mandatori PDPA (berkuat kuasa 1 Jun 2025).</p>
+
+<h2>11. Kanak-kanak</h2>
+<p>Resit tidak ditujukan kepada kanak-kanak bawah 13 tahun.</p>
+
+<h2>12. Perubahan notis</h2>
+<p>Sebarang perubahan akan disiarkan di sini dengan tarikh kuat kuasa baharu.</p>
+
+<h2>13. Aduan</h2>
+<p>Hubungi kami dahulu di <a href="mailto:adrianloh10@gmail.com">adrianloh10@gmail.com</a>. Anda juga boleh membuat aduan kepada Jabatan Perlindungan Data Peribadi (JPDP) — <a href="https://www.pdp.gov.my" rel="noopener">www.pdp.gov.my</a>.</p>
+
+<a class="back" href="./">← Back to Resit / Kembali ke Resit</a>
 </main>
 </body>
 </html>
