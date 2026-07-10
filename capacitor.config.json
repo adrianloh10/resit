@@ -2,14 +2,14 @@
   "appId": "com.adrianloh.resit",
   "appName": "Resit",
   "webDir": "www",
-  "backgroundColor": "#F7F3EC",
+  "backgroundColor": "#F4EDDE",
   "android": {
-    "backgroundColor": "#F7F3EC"
+    "backgroundColor": "#F4EDDE"
   },
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 600,
-      "backgroundColor": "#F7F3EC",
+      "backgroundColor": "#F4EDDE",
       "showSpinner": false
     }
   }

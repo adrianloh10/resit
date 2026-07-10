@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Resit</title>
 <meta name="description" content="Snap receipts, track spending. Everything stays on your phone.">
-<meta name="theme-color" content="#F7F3EC" id="meta-theme">
+<meta name="theme-color" content="#F4EDDE" id="meta-theme">
 <meta name="color-scheme" content="only light" id="meta-scheme">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
@@ -30,9 +30,13 @@
   <p class="boot-wm">Resit</p>
 </div>
 <script>
+/* Failsafe FIRST: even if storage access throws below (site data blocked),
+   the overlay always fades out rather than bricking the app. */
 window._bootStart = Date.now();
-if (sessionStorage.getItem("resitBooted")) document.getElementById("boot").className = "boot skip";
 setTimeout(function () { var b = document.getElementById("boot"); if (b) b.classList.add("done"); }, 4000);
+try {
+  if (sessionStorage.getItem("resitBooted")) document.getElementById("boot").className = "boot skip";
+} catch (e) {}
 </script>
 
 <main id="view-home" class="view">

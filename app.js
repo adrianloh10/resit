@@ -3,8 +3,22 @@
 const APP_VERSION = self.RESIT_VERSION || "v?"; /* set once in version.js; sw.js shares it */
 
 const $ = id => document.getElementById(id);
+/* sessionStorage can THROW when the user blocks site data — never let that
+   brick startup or any flow; a failed read just behaves like "not set". */
+function safeSession(op, key, val) {
+  try {
+    if (op === "get") return sessionStorage.getItem(key);
+    if (op === "set") sessionStorage.setItem(key, val);
+    if (op === "remove") sessionStorage.removeItem(key);
+  } catch (e) { return null; }
+  return null;
+}
 const CATS = window.ReceiptOCR.CATEGORIES;
 const CAT_COLOR = Object.fromEntries(CATS.map(c => [c.name, c.color]));
+/* Own-property check — a category string like "constructor" must not pull
+   functions off Object.prototype through bare object lookups. */
+const hasOwn = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
+const isRealCategory = c => typeof c === "string" && hasOwn(CAT_COLOR, c);
 
 /* A second classification axis, independent of category: who the spend is for.
    Each gets its own earth-tone accent. Default for new/old expenses: Personal. */
@@ -26,7 +40,7 @@ const CAT_ICONS = {
   Entertainment: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 5v14M16 5v14M4 9.5h4M4 14.5h4M16 9.5h4M16 14.5h4"/></svg>`,
   Other: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12.6 12.6 20a1.8 1.8 0 0 1-2.6 0L3.6 13.6a1.8 1.8 0 0 1 0-2.6L11 3.6a1.8 1.8 0 0 1 1.3-.6H19a1.8 1.8 0 0 1 1.8 1.8v6.5c0 .5-.2 1-.6 1.3z"/><circle cx="15.5" cy="8.5" r="1.3"/></svg>`
 };
-const catIcon = c => CAT_ICONS[c] || CAT_ICONS.Other;
+const catIcon = c => hasOwn(CAT_ICONS, c) ? CAT_ICONS[c] : CAT_ICONS.Other;
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 let state = {
@@ -322,7 +336,7 @@ async function applyClaudeResult(data) {
     const preferred = state.merchantNames[brandOf(normMerchant(data.merchant))];
     e.merchant = preferred || String(data.merchant).slice(0, 60);
   }
-  if (data.category && CAT_COLOR[data.category]) e.category = data.category;
+  if (isRealCategory(data.category)) e.category = data.category;
   if (data.date && /^\d{4}-\d{2}-\d{2}$/.test(String(data.date))) {
     const t = /^\d{1,2}:\d{2}$/.test(String(data.time || "")) ? data.time : "12:00";
     const d = new Date(data.date + "T" + t);
@@ -354,7 +368,7 @@ function applyTheme() {
   document.documentElement.dataset.theme = resolved;
   document.documentElement.style.colorScheme = resolved === "dark" ? "dark" : "only light";
   const mt = $("meta-theme");
-  if (mt) mt.setAttribute("content", resolved === "dark" ? "#25211A" : "#F7F3EC");
+  if (mt) mt.setAttribute("content", resolved === "dark" ? "#221B12" : "#F4EDDE");
   const ms = $("meta-scheme");
   if (ms) ms.setAttribute("content", resolved === "dark" ? "dark" : "only light");
 }
@@ -683,7 +697,7 @@ function renderHome() {
   $("month-label").textContent = MONTH_NAMES[m.getMonth()] + (sameYear ? "" : " " + m.getFullYear());
 
   const allExps = monthExpenses();
-  renderScopeFilter(allExps);
+  renderScopeFilter();
 
   /* The Personal/Shared/Company filter narrows everything below it, including
      the headline total. "" = All. */
@@ -724,11 +738,20 @@ function renderHome() {
       fill.style.width = pct + "%";
       fill.classList.toggle("over", total > state.budget);
       if (status) {
-        let label = "You are ON TRACK";
-        if (total > state.budget) label = "OVER BUDGET";
-        else if (state.monthOffset === 0 && now.getDate() >= 3) {
-          const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-          if ((total / now.getDate()) * dim > state.budget) label = "PACING HIGH";
+        /* Pacing verdicts only make sense for the CURRENT month; finished
+           months get a past-tense verdict and future months a neutral one. */
+        let label;
+        if (state.monthOffset < 0) {
+          label = total > state.budget ? "ENDED OVER BUDGET" : "ENDED UNDER BUDGET";
+        } else if (state.monthOffset > 0) {
+          label = "UPCOMING MONTH";
+        } else {
+          label = "You are ON TRACK";
+          if (total > state.budget) label = "OVER BUDGET";
+          else if (now.getDate() >= 3) {
+            const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+            if ((total / now.getDate()) * dim > state.budget) label = "PACING HIGH";
+          }
         }
         status.textContent = label;
       }
@@ -891,17 +914,9 @@ function renderFilterChips(monthExps) {
   for (const c of cats) mk(c, c);
 }
 
-/* Personal / Shared / Company filter with each type's running monthly total
-   shown right on the chip — tap to filter the list and the headline total. */
-/* Compact money for tight chips: cents dropped once >= 1,000, k over 100k. */
-function fmtChip(n) {
-  const r = Math.round(n * 100) / 100;
-  if (r >= 100000) return state.currency + " " + Math.round(r / 1000) + "k";
-  if (r >= 1000) return state.currency + " " + Math.round(r).toLocaleString("en-MY");
-  return fmtRM(r);
-}
-
-function renderScopeFilter(monthExps, targetId, rerender) {
+/* Personal / Shared / Company filter pills — tap to filter the list and the
+   headline total. */
+function renderScopeFilter(targetId, rerender) {
   const row = $(targetId || "scope-filter");
   if (!row) return;
   const redo = rerender || renderHome;
@@ -1010,7 +1025,7 @@ function renderInsights() {
   $("ins-month-label").textContent = MONTH_NAMES[m.getMonth()] + (m.getFullYear() === now.getFullYear() ? "" : " " + m.getFullYear());
 
   const allExps = monthExpenses();
-  renderScopeFilter(allExps, "ins-scope-filter", renderInsights);
+  renderScopeFilter("ins-scope-filter", renderInsights);
   const exps = state.scopeFilter ? allExps.filter(e => scopeOf(e) === state.scopeFilter) : allExps;
   const total = exps.reduce((s, e) => s + e.amount, 0);
   const body = $("insights-body");
@@ -1246,7 +1261,7 @@ function openStatement(m) {
   const merRows = Object.entries(byMer).sort((a, b) => b[1].amt - a[1].amt).slice(0, 10).map(([n, v]) =>
     `<tr><td>${escapeHtml(n)}</td><td class="num">${v.n}×</td><td class="num">${fmtRM(v.amt)}</td></tr>`).join("");
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resit — ${title}</title><style>
-    body{font-family:Georgia,serif;background:#F7F3EC;color:#2B2722;max-width:640px;margin:0 auto;padding:36px 28px}
+    body{font-family:Georgia,serif;background:#F4EDDE;color:#2C2318;max-width:640px;margin:0 auto;padding:36px 28px}
     h1{font-size:21px;font-weight:normal;margin:0}
     .sub{color:#78705E;font-size:13px;margin:4px 0 22px}
     .big{font-family:Consolas,monospace;font-size:34px;margin:6px 0 2px}
@@ -1284,7 +1299,7 @@ function switchView(name) {
   $("view-home").hidden = name !== "home";
   $("view-insights").hidden = name !== "insights";
   $("view-settings").hidden = name !== "settings";
-  $("nav-home").classList.toggle("active", name === "home");
+  /* Left button is the Menu — always fully lit; only stats reflects the view. */
   $("nav-insights").classList.toggle("active", name === "insights");
   const ns = $("nav-settings");
   if (ns) ns.classList.toggle("active", name === "settings");
@@ -2100,7 +2115,7 @@ function sanitizeRestoredExpense(e, fallbackId) {
     id: Number.isInteger(e.id) ? e.id : fallbackId,
     amount: Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0,
     merchant: e.merchant ? String(e.merchant).slice(0, 80) : "Expense",
-    category: CAT_COLOR[e.category] ? e.category : "Other",
+    category: isRealCategory(e.category) ? e.category : "Other",
     scope: SCOPES.includes(e.scope) ? e.scope : "Personal",
     claimStatus: e.claimStatus === "to-claim" || e.claimStatus === "claimed" ? e.claimStatus : "",
     date: dateOk ? new Date(e.date).toISOString() : new Date().toISOString(),
@@ -2202,10 +2217,10 @@ async function init() {
     state.licenseKey = await DB.getSetting("licenseKey", "");
     state.lastKeyCheck = await DB.getSetting("lastKeyCheck", "");
     state.expenses = await DB.getAllExpenses();
-    sessionStorage.removeItem("dbRetry");
+    safeSession("remove", "dbRetry");
   } catch (err) {
-    if (!sessionStorage.getItem("dbRetry")) {
-      sessionStorage.setItem("dbRetry", "1");
+    if (!safeSession("get", "dbRetry")) {
+      safeSession("set", "dbRetry", "1");
       try {
         const reg = await navigator.serviceWorker.getRegistration();
         if (reg) await reg.update();
@@ -2225,7 +2240,7 @@ async function init() {
      then fade it away. Same-session reloads skip it entirely. */
   const boot = $("boot");
   if (boot) {
-    sessionStorage.setItem("resitBooted", "1");
+    safeSession("set", "resitBooted", "1");
     const wait = Math.max(0, 900 - (Date.now() - (window._bootStart || Date.now())));
     setTimeout(() => {
       boot.classList.add("done");
