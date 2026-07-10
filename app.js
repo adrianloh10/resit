@@ -96,14 +96,19 @@ const CLOUD_OCR_URL = "https://resit.adrianloh10.workers.dev";
 function cloudEndpoint() { return (state.aiUrl && state.aiUrl.trim()) || CLOUD_OCR_URL; }
 
 /* ---------- Freemium ----------
-   Free = ONE scanned receipt per day (auto-read, on-device or cloud); every
-   further expense that day is manual entry (photo still attached).
-   Pro  = unlimited scans (cloud reads still bounded by the Worker's daily cap).
+   Free = ONE scanned receipt per day. Scans 2-5 can be unlocked by watching a
+   rewarded ad WHERE ADS EXIST (the native Android/iOS builds — a PWA cannot
+   show rewarded ads, so on the web the option simply doesn't appear and free
+   users go manual after scan 1). Beyond 5, or to skip ads entirely: Pro.
+   Pro = unlimited scans (cloud reads still bounded by the Worker's daily cap).
+   The native shell exposes window.ResitAds = { available(), showRewarded() }
+   (AdMob rewarded video) — wired in Phase A; absent on the web.
    PAY_URL is the checkout link (Stripe / LemonSqueezy) — fill it after you set
    up a payment account; until then the upgrade button shows "coming soon". */
 const FREE_SCANS_PER_DAY = 1;
+const AD_SCANS_PER_DAY = 4;   /* scans 2-5, one rewarded ad each */
 const PAY_URL = "";
-const PRICE_LABEL = "RM 59 / year";
+const PRICE_LABEL = "RM 6.99 / month or RM 79 / year";
 /* Local-time day key (toISOString would flip the day near midnight UTC+8). */
 function todayKey() {
   const d = new Date();
@@ -116,6 +121,25 @@ function todayKey() {
 function isPro() { return !!state.pro || !!state.ghProven; }
 function scansToday() { return state.scanDay === todayKey() ? (state.scanCount || 0) : 0; }
 function scanAllowed() { return isPro() || scansToday() < FREE_SCANS_PER_DAY; }
+/* Rewarded-ad unlock: available only where the native shell provides ads and
+   the user is inside the ad-unlockable band (scans 2-5). */
+function adsAvailable() {
+  try { return !!(window.ResitAds && window.ResitAds.available && window.ResitAds.available()); }
+  catch (e) { return false; }
+}
+function adUnlockAvailable() {
+  return !isPro() && adsAvailable() &&
+    scansToday() >= FREE_SCANS_PER_DAY &&
+    scansToday() < FREE_SCANS_PER_DAY + AD_SCANS_PER_DAY;
+}
+/* Show the rewarded ad; resolves true only when the reward was earned. */
+async function watchAdForScan() {
+  try {
+    toast("Loading ad…");
+    const earned = await window.ResitAds.showRewarded();
+    return earned === true;
+  } catch (e) { toast("Ad couldn't load — try again later"); return false; }
+}
 async function bumpScanUsed() {
   const k = todayKey();
   if (state.scanDay !== k) { state.scanDay = k; state.scanCount = 0; }
@@ -169,7 +193,7 @@ function renderPlan() {
   } else {
     if (status) status.textContent = "Free — " + FREE_SCANS_PER_DAY + " scanned receipt per day (" +
       (scanAllowed() ? "available today" : "used today — manual entry until tomorrow") + "), unlimited manual entries. " +
-      "Pro adds unlimited scans, categories and claims.";
+      "Pro adds unlimited scans and claims tracking.";
     if (btn) { btn.hidden = false; btn.textContent = "Upgrade to Pro"; }
   }
 }
@@ -402,19 +426,6 @@ function renderCatBudgets() {
   const wrap = $("cat-budgets");
   if (!wrap) return;
   wrap.innerHTML = "";
-  /* Categories are a Pro feature — free tier keeps the overall budget only. */
-  if (!isPro()) {
-    const p = document.createElement("p");
-    p.className = "settings-sub";
-    p.textContent = "Per-category budgets are part of Pro. ";
-    const b = document.createElement("button");
-    b.className = "settings-link";
-    b.textContent = "See Pro";
-    b.addEventListener("click", () => showUpgrade("Categories and category budgets are Pro features."));
-    p.appendChild(b);
-    wrap.appendChild(p);
-    return;
-  }
   for (const c of CATS) {
     const row = document.createElement("label");
     row.className = "cat-budget-row";
@@ -865,9 +876,8 @@ function renderHome() {
     const odd = unusualIds.has(e.id) ? `<span class="odd-pill">higher than usual</span>` : "";
     const camera = e.photo ? `<span class="has-photo" aria-hidden="true">▦ </span>` : "";
     const sc = scopeOf(e);
-    /* "Category | TYPE" account tag, colour-coded. Categories are Pro, so the
-       free tier's tag carries the type only. */
-    const tag = `<span class="acct-tag ${SCOPE_TAG[sc]}">${isPro() ? escapeHtml(e.category) + " | " : ""}${sc.toUpperCase()}</span>`;
+    /* "Category | TYPE" account tag, colour-coded. */
+    const tag = `<span class="acct-tag ${SCOPE_TAG[sc]}">${escapeHtml(e.category)} | ${sc.toUpperCase()}</span>`;
     const amountHtml = e.pending
       ? `<span class="entry-amount waiting">waiting…</span>`
       : `<span class="entry-amount">${fmtRM(e.amount)}</span>`;
@@ -903,7 +913,7 @@ function renderHome() {
         <span class="cat-icon">${catIcon(e.category)}</span>
         <span class="entry-main">
           <span class="entry-merchant"><span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span></span>
-          <span class="entry-cat"><span class="acct-tag ${SCOPE_TAG[sc]}">${isPro() ? escapeHtml(e.category) + " | " : ""}${sc.toUpperCase()}</span><span class="mut">${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}</span></span>
+          <span class="entry-cat"><span class="acct-tag ${SCOPE_TAG[sc]}">${escapeHtml(e.category)} | ${sc.toUpperCase()}</span><span class="mut">${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}</span></span>
         </span>
         <span class="entry-amount">${fmtRM(e.amount)}</span>`;
       row.addEventListener("click", () => openConfirmSheet(e));
@@ -922,8 +932,6 @@ function renderHome() {
 function renderFilterChips(monthExps) {
   const row = $("filter-chips");
   if (!row) return;
-  /* Category filters ride on the Pro category feature. */
-  if (!isPro()) { row.innerHTML = ""; state.filterCat = ""; return; }
   const present = [...new Set(monthExps.map(e => e.category))];
   const cats = CATS.filter(c => present.includes(c.name)).map(c => c.name);
   row.innerHTML = "";
@@ -1178,10 +1186,6 @@ function renderInsights() {
   }
 
   html += `<p class="ins-section-label">By category</p>`;
-  if (!isPro()) {
-    /* Category breakdown is Pro — teaser row like the radar. */
-    html += `<div class="ins-row"><span class="ins-row-name" style="color:var(--muted)">See where the money goes, category by category</span><button class="settings-link" id="ins-cat-upgrade">Pro</button></div>`;
-  } else
   for (const [cat, amt] of cats) {
     const pct = Math.round((amt / total) * 100);
     const cb = state.catBudgets[cat];
@@ -1227,8 +1231,6 @@ function renderInsights() {
   if (st) st.addEventListener("click", () => { if (isPro()) openStatement(m); else showUpgrade("Monthly statements are a Pro feature."); });
   const ru = $("ins-radar-upgrade");
   if (ru) ru.addEventListener("click", () => showUpgrade("The recurring-charge radar is a Pro feature."));
-  const cu = $("ins-cat-upgrade");
-  if (cu) cu.addEventListener("click", () => showUpgrade("Category insights and budgets are Pro features."));
   /* Tap a rhythm day -> show that day's spend (phones have no hover). */
   for (const day of body.querySelectorAll(".rh-day[data-label]")) {
     day.addEventListener("click", () => toast(day.dataset.label));
@@ -1640,18 +1642,37 @@ async function handleImage(file) {
       () => { state._batchScope = scope; pickImage("camera"); }, null, 6000);
     return;
   }
-  /* Free tier: one auto-read per day. Further receipts still get their photo
-     attached, but the fields are entered manually (or go Pro). */
+  /* Free tier: one auto-read per day. Where rewarded ads exist (native app),
+     scans 2-5 can each be unlocked by watching one; otherwise (and beyond 5)
+     the photo still attaches but fields are manual — or go Pro. */
   if (!scanAllowed()) {
-    const thumb = await fileToThumb(file, 700);
-    toastAction("Daily free scan used — enter this one manually", "Go Pro",
-      () => showUpgrade("Free includes " + FREE_SCANS_PER_DAY + " scanned receipt a day; Pro scans them all."), null, 5500);
-    openConfirmSheet({
-      amount: null, merchant: "", category: "Other", scope: "Personal",
-      date: new Date().toISOString(), items: [], note: "",
-      photo: thumb || undefined, fromReceipt: false
-    });
-    return;
+    if (adUnlockAvailable()) {
+      const left = FREE_SCANS_PER_DAY + AD_SCANS_PER_DAY - scansToday();
+      const wantsAd = confirm("Daily free scan used.\n\nWatch a short ad to scan this receipt? (" + left + " ad unlock" + (left > 1 ? "s" : "") + " left today)\n\nCancel = enter it manually.");
+      if (wantsAd && await watchAdForScan()) {
+        /* fall through to the normal scan path below */
+      } else if (wantsAd) {
+        return; /* ad failed — nothing consumed, let them retry */
+      } else {
+        const thumb0 = await fileToThumb(file, 700);
+        openConfirmSheet({
+          amount: null, merchant: "", category: "Other", scope: "Personal",
+          date: new Date().toISOString(), items: [], note: "",
+          photo: thumb0 || undefined, fromReceipt: false
+        });
+        return;
+      }
+    } else {
+      const thumb = await fileToThumb(file, 700);
+      toastAction("Daily free scan used — enter this one manually", "Go Pro",
+        () => showUpgrade("Free includes " + FREE_SCANS_PER_DAY + " scanned receipt a day; Pro scans them all."), null, 5500);
+      openConfirmSheet({
+        amount: null, merchant: "", category: "Other", scope: "Personal",
+        date: new Date().toISOString(), items: [], note: "",
+        photo: thumb || undefined, fromReceipt: false
+      });
+      return;
+    }
   }
   state.ocrCancelled = false;
   $("processing-overlay").hidden = false;
@@ -1879,16 +1900,6 @@ function renderCategoryChips() {
   if (!e) return;
   const chips = $("category-chips");
   chips.innerHTML = "";
-  /* Categories are Pro: free entries are auto-filed quietly (data kept, so
-     upgrading unlocks it retroactively) but the picker is locked. */
-  if (!isPro()) {
-    const b = document.createElement("button");
-    b.className = "chip";
-    b.textContent = "Categories — Pro 🔒";
-    b.addEventListener("click", () => showUpgrade("Categories, category budgets and category insights are Pro features."));
-    chips.appendChild(b);
-    return;
-  }
   for (const c of CATS) {
     const b = document.createElement("button");
     const sel = c.name === e.category;
