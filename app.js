@@ -246,9 +246,15 @@ function renderCloudSetting() {
   const btn = $("cloud-toggle");
   const status = $("cloud-status");
   if (btn) btn.textContent = on ? "Turn off" : "Turn on";
-  if (status) status.textContent = on
-    ? "On — hard-to-read receipts are read by a cloud AI (it may keep them; see Privacy)."
-    : "Off — everything stays on your phone.";
+  if (status) status.textContent = on ? "On" : "Off — receipts stay on your phone";
+}
+
+/* The Claude-inbox block is owner plumbing — invisible unless a token is
+   already saved. On a fresh owner device: tap the version line in Settings
+   7 times to reveal it. */
+function renderInboxSetting() {
+  const wrap = $("inbox-field");
+  if (wrap) wrap.hidden = !(state.ghToken || state._inboxReveal);
 }
 
 let inboxSyncing = false;
@@ -1382,6 +1388,7 @@ function switchView(name) {
     renderThemeChips();
     renderSyncStatus();
     renderCatBudgets();
+    renderInboxSetting();
     renderCloudSetting();
     renderPlan();
     renderBackupStatus();
@@ -2611,6 +2618,19 @@ async function init() {
   on("upgrade-close", () => { const ov = $("upgrade-overlay"); if (ov) ov.hidden = true; });
   on("upgrade-overlay", ev => { if (ev.target === $("upgrade-overlay")) $("upgrade-overlay").hidden = true; });
   $("app-version").textContent = "Resit " + APP_VERSION + " · ";
+  /* Owner backdoor: 7 taps on the version line reveal the Claude-inbox setup. */
+  let verTaps = 0, verTimer = null;
+  $("app-version").addEventListener("click", () => {
+    verTaps++;
+    clearTimeout(verTimer);
+    verTimer = setTimeout(() => { verTaps = 0; }, 2500);
+    if (verTaps >= 7) {
+      verTaps = 0;
+      state._inboxReveal = true;
+      renderInboxSetting();
+      toast("Claude inbox settings revealed");
+    }
+  });
   $("copy-scan").addEventListener("click", async () => {
     const t = await DB.getSetting("lastScan", "");
     if (!t) { toast("No scan yet"); return; }

@@ -127,7 +127,7 @@ try {
     <div class="settings-group">
       <p class="settings-group-title">Receipt reading</p>
       <div class="settings-card">
-        <div class="field">
+        <div class="field" id="inbox-field" hidden>
           <span class="field-label">Claude inbox (free — your receipts get checked by Claude on your PC)</span>
           <input type="password" id="gh-token" placeholder="GitHub token (github_pat_...)">
           <div class="btn-pair">
@@ -135,11 +135,11 @@ try {
             <button class="ghost-btn small" id="sync-now">Check for Claude's updates</button>
           </div>
           <p class="sync-status" id="sync-status"></p>
+          <div class="settings-divider" style="margin-top: 14px;"></div>
         </div>
         <div class="field" id="cloud-field" hidden>
-          <div class="settings-divider" style="margin-bottom: 14px;"></div>
           <span class="field-label">Smarter receipt reading (cloud)</span>
-          <p class="settings-sub">When on, receipts your phone can't read clearly are sent to a cloud AI (via Resit's private server) for a sharper result. Resit's server stores nothing, but the AI provider may keep and learn from what you send — see the privacy notice. Off keeps everything on your phone.</p>
+          <p class="settings-sub">Receipts your phone can't read clearly get a second read from a cloud AI — details in the <a href="privacy.html" target="_blank" rel="noopener">privacy notice</a>.</p>
           <div class="btn-pair">
             <button class="ghost-btn small" id="cloud-toggle">Turn on</button>
             <a class="ghost-btn small cloud-privacy" href="privacy.html" target="_blank" rel="noopener">Privacy</a>
