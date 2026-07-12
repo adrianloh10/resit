@@ -352,6 +352,10 @@ async function applyClaudeResult(data) {
     return false;
   }
   let e = state.expenses.find(x => String(x.id) === String(data.expenseId));
+  /* Instant reads (Gemini) fill scans on the spot now — a late Claude result
+     for an expense that is no longer pending must never overwrite what the
+     user already confirmed. Consume it so the result file gets cleaned up. */
+  if (e && !e.pending) return true;
   let created = false;
   /* Self-heal: if the pending expense is missing (storage hiccup, reinstall),
      recreate it from Claude's result — the uploaded photo means the data
@@ -1513,7 +1517,6 @@ async function pickImage(source) {
   if (isNative()) {
     const file = await captureNative(source);
     if (file) handleImage(file);
-    else state._batchScope = null; /* cancelled — don't let a stale batch scope linger */
     return;
   }
   (source === "camera" ? $("camera-input") : $("gallery-input")).click();
@@ -1583,65 +1586,12 @@ function openChooser() {
   $("chooser-overlay").hidden = false;
 }
 
-/* Quick "who's this for?" picker shown right after a photo is taken, so the
-   receipt is tagged Personal/Shared/Company before it's saved. Resolves to the
-   chosen scope, or null if cancelled. */
-function pickScope() {
-  /* Batch capture ("Snap another"): reuse the last scope without re-asking. */
-  if (state._batchScope) {
-    const s = state._batchScope;
-    state._batchScope = null;
-    return Promise.resolve(s);
-  }
-  return new Promise(resolve => {
-    const ov = $("scope-pick-overlay");
-    if (!ov) { resolve("Personal"); return; }
-    const wired = [];
-    const cleanup = () => wired.forEach(([el, fn]) => el.removeEventListener("click", fn));
-    const finish = val => { cleanup(); ov.hidden = true; resolve(val); };
-    const bind = (id, val) => { const el = $(id); if (el) { const fn = () => finish(val); el.addEventListener("click", fn); wired.push([el, fn]); } };
-    bind("scope-pick-personal", "Personal");
-    bind("scope-pick-shared", "Shared");
-    bind("scope-pick-company", "Company");
-    bind("scope-pick-cancel", null);
-    const backdrop = ev => { if (ev.target === ov) finish(null); };
-    ov.addEventListener("click", backdrop); wired.push([ov, backdrop]);
-    ov.hidden = false;
-  });
-}
-
 async function handleImage(file) {
-  if (!file) { state._batchScope = null; return; }
-  /* Claude inbox mode: no on-device reading, no animation — save instantly
-     as pending and let Claude fill in everything when it reviews the photo. */
-  if (state.ghToken) {
-    const scope = await pickScope();
-    if (!scope) { toast("Photo discarded"); return; } /* cancelled — don't save */
-    const thumb = await fileToThumb(file, 700);
-    const record = {
-      amount: 0,
-      merchant: "Receipt",
-      category: "Other",
-      scope: scope,
-      /* Company receipts are almost always claimed back — default them in. */
-      claimStatus: scope === "Company" ? "to-claim" : "",
-      date: new Date().toISOString(),
-      items: [],
-      note: "",
-      pending: true,
-      photo: thumb || undefined,
-      createdAt: new Date().toISOString()
-    };
-    record.id = await DB.addExpense(record);
-    state.expenses.push(record);
-    queuePhotoForClaude(record.id, file);
-    state.monthOffset = 0;
-    switchView("home");
-    /* Batch loop: one tap to snap the next receipt, reusing this scope. */
-    toastAction("Saved — Claude will fill it in", "Snap another",
-      () => { state._batchScope = scope; pickImage("camera"); }, null, 6000);
-    return;
-  }
+  if (!file) return;
+  /* EVERY install — including the owner's — takes the instant path now:
+     on-device read, Gemini for the hard ones, result in seconds. The Claude
+     inbox no longer fronts scanning; it only fills receipts deliberately
+     saved without an amount, and learns from those. */
   /* Free tier: one auto-read per day. Where rewarded ads exist (native app),
      scans 2-5 can each be unlocked by watching one; otherwise (and beyond 5)
      the photo still attaches but fields are manual — or go Pro. */
@@ -1968,7 +1918,10 @@ async function saveExpense() {
     state.expenses.push(record);
   }
 
-  if (!e.id && e._file && state.ghToken) {
+  /* The Claude inbox only receives receipts that still NEED filling (saved
+     without an amount). Instant-read receipts are already complete — sending
+     them too would just burn duplicate processing. */
+  if (!e.id && e._file && state.ghToken && record.pending) {
     queuePhotoForClaude(record.id, e._file);
   }
 
@@ -1993,7 +1946,14 @@ async function saveExpense() {
   const now = new Date();
   state.monthOffset = (saved.getFullYear() - now.getFullYear()) * 12 + (saved.getMonth() - now.getMonth());
   switchView("home");
-  toast(record.pending ? "Saved — Claude will fill it in" : e.id ? "Updated" : "Saved " + fmtRM(record.amount, true));
+  if (record.pending) {
+    toast("Saved — Claude will fill it in");
+  } else if (!e.id && e._file) {
+    /* Fresh scan saved — keep the batch momentum going. */
+    toastAction("Saved " + fmtRM(record.amount, true), "Snap another", () => pickImage("camera"), null, 6000);
+  } else {
+    toast(e.id ? "Updated" : "Saved " + fmtRM(record.amount, true));
+  }
 }
 
 function renderCurrent() {
