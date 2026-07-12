@@ -247,7 +247,7 @@ function renderCloudSetting() {
   const status = $("cloud-status");
   if (btn) btn.textContent = on ? "Turn off" : "Turn on";
   if (status) status.textContent = on
-    ? "On — hard-to-read receipts are read in the cloud, then discarded."
+    ? "On — hard-to-read receipts are read by Google's AI (Google may keep them; see Privacy)."
     : "Off — everything stays on your phone.";
 }
 
@@ -743,8 +743,8 @@ function renderHome() {
   const [whole, cents] = bare.split(".");
   $("month-total").innerHTML = `<span class="cur-prefix">${escapeHtml(state.currency)}</span> ${whole}<span class="cents">.${cents}</span>`;
 
-  /* Hero: REMAINING | TOTAL BUDGET columns + a status bar with the verdict
-     written inside it ("You are ON TRACK" / "PACING HIGH" / "OVER BUDGET").
+  /* Hero: REMAINING | TOTAL BUDGET columns + a status bar with the budget
+     percentage written inside it ("42% OF BUDGET USED").
      With a type filter active, the bar shows that type's share instead. */
   const fill = $("budget-fill");
   const track = $("budget-track");
@@ -774,20 +774,16 @@ function renderHome() {
       fill.style.width = pct + "%";
       fill.classList.toggle("over", total > state.budget);
       if (status) {
-        /* Pacing verdicts only make sense for the CURRENT month; finished
-           months get a past-tense verdict and future months a neutral one. */
+        /* Plain percentage of budget used (can pass 100%); finished months
+           read past-tense and future months get a neutral label. */
+        const pctUsed = Math.round((total / state.budget) * 100);
         let label;
         if (state.monthOffset < 0) {
-          label = total > state.budget ? "ENDED OVER BUDGET" : "ENDED UNDER BUDGET";
+          label = "ENDED AT " + pctUsed + "% OF BUDGET";
         } else if (state.monthOffset > 0) {
           label = "UPCOMING MONTH";
         } else {
-          label = "You are ON TRACK";
-          if (total > state.budget) label = "OVER BUDGET";
-          else if (now.getDate() >= 3) {
-            const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-            if ((total / now.getDate()) * dim > state.budget) label = "PACING HIGH";
-          }
+          label = pctUsed + "% OF BUDGET USED";
         }
         status.textContent = label;
       }
@@ -1143,7 +1139,8 @@ function renderInsights() {
   html += `</div>`;
 
   /* Rhythm: a real month calendar — darker ink = more spent that day.
-     Hover shows the amount (title); tapping shows it as a toast on phones. */
+     Hover shows the amount (title); tapping a spend day opens the day
+     sheet (empty days toast). */
   const dim2 = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
   const perDay = Array(dim2 + 1).fill(0);
   for (const e of exps) perDay[new Date(e.date).getDate()] += e.amount;
@@ -1159,7 +1156,7 @@ function renderInsights() {
       const op = amt > 0 ? 0.10 + 0.80 * (amt / maxDay) : 0;
       const label = d + " " + mon3 + " · " + (amt > 0 ? fmtRM(amt) : "nothing spent");
       html += `<button type="button" class="rh-day${amt > 0 ? " spent" : ""}${op > 0.5 ? " deep" : ""}"` +
-        ` style="--rh:${op.toFixed(2)}" title="${label}" data-label="${label}"><i>${d}</i></button>`;
+        ` style="--rh:${op.toFixed(2)}" title="${label}" data-label="${label}" data-day="${d}"><i>${d}</i></button>`;
     }
     html += `</div>`;
     let we = 0, weDays = 0, wd = 0, wdDays = 0;
@@ -1235,9 +1232,16 @@ function renderInsights() {
   if (st) st.addEventListener("click", () => { if (isPro()) openStatement(m); else showUpgrade("Monthly statements are a Pro feature."); });
   const ru = $("ins-radar-upgrade");
   if (ru) ru.addEventListener("click", () => showUpgrade("The recurring-charge radar is a Pro feature."));
-  /* Tap a rhythm day -> show that day's spend (phones have no hover). */
+  /* Tap a rhythm day -> open that day's expenses; empty days just toast. */
   for (const day of body.querySelectorAll(".rh-day[data-label]")) {
-    day.addEventListener("click", () => toast(day.dataset.label));
+    day.addEventListener("click", () => {
+      const d = parseInt(day.dataset.day, 10);
+      const dayExps = exps.filter(e => new Date(e.date).getDate() === d);
+      /* "spent" = the day has a real total; a day holding only zero-amount
+         pending receipts keeps the toast (its label says "nothing spent"). */
+      if (dayExps.length && day.classList.contains("spent")) openDaySheet(day.dataset.label, dayExps);
+      else toast(day.dataset.label);
+    });
   }
   /* Tap a top place -> home, pre-filtered to that shop. */
   for (const row of body.querySelectorAll(".ins-merchant-row")) {
@@ -1250,6 +1254,34 @@ function renderInsights() {
       renderHome();
     });
   }
+}
+
+/* Day drill-down: a sheet listing one calendar day's expenses (opened from
+   the Monthly spend rhythm grid). Tapping an entry opens it for editing. */
+function openDaySheet(label, dayExps) {
+  const ov = $("day-overlay");
+  if (!ov) return;
+  const [dayPart, amtPart] = label.split(" · ");
+  $("day-title").textContent = dayPart;
+  $("day-total").textContent = amtPart || "";
+  const list = $("day-list");
+  list.innerHTML = "";
+  const sorted = dayExps.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+  for (const e of sorted) {
+    const sc = scopeOf(e);
+    const row = document.createElement("button");
+    row.className = "entry";
+    row.innerHTML = `
+      <span class="cat-icon">${catIcon(e.category)}</span>
+      <span class="entry-main">
+        <span class="entry-merchant"><span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span></span>
+        <span class="entry-cat"><span class="acct-tag ${SCOPE_TAG[sc]}">${escapeHtml(e.category)} | ${sc.toUpperCase()}</span></span>
+      </span>
+      <span class="entry-amount${e.pending ? " waiting" : ""}">${e.pending ? "waiting…" : fmtRM(e.amount)}</span>`;
+    row.addEventListener("click", () => { ov.hidden = true; openConfirmSheet(e); });
+    list.appendChild(row);
+  }
+  ov.hidden = false;
 }
 
 /* Entries priced far (3×+) above this shop's usual — or, lacking shop
@@ -1626,6 +1658,7 @@ async function handleImage(file) {
   }
   state.ocrCancelled = false;
   $("processing-overlay").hidden = false;
+  $("processing-overlay").classList.remove("cloud");
   $("processing-text").textContent = "Reading receipt…";
   $("processing-sub").textContent = "This happens on your phone";
   try {
@@ -1641,8 +1674,9 @@ async function handleImage(file) {
       if (state.ocrCancelled) return;
       if (consented) {
         $("processing-overlay").hidden = false;
+        $("processing-overlay").classList.add("cloud");
         $("processing-text").textContent = "Reading with cloud…";
-        $("processing-sub").textContent = "Read in memory by Google Gemini, never stored";
+        $("processing-sub").textContent = "AI analysis";
         try {
           const ai = await cloudRead(file);
           if (state.ocrCancelled) return;
@@ -1720,7 +1754,9 @@ function openConfirmSheet(expense) {
       .map(([n]) => `<option value="${escapeHtml(n)}">`).join("");
   }
   const d = new Date(e.date);
-  $("confirm-date").value = d.toISOString().slice(0, 10);
+  /* LOCAL date, not toISOString() (UTC) — an expense logged 00:00-07:59 MYT
+     would otherwise show (and silently resave as) the previous day. */
+  $("confirm-date").value = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   $("confirm-time").value = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
   $("confirm-note").value = e.note || "";
 
@@ -1945,7 +1981,8 @@ async function saveExpense() {
   const saved = new Date(record.date);
   const now = new Date();
   state.monthOffset = (saved.getFullYear() - now.getFullYear()) * 12 + (saved.getMonth() - now.getMonth());
-  switchView("home");
+  /* An edit made from the Insights day sheet returns to Insights, not Home. */
+  switchView(state.view === "insights" ? "insights" : "home");
   if (record.pending) {
     toast("Saved — Claude will fill it in");
   } else if (!e.id && e._file) {
@@ -2468,6 +2505,8 @@ async function init() {
     from: $("exp-from").value, to: $("exp-to").value,
     scope: $("exp-scope").value, category: $("exp-cat").value, claim: $("exp-claim").value
   });
+  on("day-back", () => { $("day-overlay").hidden = true; });
+  on("day-overlay", ev => { if (ev.target === $("day-overlay")) $("day-overlay").hidden = true; });
   on("export-filtered", () => { const ov = $("export-overlay"); if (ov) ov.hidden = false; });
   on("export-back", () => { $("export-overlay").hidden = true; });
   on("export-overlay", ev => { if (ev.target === $("export-overlay")) $("export-overlay").hidden = true; });
