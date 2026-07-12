@@ -17,7 +17,17 @@ ALLOW_ORIGINS = "https://adrianloh10.github.io,http://localhost:8902,https://loc
 DAILY_CAP = "20"
 # Gemini model. flash-lite = cheapest; swap to "gemini-flash-latest" for higher accuracy.
 GEMINI_MODEL = "gemini-flash-lite-latest"
+# OPTIONAL failover reader: any OpenAI-compatible provider serving an open
+# vision model. Fill BOTH and set the FALLBACK_API_KEY secret to activate,
+# e.g. DeepInfra + Qwen:
+#   FALLBACK_URL   = "https://api.deepinfra.com/v1/openai/chat/completions"
+#   FALLBACK_MODEL = "Qwen/Qwen2.5-VL-7B-Instruct"
+FALLBACK_URL = ""
+FALLBACK_MODEL = ""
 
-# Secrets are NOT stored here. Set them once with:
-#   wrangler secret put GEMINI_API_KEY
-#   wrangler secret put TURNSTILE_SECRET   (optional)
+# Secrets are NOT stored here. Set them in the dashboard (Worker -> Settings ->
+# Variables and Secrets) or with wrangler:
+#   GEMINI_API_KEY     (primary reader)
+#   FALLBACK_API_KEY   (optional — activates the failover reader)
+#   TURNSTILE_SECRET   (optional bot check)
+#   PRO_UNLOCK         (master code for /mint and /revoke)

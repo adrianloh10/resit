@@ -8,10 +8,20 @@
  * anonymous per-device daily counter (abuse / cost protection).
  *
  * Secrets (set with `wrangler secret put`, never in this file or git):
- *   GEMINI_API_KEY     — required
+ *   GEMINI_API_KEY     — primary reader (Google Gemini)
+ *   FALLBACK_API_KEY   — optional; enables the failover reader
  *   TURNSTILE_SECRET   — optional; if set, requests must carry a valid token
- * Vars (wrangler.toml): ALLOW_ORIGINS, DAILY_CAP, GEMINI_MODEL
+ *   PRO_UNLOCK         — master code; gates /mint and /revoke
+ * Vars (wrangler.toml): ALLOW_ORIGINS, DAILY_CAP, GEMINI_MODEL,
+ *   FALLBACK_URL, FALLBACK_MODEL (OpenAI-compatible provider serving an open
+ *   vision model, e.g. DeepInfra/Together/OpenRouter + Qwen-VL).
  * Binding: DB (D1) — optional; if absent, quota is skipped.
+ *
+ * Reading is provider-agnostic: Gemini is tried first; on ANY failure
+ * (outage, quota, key problem, junk output) the request fails over to the
+ * open-model provider when configured. Both outputs pass through one
+ * normalizer so the app always receives the same JSON shape. With no
+ * fallback configured, behaviour is identical to before.
  */
 
 const CATEGORIES = ["Food", "Groceries", "Fuel", "Transport", "Shopping", "Bills", "Health", "Entertainment", "Other"];
@@ -50,6 +60,136 @@ const SYSTEM_PROMPT =
   "Pick the category that best fits the merchant and items. " +
   "Always fill merchant and total first; list AT MOST 20 line items (the total matters more than a complete item list). " +
   "Set readable=false if the image is not a receipt or is too unclear to read.";
+
+/* One normalizer for every provider: whatever comes back is coerced into the
+   exact shape the app consumes, defensively typed and capped. */
+function normalizeResult(o) {
+  if (!o || typeof o !== "object") return null;
+  const num = v => {
+    const n = typeof v === "string" ? parseFloat(v.replace(/[^\d.-]/g, "")) : Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const items = Array.isArray(o.items)
+    ? o.items.slice(0, 20)
+        .map(i => ({ name: String((i && i.name) || "").slice(0, 80), price: num(i && i.price) || 0 }))
+        .filter(i => i.name)
+    : [];
+  return {
+    merchant: String(o.merchant || "").slice(0, 60),
+    total: num(o.total),
+    date: typeof o.date === "string" && o.date ? o.date.slice(0, 10) : null,
+    time: typeof o.time === "string" && o.time ? o.time.slice(0, 5) : null,
+    category: CATEGORIES.includes(o.category) ? o.category : "Other",
+    items,
+    readable: o.readable !== false
+  };
+}
+
+/* Primary reader: Google Gemini. Returns {ok, result} or {ok:false, msg}. */
+async function readWithGemini(env, image, mediaType) {
+  const model = env.GEMINI_MODEL || "gemini-flash-lite-latest";
+  try {
+    const r = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + env.GEMINI_API_KEY,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: [{
+            parts: [
+              { inline_data: { mime_type: mediaType, data: image } },
+              { text: "Extract the expense fields from this receipt." }
+            ]
+          }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: RESPONSE_SCHEMA,
+            temperature: 0,
+            /* Hard per-receipt cost caps: bound the output length and switch
+               OFF the model's "thinking" tokens, so no single scan can run up
+               a large bill. ~640 tokens covers a receipt with up to ~20 line
+               items (fields + JSON syntax). */
+            maxOutputTokens: 640,
+            thinkingConfig: { thinkingBudget: 0 }
+          }
+        })
+      }
+    );
+    if (!r.ok) {
+      const errBody = await r.json().catch(() => ({}));
+      const detail = errBody && errBody.error ? String(errBody.error.message || "") : "";
+      const msg = r.status === 401 || r.status === 403 ? "Reader key invalid"
+        : r.status === 429 ? "Reader is busy — try again in a minute"
+        : /quota|billing/i.test(detail) ? "Reader quota exhausted for today"
+        : "Couldn't read the receipt";
+      return { ok: false, msg };
+    }
+    const data = await r.json();
+    const parts = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
+    const text = parts && parts.find(p => typeof p.text === "string");
+    if (!text) return { ok: false, msg: "No readable result" };
+    const result = normalizeResult(JSON.parse(text.text));
+    if (!result) return { ok: false, msg: "No readable result" };
+    return { ok: true, result };
+  } catch (err) {
+    return { ok: false, msg: "Couldn't read the receipt" };
+  }
+}
+
+/* Failover reader: any OpenAI-compatible provider serving an open vision
+   model (DeepInfra / Together / OpenRouter + Qwen-VL etc.). Same caps. */
+function fallbackConfigured(env) {
+  return !!(env.FALLBACK_URL && env.FALLBACK_MODEL && env.FALLBACK_API_KEY);
+}
+
+async function readWithFallback(env, image, mediaType) {
+  try {
+    const r = await fetch(env.FALLBACK_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + env.FALLBACK_API_KEY
+      },
+      body: JSON.stringify({
+        model: env.FALLBACK_MODEL,
+        temperature: 0,
+        max_tokens: 640,
+        messages: [
+          {
+            role: "system",
+            content: SYSTEM_PROMPT +
+              " Respond with ONLY one JSON object — no markdown, no commentary — with keys:" +
+              " merchant (string), total (number or null), date (string YYYY-MM-DD or null)," +
+              " time (string HH:MM or null), category (one of " + CATEGORIES.join("/") + ")," +
+              " items (array of {name, price}), readable (boolean)."
+          },
+          {
+            role: "user",
+            content: [
+              { type: "image_url", image_url: { url: "data:" + mediaType + ";base64," + image } },
+              { type: "text", text: "Extract the expense fields from this receipt." }
+            ]
+          }
+        ]
+      })
+    });
+    if (!r.ok) return { ok: false, msg: "Couldn't read the receipt" };
+    const data = await r.json();
+    let text = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (typeof text !== "string" || !text.trim()) return { ok: false, msg: "No readable result" };
+    /* Open models sometimes wrap JSON in code fences — strip them. */
+    text = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start === -1 || end <= start) return { ok: false, msg: "No readable result" };
+    const result = normalizeResult(JSON.parse(text.slice(start, end + 1)));
+    if (!result) return { ok: false, msg: "No readable result" };
+    return { ok: true, result };
+  } catch (err) {
+    return { ok: false, msg: "Couldn't read the receipt" };
+  }
+}
 
 function corsHeaders(origin, allowList) {
   const h = {
@@ -170,7 +310,7 @@ export default {
       return json({ ok: true, revoked: res2.meta.changes > 0 }, 200, cors);
     }
 
-    if (!env.GEMINI_API_KEY) return json({ error: "Reader not configured" }, 500, cors);
+    if (!env.GEMINI_API_KEY && !fallbackConfigured(env)) return json({ error: "Reader not configured" }, 500, cors);
 
     let body;
     try { body = await request.json(); } catch (e) { return json({ error: "Bad request" }, 400, cors); }
@@ -195,55 +335,18 @@ export default {
       } catch (e) { /* quota table missing/erroring must not block reading */ }
     }
 
-    const model = env.GEMINI_MODEL || "gemini-flash-lite-latest";
-    try {
-      const r = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + env.GEMINI_API_KEY,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-            contents: [{
-              parts: [
-                { inline_data: { mime_type: mediaType || "image/jpeg", data: image } },
-                { text: "Extract the expense fields from this receipt." }
-              ]
-            }],
-            generationConfig: {
-              responseMimeType: "application/json",
-              responseSchema: RESPONSE_SCHEMA,
-              temperature: 0,
-              /* Hard per-receipt cost caps: bound the output length and switch
-                 OFF the model's "thinking" tokens, so no single scan can run up
-                 a large bill. ~640 tokens covers a receipt with up to ~20 line
-                 items (fields + JSON syntax). */
-              maxOutputTokens: 640,
-              thinkingConfig: { thinkingBudget: 0 }
-            }
-          })
-        }
-      );
-
-      if (!r.ok) {
-        const errBody = await r.json().catch(() => ({}));
-        const detail = errBody && errBody.error ? String(errBody.error.message || "") : "";
-        const msg = r.status === 401 || r.status === 403 ? "Reader key invalid"
-          : r.status === 429 ? "Reader is busy — try again in a minute"
-          : /quota|billing/i.test(detail) ? "Reader quota exhausted for today"
-          : "Couldn't read the receipt";
-        return json({ error: msg }, 502, cors);
-      }
-
-      const data = await r.json();
-      const parts = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
-      const text = parts && parts.find(p => typeof p.text === "string");
-      if (!text) return json({ error: "No readable result" }, 502, cors);
-      let result;
-      try { result = JSON.parse(text.text); } catch (e) { return json({ error: "No readable result" }, 502, cors); }
-      return json(result, 200, cors);
-    } catch (err) {
-      return json({ error: "Couldn't read the receipt" }, 502, cors);
+    /* Provider chain: Gemini first, open-model failover second. Either can be
+       absent; the app sees one consistent JSON shape or one clean error. */
+    const mt = mediaType || "image/jpeg";
+    let primary = { ok: false, msg: "Reader not configured" };
+    if (env.GEMINI_API_KEY) {
+      primary = await readWithGemini(env, image, mt);
+      if (primary.ok) return json(primary.result, 200, cors);
     }
+    if (fallbackConfigured(env)) {
+      const fb = await readWithFallback(env, image, mt);
+      if (fb.ok) return json(fb.result, 200, cors);
+    }
+    return json({ error: primary.msg }, 502, cors);
   }
 };
