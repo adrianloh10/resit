@@ -8,7 +8,7 @@ built in the cloud (no Mac, no Node on your PC). iOS is Phase B, later.
 - `codemagic.yaml` — the cloud build: copies the web files into `www/`, generates the
   native Android project, and produces an installable **debug APK**.
 - Native **camera** capture (with the web file-picker still used on the website).
-- A **Google Gemini** disclosure on the cloud-read consent screen (store requirement).
+- A cloud-AI disclosure on the cloud-read consent screen (store requirement; the privacy notice names the provider).
 - Worker now allows the native app's origin (`https://localhost`, `capacitor://localhost`).
 
 > Note: the native Android project (`android/`) and `node_modules/` are **not** in the

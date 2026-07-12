@@ -247,7 +247,7 @@ function renderCloudSetting() {
   const status = $("cloud-status");
   if (btn) btn.textContent = on ? "Turn off" : "Turn on";
   if (status) status.textContent = on
-    ? "On — hard-to-read receipts are read by Google's AI (Google may keep them; see Privacy)."
+    ? "On — hard-to-read receipts are read by a cloud AI (it may keep them; see Privacy)."
     : "Off — everything stays on your phone.";
 }
 
@@ -352,7 +352,7 @@ async function applyClaudeResult(data) {
     return false;
   }
   let e = state.expenses.find(x => String(x.id) === String(data.expenseId));
-  /* Instant reads (Gemini) fill scans on the spot now — a late Claude result
+  /* Instant reads (cloud AI) fill scans on the spot now — a late Claude result
      for an expense that is no longer pending must never overwrite what the
      user already confirmed. Consume it so the result file gets cleaned up. */
   if (e && !e.pending) return true;
@@ -1621,7 +1621,7 @@ function openChooser() {
 async function handleImage(file) {
   if (!file) return;
   /* EVERY install — including the owner's — takes the instant path now:
-     on-device read, Gemini for the hard ones, result in seconds. The Claude
+     on-device read, cloud AI for the hard ones, result in seconds. The Claude
      inbox no longer fronts scanning; it only fills receipts deliberately
      saved without an amount, and learns from those. */
   /* Free tier: one auto-read per day. Where rewarded ads exist (native app),
