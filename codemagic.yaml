@@ -15,7 +15,7 @@ workflows:
     max_build_duration: 30
     environment:
       node: 20
-      java: 17
+      java: 21 # Capacitor 7's Android library compiles against Java 21
     scripts:
       - name: Assemble web app into www/
         script: |
