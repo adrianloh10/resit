@@ -9,7 +9,9 @@
 workflows:
   android:
     name: Resit Android (debug)
-    instance_type: linux_x2
+    # mac_mini_m2 is covered by Codemagic's 500 free minutes/month;
+    # Linux instances are pay-per-minute and NOT in the free tier.
+    instance_type: mac_mini_m2
     max_build_duration: 30
     environment:
       node: 20
