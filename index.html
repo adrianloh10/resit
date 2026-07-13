@@ -202,7 +202,7 @@ try {
     </div>
 
     <button class="ghost-btn danger" id="erase-data">Erase all data</button>
-    <p class="settings-note"><span id="app-version"></span>Resit keeps everything on this phone and learns from your corrections — categories, shop names, and where each shop prints its total. Nothing leaves your phone unless you turn on cloud reading or use the Claude inbox.</p>
+    <p class="settings-note"><span id="app-version"></span>Resit keeps everything on this phone and learns from your corrections — categories, shop names, and where each shop prints its total. Nothing leaves your phone unless you turn on cloud reading. <a href="eula.html" target="_blank" rel="noopener">Terms</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
   </section>
 </main>
 
@@ -283,6 +283,16 @@ try {
     <label class="repeat-row" id="repeat-row"><input type="checkbox" id="confirm-repeat"><span>Repeats every month</span></label>
     <button class="save-btn" id="save-btn">Save</button>
     <p class="edit-hint">Tap anything to edit</p>
+  </div>
+</div>
+
+<div class="overlay sheet-overlay" id="eula-overlay" hidden>
+  <div class="confirm-sheet" style="text-align: center;">
+    <p class="sheet-title" id="eula-title" style="margin: 6px 0 12px;">Welcome to Resit</p>
+    <p class="consent-text">Snap a receipt and it files itself. Your records live on this phone — cloud reading is optional and always asks first. Before you start, please have a look at the terms.</p>
+    <p class="consent-text" style="margin-top: 10px;"><a href="eula.html" target="_blank" rel="noopener">Terms of Use</a> &nbsp;·&nbsp; <a href="privacy.html" target="_blank" rel="noopener">Privacy Notice</a></p>
+    <button class="save-btn" id="eula-accept" style="margin-top: 14px;">I agree — start using Resit</button>
+    <p class="edit-hint">By continuing you confirm you're at least 13 (or have a parent's consent), accept the Terms of Use, and acknowledge the Privacy Notice.</p>
   </div>
 </div>
 

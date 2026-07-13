@@ -1,6 +1,7 @@
 /* Resit — snap receipts, track spending. All data stays on-device. */
 
 const APP_VERSION = self.RESIT_VERSION || "v?"; /* set once in version.js; sw.js shares it */
+const TERMS_VERSION = "1.0"; /* bump when eula.html changes materially — the accept gate re-shows */
 
 const $ = id => document.getElementById(id);
 /* sessionStorage can THROW when the user blocks site data — never let that
@@ -2280,6 +2281,7 @@ async function init() {
     state.backupNudgeSnooze = await DB.getSetting("backupNudgeSnooze", "");
     state.licenseKey = await DB.getSetting("licenseKey", "");
     state.lastKeyCheck = await DB.getSetting("lastKeyCheck", "");
+    state.eulaAccepted = await DB.getSetting("eulaAccepted", "");
     state.expenses = await DB.getAllExpenses();
     safeSession("remove", "dbRetry");
   } catch (err) {
@@ -2310,6 +2312,27 @@ async function init() {
       boot.classList.add("done");
       setTimeout(() => boot.remove(), 500);
     }, wait);
+  }
+
+  /* The Terms of Use must be accepted once per TERMS_VERSION before use.
+     The overlay has no backdrop-close and no cancel — Agree is the only way
+     in. (If storage failed above, eulaAccepted reads "" — showing the gate
+     again is the safe direction.) */
+  if ((state.eulaAccepted || "").split("|")[0] !== TERMS_VERSION) {
+    const ov = $("eula-overlay");
+    if (ov) {
+      /* Returning users after a terms change get an "updated" heading. */
+      if (state.eulaAccepted) {
+        const t = $("eula-title");
+        if (t) t.textContent = "We've updated the terms";
+      }
+      ov.hidden = false;
+      /* The veil only blocks pointers — make everything else inert so
+         keyboard / screen-reader users can't operate the app beneath it. */
+      for (const el of document.querySelectorAll("body > *:not(#eula-overlay):not(script)")) el.inert = true;
+      const btn = $("eula-accept");
+      if (btn) btn.focus();
+    }
   }
 
   /* Ask the browser to protect our storage from eviction under storage
@@ -2511,6 +2534,13 @@ async function init() {
   const readExportFilter = () => ({
     from: $("exp-from").value, to: $("exp-to").value,
     scope: $("exp-scope").value, category: $("exp-cat").value, claim: $("exp-claim").value
+  });
+  on("eula-accept", async () => {
+    state.eulaAccepted = TERMS_VERSION + "|" + new Date().toISOString(); /* terms version | when */
+    try { await DB.setSetting("eulaAccepted", state.eulaAccepted); }
+    catch (e) {} /* storage broken → the gate simply returns next launch; never a dead button */
+    $("eula-overlay").hidden = true;
+    for (const el of document.querySelectorAll("body > [inert]")) el.inert = false;
   });
   on("day-back", () => { $("day-overlay").hidden = true; });
   on("day-overlay", ev => { if (ev.target === $("day-overlay")) $("day-overlay").hidden = true; });
