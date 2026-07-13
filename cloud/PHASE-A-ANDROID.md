@@ -4,7 +4,7 @@ This wraps the existing Resit web app into a real Android app with **Capacitor**
 built in the cloud (no Mac, no Node on your PC). iOS is Phase B, later.
 
 ## What Claude has already built (in the repo)
-- `package.json`, `capacitor.config.json` — the Capacitor setup (app id `com.adrianloh.resit`).
+- `package.json`, `capacitor.config.json` — the Capacitor setup (app id `com.promaxdigita.resit`).
 - `codemagic.yaml` — the cloud build: copies the web files into `www/`, generates the
   native Android project, and produces an installable **debug APK**.
 - Native **camera** capture (with the web file-picker still used on the website).
