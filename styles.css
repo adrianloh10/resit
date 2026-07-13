@@ -212,50 +212,28 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 }
 .sheet-overlay { align-items: flex-end; }
 
-.processing-card {
-  background: var(--paper); border-radius: 20px;
-  padding: 28px 32px; text-align: center; width: 260px;
+/* Scan pill: a small breathing chip above the nav while a receipt is read.
+   Tap = cancel. The .done state shows "Scan complete ✓" and fades away. */
+.scan-pill {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  background: var(--sienna-deep); color: #F3E9D5;
+  font-size: 12.5px; font-weight: 500;
+  padding: 9px 18px; border-radius: 99px;
+  z-index: 40; cursor: pointer; white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(44, 35, 24, .25);
+  animation: pill-breathe 1.6s ease-in-out infinite;
 }
-/* "Little printer": the receipt prints itself out of a slot, torn edge and
-   all. A cloud read (#processing-overlay.cloud) blinks the printer's light
-   teal and prints in teal ink. */
-.printer-anim { width: 88px; margin: 0 auto 18px; }
-.printer-anim .slot {
-  height: 12px; background: var(--sienna-deep); border-radius: 7px;
-  position: relative; z-index: 2;
-  box-shadow: 0 1.5px 3px rgba(44, 35, 24, .35);
+.scan-pill.done {
+  animation: none; background: var(--teal); cursor: default;
+  transition: opacity .5s ease .9s; opacity: 1;
 }
-.printer-anim .slot i {
-  position: absolute; right: 7px; top: 4px; width: 4px; height: 4px;
-  border-radius: 50%; background: var(--divider-soft);
-}
-.printer-anim .pwrap { height: 88px; overflow: hidden; margin: 0 8px; }
-.printer-anim .sheet {
-  height: 100%; background: var(--paper-raised);
-  border: 0.5px solid var(--divider); border-top: none;
-  animation: printout 3.6s ease-in-out infinite;
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 6px), 87.5% 100%, 75% calc(100% - 6px), 62.5% 100%, 50% calc(100% - 6px), 37.5% 100%, 25% calc(100% - 6px), 12.5% 100%, 0 calc(100% - 6px));
-}
-@keyframes printout {
-  0% { transform: translateY(-96%); opacity: 1; }
-  58%, 84% { transform: translateY(0); opacity: 1; }
-  94% { opacity: 0; }
-  100% { transform: translateY(-96%); opacity: 0; }
-}
-.printer-anim .rl { display: flex; flex-direction: column; gap: 10px; padding: 13px 10px 0; }
-.printer-anim .rl i { display: block; height: 3px; border-radius: 2px; background: var(--divider-soft); }
-.printer-anim .rl i:nth-child(1) { width: 65%; }
-.printer-anim .rl i:nth-child(3) { width: 85%; }
-.printer-anim .rl i:nth-child(4) { width: 70%; }
-.printer-anim .rl i:nth-child(5) { width: 45%; background: var(--muted); }
-#processing-overlay.cloud .printer-anim .slot i {
-  background: var(--teal); animation: printer-blink .9s steps(2, end) infinite;
-}
-@keyframes printer-blink { 50% { opacity: .15; } }
-#processing-overlay.cloud .printer-anim .rl i { background: var(--teal); opacity: .4; }
-#processing-overlay.cloud .printer-anim .rl i:nth-child(5) { opacity: .75; }
-.processing-text { font-size: 15px; font-weight: 500; }
-.processing-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+@keyframes pill-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .scan-pill { animation: none; } }
+
+/* The live "reading" row that leads the ledger during a scan. */
+.entry.reading { pointer-events: none; animation: reading-pulse 1.4s ease-in-out infinite; }
+@keyframes reading-pulse { 0%, 100% { opacity: .45; } 50% { opacity: .9; } }
 
 /* ---------- Confirm sheet ---------- */
 .confirm-sheet {

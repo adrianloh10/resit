@@ -902,6 +902,19 @@ function renderHome() {
 
   const ledger = $("ledger");
   ledger.innerHTML = "";
+  /* While a receipt is being read, the ledger leads with a live pending row
+     so the scan visibly "exists" without any blocking overlay. */
+  if (state.scanning) {
+    const r = document.createElement("div");
+    r.className = "entry reading";
+    r.innerHTML = `<span class="cat-icon">${catIcon("Other")}</span>
+      <span class="entry-main">
+        <span class="entry-merchant"><span class="merchant-name">Reading receipt…</span></span>
+        <span class="entry-cat"><span class="mut">just a moment</span></span>
+      </span>
+      <span class="entry-amount waiting">…</span>`;
+    ledger.appendChild(r);
+  }
   const empty = $("empty-note");
   if (!allExps.length && !others.length) {
     empty.hidden = false;
@@ -1589,6 +1602,33 @@ function ensureCloudConsent() {
   });
 }
 
+/* The scan pill: a small breathing status chip above the nav while a
+   receipt is being read — never a blocking overlay. */
+function showScanPill(msg) {
+  const p = $("scan-pill");
+  if (!p) return;
+  clearTimeout(p._t);
+  p.textContent = msg;
+  p.classList.remove("done");
+  p.hidden = false;
+}
+function completeScanPill(msg) {
+  const p = $("scan-pill");
+  if (!p) return;
+  p.textContent = msg;
+  p.classList.add("done");
+  p.hidden = false;
+  clearTimeout(p._t);
+  p._t = setTimeout(() => { p.hidden = true; p.classList.remove("done"); }, 1600);
+}
+function hideScanPill() {
+  const p = $("scan-pill");
+  if (!p) return;
+  clearTimeout(p._t);
+  p.hidden = true;
+  p.classList.remove("done");
+}
+
 /* Merge the AI's reading over the on-device parse — the AI only runs when
    the on-device result was weak, so it wins where it answered. */
 function mergeAIResult(parsed, ai) {
@@ -1763,12 +1803,15 @@ async function handleImage(file) {
     }
   }
   state.ocrCancelled = false;
-  $("processing-overlay").hidden = false;
-  $("processing-overlay").classList.remove("cloud");
-  $("processing-text").textContent = "Reading receipt…";
-  $("processing-sub").textContent = "This happens on your phone";
+  /* Non-blocking read: no full-screen overlay. The ledger shows a live
+     "reading" row and a small pill breathes at the bottom (tap = cancel);
+     the wait never blocks looking at your expenses. */
+  state.scanning = true;
+  switchView("home");
+  renderHome();
+  showScanPill("Reading receipt…");
   try {
-    const parsed = await window.ReceiptOCR.scanReceipt(file, msg => { $("processing-text").textContent = msg; });
+    const parsed = await window.ReceiptOCR.scanReceipt(file, msg => showScanPill(msg));
     if (state.ocrCancelled) return;
     DB.setSetting("lastScan", parsed.rawText || "");
     applyLearnedTotalHint(parsed);
@@ -1779,10 +1822,7 @@ async function handleImage(file) {
       const consented = await ensureCloudConsent();
       if (state.ocrCancelled) return;
       if (consented) {
-        $("processing-overlay").hidden = false;
-        $("processing-overlay").classList.add("cloud");
-        $("processing-text").textContent = "Reading with cloud…";
-        $("processing-sub").textContent = "AI analysis";
+        showScanPill("Reading with cloud…");
         try {
           const ai = await cloudRead(file);
           if (state.ocrCancelled) return;
@@ -1794,9 +1834,13 @@ async function handleImage(file) {
       }
     }
     if (state.ocrCancelled) return;
-    $("processing-overlay").hidden = true;
+    state.scanning = false;
+    renderHome();
     const usable = !!(parsed.total || parsed.merchant || (parsed.items && parsed.items.length));
-    if (!usable) {
+    if (usable) {
+      completeScanPill("Scan complete ✓");
+    } else {
+      hideScanPill();
       toast(state.ghToken ? "Couldn't read it — save anyway, Claude will fill it in" : "Couldn't read that — try better lighting, or enter manually");
     }
     /* Only a read that actually produced something consumes the free daily
@@ -1807,7 +1851,9 @@ async function handleImage(file) {
     openConfirmSheet(draft);
   } catch (err) {
     if (state.ocrCancelled) return;
-    $("processing-overlay").hidden = true;
+    state.scanning = false;
+    hideScanPill();
+    renderHome();
     toast(err.message || "Something went wrong reading the receipt");
     openConfirmSheet(null);
   }
@@ -2622,7 +2668,16 @@ async function init() {
 
   $("camera-input").addEventListener("change", ev => { handleImage(ev.target.files[0]); ev.target.value = ""; });
   $("gallery-input").addEventListener("change", ev => { handleImage(ev.target.files[0]); ev.target.value = ""; });
-  $("cancel-ocr").addEventListener("click", () => { state.ocrCancelled = true; $("processing-overlay").hidden = true; });
+  /* Tapping the breathing scan pill cancels the read (the ✓ state doesn't). */
+  on("scan-pill", () => {
+    const p = $("scan-pill");
+    if (!state.scanning || (p && p.classList.contains("done"))) return;
+    state.ocrCancelled = true;
+    state.scanning = false;
+    hideScanPill();
+    renderHome();
+    toast("Cancelled");
+  });
 
   $("confirm-merchant").addEventListener("input", () => {
     const e = state.editing;
