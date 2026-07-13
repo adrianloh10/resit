@@ -238,16 +238,20 @@ function mintKey() {
   return "RESIT-" + chars.slice(0, 4).join("") + "-" + chars.slice(4, 8).join("") + "-" + chars.slice(8, 12).join("");
 }
 
-async function checkAndBumpQuota(db, deviceId, cap) {
+/* Quota is charged only for SUCCESSFUL reads: check the cap up front, but
+   bump the counter after a provider answers — a burst of failures (blur,
+   outage) can no longer lock a device out for the day. */
+async function quotaExceeded(db, deviceId, cap) {
   const day = new Date().toISOString().slice(0, 10);
   const row = await db.prepare("SELECT count FROM device_quota WHERE device_id=?1 AND day=?2").bind(deviceId, day).first();
-  const used = row ? row.count : 0;
-  if (used >= cap) return false;
+  return (row ? row.count : 0) >= cap;
+}
+async function bumpQuota(db, deviceId) {
+  const day = new Date().toISOString().slice(0, 10);
   await db.prepare(
     "INSERT INTO device_quota(device_id, day, count) VALUES(?1, ?2, 1) " +
     "ON CONFLICT(device_id, day) DO UPDATE SET count = count + 1"
   ).bind(deviceId, day).run();
-  return true;
 }
 
 export default {
@@ -327,11 +331,13 @@ export default {
       if (!ok) return json({ error: "Couldn't verify you're human — reload and try again" }, 403, cors);
     }
 
+    let quota = null; /* set only when a successful read should be counted */
     if (env.DB && deviceId && typeof deviceId === "string") {
       const cap = parseInt(env.DAILY_CAP || "20", 10);
       try {
-        const allowed = await checkAndBumpQuota(env.DB, deviceId.slice(0, 64), cap);
-        if (!allowed) return json({ error: "Daily limit reached — read on-device or enter it manually" }, 429, cors);
+        if (await quotaExceeded(env.DB, deviceId.slice(0, 64), cap))
+          return json({ error: "Daily limit reached — read on-device or enter it manually" }, 429, cors);
+        quota = { db: env.DB, id: deviceId.slice(0, 64) };
       } catch (e) { /* quota table missing/erroring must not block reading */ }
     }
 
@@ -341,11 +347,17 @@ export default {
     let primary = { ok: false, msg: "Reader not configured" };
     if (env.GEMINI_API_KEY) {
       primary = await readWithGemini(env, image, mt);
-      if (primary.ok) return json(primary.result, 200, cors);
+      if (primary.ok) {
+        if (quota) try { await bumpQuota(quota.db, quota.id); } catch (e) {}
+        return json(primary.result, 200, cors);
+      }
     }
     if (fallbackConfigured(env)) {
       const fb = await readWithFallback(env, image, mt);
-      if (fb.ok) return json(fb.result, 200, cors);
+      if (fb.ok) {
+        if (quota) try { await bumpQuota(quota.db, quota.id); } catch (e) {}
+        return json(fb.result, 200, cors);
+      }
     }
     return json({ error: primary.msg }, 502, cors);
   }

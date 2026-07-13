@@ -298,6 +298,9 @@ async function syncInbox() {
 async function manualSync() {
   if (!state.ghToken) { toast("Set up the Claude inbox first"); return; }
   if (!navigator.onLine) { toast("You're offline"); return; }
+  /* syncInbox no-ops while a sync is already running — saying "Up to date"
+     then would be a lie. */
+  if (inboxSyncing) { toast("Still checking…"); return; }
   state._lastApplied = 0;
   await syncInbox();
   if (state.syncStatus === "auth") toast("Couldn't connect — check your token");
@@ -946,6 +949,17 @@ function renderHome() {
       </span>
       ${amountHtml}`;
     row.addEventListener("click", () => openConfirmSheet(e));
+    /* The "duplicate?" flag is actionable: tapping it offers removal with
+       the same soft-delete + undo the sheet's Delete button uses. */
+    const dupEl = row.querySelector(".dup-flag");
+    if (dupEl) dupEl.addEventListener("click", ev => {
+      ev.stopPropagation();
+      state.expenses = state.expenses.filter(x => x.id !== e.id);
+      renderCurrent();
+      toastAction("Duplicate removed", "Undo",
+        () => { state.expenses.push(e); renderCurrent(); },
+        async () => { await DB.deleteExpense(e.id); });
+    });
     ledger.appendChild(row);
   }
 
@@ -1747,10 +1761,13 @@ async function handleImage(file) {
     }
     if (state.ocrCancelled) return;
     $("processing-overlay").hidden = true;
-    if (!parsed.total && !parsed.merchant && !parsed.items.length) {
+    const usable = !!(parsed.total || parsed.merchant || (parsed.items && parsed.items.length));
+    if (!usable) {
       toast(state.ghToken ? "Couldn't read it — save anyway, Claude will fill it in" : "Couldn't read that — try better lighting, or enter manually");
     }
-    if (!isPro()) await bumpScanUsed(); /* the day's auto-read is consumed */
+    /* Only a read that actually produced something consumes the free daily
+       scan — a blurry failure costs the user nothing. */
+    if (usable && !isPro()) await bumpScanUsed();
     const draft = parsedToDraft(parsed);
     draft._file = file;
     openConfirmSheet(draft);
@@ -1980,6 +1997,13 @@ async function saveExpense() {
   const canPend = !!(!e.id && e.fromReceipt && e._file && state.ghToken);
   if (!(amount > 0) && !canPend) { toast("Enter an amount"); $("confirm-amount").focus(); return; }
 
+  /* Save is async — a fast double-tap must not create two expenses. */
+  if (state._saving) return;
+  state._saving = true;
+  const saveBtn = $("save-btn");
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+
   const dateStr = $("confirm-date").value;
   const timeStr = $("confirm-time").value || "12:00";
   const d = dateStr ? new Date(dateStr + "T" + timeStr) : new Date();
@@ -2049,6 +2073,11 @@ async function saveExpense() {
     toastAction("Saved " + fmtRM(record.amount, true), "Snap another", () => pickImage("camera"), null, 6000);
   } else {
     toast(e.id ? "Updated" : "Saved " + fmtRM(record.amount, true));
+  }
+
+  } finally {
+    state._saving = false;
+    if (saveBtn) saveBtn.disabled = false;
   }
 }
 
@@ -2494,7 +2523,32 @@ async function init() {
     else { state.search = ""; const i = $("search-input"); if (i) i.value = ""; renderHome(); }
   });
   const si = $("search-input");
-  if (si) si.addEventListener("input", () => { state.search = si.value; renderHome(); });
+  if (si) {
+    /* Debounced: every keystroke used to rebuild the whole ledger. */
+    let searchTimer = null;
+    si.addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => { state.search = si.value; renderHome(); }, 150);
+    });
+  }
+
+  /* Escape closes whichever dismissible sheet is open — never the EULA or
+     consent gates (those need an explicit choice). The confirm sheet uses
+     its normal close, which may ask about unsaved changes. */
+  document.addEventListener("keydown", ev => {
+    if (ev.key !== "Escape") return;
+    for (const id of ["photo-overlay", "menu-overlay", "chooser-overlay", "upgrade-overlay",
+      "export-overlay", "day-overlay", "statement-overlay"]) {
+      const ov = $(id);
+      if (ov && !ov.hidden) {
+        if (id === "statement-overlay") { const fr = $("statement-frame"); if (fr) fr.srcdoc = ""; }
+        ov.hidden = true;
+        return;
+      }
+    }
+    const co = $("confirm-overlay");
+    if (co && !co.hidden) closeConfirmSheet();
+  });
 
   /* Receipt photo lightbox — tap anywhere to close. */
   on("photo-overlay", () => { const ov = $("photo-overlay"); if (ov) ov.hidden = true; });
