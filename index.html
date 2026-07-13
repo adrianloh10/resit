@@ -96,12 +96,19 @@ try {
   <section class="settings-body">
 
     <div class="settings-group">
-      <p class="settings-group-title">General</p>
+      <p class="settings-group-title">Profile</p>
       <div class="settings-card">
-        <div class="field">
-          <span class="field-label">Appearance</span>
-          <div class="chip-row" style="justify-content: flex-start; margin-top: 4px;" id="theme-chips"></div>
-        </div>
+        <label class="field">
+          <span class="field-label">Country (sets date &amp; number formats)</span>
+          <select id="country-select">
+            <option value="MY">Malaysia</option><option value="SG">Singapore</option>
+            <option value="ID">Indonesia</option><option value="TH">Thailand</option>
+            <option value="PH">Philippines</option><option value="VN">Vietnam</option>
+            <option value="BN">Brunei</option><option value="IN">India</option>
+            <option value="AU">Australia</option><option value="GB">United Kingdom</option>
+            <option value="US">United States</option><option value="OT">Other</option>
+          </select>
+        </label>
         <div class="settings-divider"></div>
         <label class="field">
           <span class="field-label">Currency (display only — amounts aren't converted)</span>
@@ -112,6 +119,24 @@ try {
             <option>KRW</option><option>TWD</option><option>HKD</option><option>CNY</option><option>BND</option>
           </select>
         </label>
+        <div class="settings-divider"></div>
+        <label class="field">
+          <span class="field-label">Language</span>
+          <select id="language-select">
+            <option value="en">English</option>
+            <option value="ms" disabled>Bahasa Malaysia — coming soon</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <p class="settings-group-title">General</p>
+      <div class="settings-card">
+        <div class="field">
+          <span class="field-label">Appearance</span>
+          <div class="chip-row" style="justify-content: flex-start; margin-top: 4px;" id="theme-chips"></div>
+        </div>
         <div class="settings-divider"></div>
         <label class="field">
           <span class="field-label" id="budget-label">Monthly budget (RM)</span>
@@ -158,7 +183,26 @@ try {
     <div class="settings-group">
       <p class="settings-group-title">Monthly expenses</p>
       <div class="settings-card">
-        <p class="settings-sub" style="margin-top: 0;">Bills that repeat every month (rent, subscriptions). Added automatically on their day — set one up by ticking "Repeats every month" when entering an expense.</p>
+        <p class="settings-sub" style="margin-top: 0;">Bills that repeat (rent, subscriptions). Added automatically on their day — set one up below, or tick "Repeats every month" when entering an expense.</p>
+        <div class="field" id="recurring-add">
+          <input type="text" id="rec-name" placeholder="Name (e.g. Rent, Netflix)" autocomplete="off">
+          <div class="btn-pair" style="margin-top: 8px;">
+            <input type="number" id="rec-amount" inputmode="decimal" min="0" step="0.01" placeholder="Amount">
+            <input type="number" id="rec-day" inputmode="numeric" min="1" max="31" placeholder="Day (1–31)">
+          </div>
+          <div class="btn-pair" style="margin-top: 8px;">
+            <select id="rec-freq">
+              <option value="1">Every month</option>
+              <option value="2">Every 2 months</option>
+              <option value="3">Every 3 months</option>
+              <option value="6">Every 6 months</option>
+              <option value="12">Every year</option>
+            </select>
+            <select id="rec-cat"></select>
+          </div>
+          <button class="ghost-btn small" id="rec-add" style="margin-top: 10px;">Add monthly expense</button>
+        </div>
+        <div class="settings-divider"></div>
         <div class="rules-list" id="recurring-list"></div>
       </div>
     </div>

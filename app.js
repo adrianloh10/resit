@@ -57,6 +57,8 @@ let state = {
   merchantScopes: {},
   catBudgets: {},
   currency: "RM",   /* display only — no conversion */
+  country: "MY",    /* profile: drives date/number locale */
+  language: "en",   /* profile: UI language (English only for now) */
   recurring: [],    /* monthly expense templates */
   theme: "light",
   aiUrl: "",
@@ -223,7 +225,7 @@ function renderSyncStatus() {
   const el = $("sync-status");
   if (!el) return;
   if (!state.ghToken) { el.textContent = ""; return; }
-  const when = state.lastSyncAt ? new Date(state.lastSyncAt).toLocaleTimeString("en-MY", { hour: "2-digit", minute: "2-digit" }) : "";
+  const when = state.lastSyncAt ? new Date(state.lastSyncAt).toLocaleTimeString(appLocale(), { hour: "2-digit", minute: "2-digit" }) : "";
   const map = {
     syncing: "Checking with Claude…",
     ok: "Synced" + (when ? " · " + when : ""),
@@ -637,8 +639,12 @@ function viewedMonth() {
 
 /* Amounts always carry the display currency (second arg kept for old call
    sites; it no longer changes anything). */
+/* Profile country -> the locale used for every date/number format. */
+const COUNTRY_LOCALES = { MY: "en-MY", SG: "en-SG", ID: "id-ID", TH: "th-TH", PH: "en-PH", VN: "vi-VN", BN: "ms-BN", IN: "en-IN", AU: "en-AU", GB: "en-GB", US: "en-US", OT: "en-MY" };
+function appLocale() { return COUNTRY_LOCALES[state.country] || "en-MY"; }
+
 function fmtRM(n, _withSign) {
-  const s = (Math.round(n * 100) / 100).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const s = (Math.round(n * 100) / 100).toLocaleString(appLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return state.currency + " " + s;
 }
 
@@ -659,7 +665,8 @@ async function materializeRecurring() {
       let guard = 0;
       while (t.lastMonth < curKey && guard++ < 6) {
         const [y, mo] = t.lastMonth.split("-").map(Number); /* mo is 1-based */
-        const nxt = new Date(y, mo, 1); /* first day of the following month */
+        /* t.every = interval in months (1 = monthly, 12 = yearly). */
+        const nxt = new Date(y, mo - 1 + (t.every || 1), 1);
         const dim = new Date(nxt.getFullYear(), nxt.getMonth() + 1, 0).getDate();
         const when = new Date(nxt.getFullYear(), nxt.getMonth(), Math.min(t.day || 1, dim), 9, 0);
         if (when > now) break; /* this month's day hasn't arrived yet */
@@ -694,7 +701,8 @@ function renderRecurringList() {
     const row = document.createElement("div");
     row.className = "rule-row";
     const span = document.createElement("span");
-    span.textContent = t.merchant + " · " + fmtRM(t.amount, true) + " · day " + (t.day || 1);
+    const freq = (t.every || 1) === 1 ? "monthly" : (t.every === 12 ? "yearly" : "every " + t.every + " mo");
+    span.textContent = t.merchant + " · " + fmtRM(t.amount, true) + " · " + freq + ", day " + (t.day || 1);
     const x = document.createElement("button");
     x.className = "item-del";
     x.textContent = "✕";
@@ -821,7 +829,7 @@ function renderHome() {
         const left = state.budget - total;
         $("hero-remaining").textContent = left >= 0 ? fmtRM(left) : "−" + fmtRM(-left);
         $("hero-remaining-col").classList.toggle("neg", left < 0);
-        $("hero-budget").textContent = state.currency + " " + state.budget.toLocaleString("en-MY");
+        $("hero-budget").textContent = state.currency + " " + state.budget.toLocaleString(appLocale());
       }
       if (track) track.hidden = false;
       const pct = Math.min(100, (total / state.budget) * 100);
@@ -921,7 +929,7 @@ function renderHome() {
       const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
       let prefix = d.toDateString() === today.toDateString() ? "Today · "
         : d.toDateString() === yesterday.toDateString() ? "Yesterday · " : "";
-      label.textContent = prefix + d.toLocaleDateString("en-MY", { weekday: "short", day: "numeric", month: "short" });
+      label.textContent = prefix + d.toLocaleDateString(appLocale(), { weekday: "short", day: "numeric", month: "short" });
       ledger.appendChild(label);
     }
     const dup = dupIds.has(e.id) ? `<span class="dup-flag">duplicate?</span>` : "";
@@ -948,7 +956,29 @@ function renderHome() {
         <span class="entry-cat">${tag}${claim}${odd}${dup}${pending}${note}</span>
       </span>
       ${amountHtml}`;
-    row.addEventListener("click", () => openConfirmSheet(e));
+    /* Long-press (550ms, ~still finger) deletes with Undo; a normal tap
+       opens the expense as before. */
+    let lpTimer = null, lpFired = false, lpX = 0, lpY = 0;
+    row.addEventListener("pointerdown", ev => {
+      lpFired = false; lpX = ev.clientX; lpY = ev.clientY;
+      clearTimeout(lpTimer);
+      lpTimer = setTimeout(() => {
+        lpFired = true;
+        try { if (navigator.vibrate) navigator.vibrate(15); } catch (err) {}
+        state.expenses = state.expenses.filter(x => x.id !== e.id);
+        renderCurrent();
+        toastAction("Deleted " + (e.merchant || "expense"), "Undo",
+          () => { state.expenses.push(e); renderCurrent(); },
+          async () => { await DB.deleteExpense(e.id); });
+      }, 550);
+    });
+    row.addEventListener("pointermove", ev => {
+      if (lpTimer && Math.hypot(ev.clientX - lpX, ev.clientY - lpY) > 12) { clearTimeout(lpTimer); lpTimer = null; }
+    });
+    for (const evName of ["pointerup", "pointercancel", "pointerleave"])
+      row.addEventListener(evName, () => { clearTimeout(lpTimer); lpTimer = null; });
+    row.addEventListener("contextmenu", ev => ev.preventDefault());
+    row.addEventListener("click", () => { if (lpFired) { lpFired = false; return; } openConfirmSheet(e); });
     /* The "duplicate?" flag is actionable: tapping it offers removal with
        the same soft-delete + undo the sheet's Delete button uses. */
     const dupEl = row.querySelector(".dup-flag");
@@ -1196,7 +1226,7 @@ function renderInsights() {
   for (const b of bars) {
     const h = maxM > 0 ? Math.max(3, Math.round(b.total / maxM * 64)) : 3;
     html += `<div class="trend-col">
-      <span class="trend-val">${b.total > 0 ? Math.round(b.total).toLocaleString("en-MY") : ""}</span>
+      <span class="trend-val">${b.total > 0 ? Math.round(b.total).toLocaleString(appLocale()) : ""}</span>
       <div class="trend-bar ${b.current ? "cur" : ""}" style="height:${h}px"></div>
       <span class="trend-lbl">${b.label}</span>
     </div>`;
@@ -1406,7 +1436,7 @@ function openStatement(m) {
     @media print{body{background:#fff}}
   </style></head><body>
     <h1>Resit — monthly statement</h1>
-    <p class="sub">${title} · generated ${new Date().toLocaleDateString("en-MY")}</p>
+    <p class="sub">${title} · generated ${new Date().toLocaleDateString(appLocale())}</p>
     <p class="big">${fmtRM(total)}</p>
     <p class="sub">${exps.length} expenses · Personal ${fmtRM(st.Personal)} · Shared ${fmtRM(st.Shared)} · Company ${fmtRM(st.Company)}${toClaim > 0 ? " · still to claim " + fmtRM(toClaim) : ""}</p>
     <p class="sect">By category</p>
@@ -1461,6 +1491,10 @@ function switchView(name) {
     renderRecurringList();
     const cs = $("currency-select");
     if (cs) cs.value = state.currency;
+    const cos = $("country-select");
+    if (cos) cos.value = state.country || "MY";
+    const lgs = $("language-select");
+    if (lgs) lgs.value = state.language || "en";
     const bl = $("budget-label");
     if (bl) bl.textContent = "Monthly budget (" + state.currency + ")";
   }
@@ -2128,7 +2162,7 @@ function expenseExportRecords(f) {
       const d = new Date(e.date);
       const amount = Number(e.amount) || 0;
       return {
-        date: d.toLocaleDateString("en-MY"),
+        date: d.toLocaleDateString(appLocale()),
         time: d.toTimeString().slice(0, 5),
         merchant: e.merchant || "",
         category: e.category || "",
@@ -2341,6 +2375,8 @@ async function init() {
     /* Currency is injected into markup — only accept plain 2-4 letter codes. */
     const cur = await DB.getSetting("currency", "RM");
     state.currency = /^[A-Z]{2,4}$/.test(cur) ? cur : "RM";
+    state.country = await DB.getSetting("country", "MY");
+    state.language = await DB.getSetting("language", "en");
     state.recurring = await DB.getSetting("recurringTemplates", []);
     state.ghProven = await DB.getSetting("ghProven", false);
     state.skipResults = await DB.getSetting("skipResults", []);
@@ -2621,6 +2657,45 @@ async function init() {
     await DB.setSetting("budget", v);
     toast("Budget saved");
   });
+  /* Profile: country drives locale formats; language is English-only today. */
+  const cosel = $("country-select");
+  if (cosel) cosel.addEventListener("change", async () => {
+    state.country = cosel.value;
+    await DB.setSetting("country", state.country);
+    renderHome();
+  });
+  const lgsel = $("language-select");
+  if (lgsel) lgsel.addEventListener("change", async () => {
+    state.language = lgsel.value;
+    await DB.setSetting("language", state.language);
+  });
+
+  /* Monthly-expense form: add a repeating template directly from Settings. */
+  const recCat = $("rec-cat");
+  if (recCat) for (const c of CATS) { const o = document.createElement("option"); o.value = c.name; o.textContent = c.name; recCat.appendChild(o); }
+  on("rec-add", async () => {
+    const name = ($("rec-name").value || "").trim();
+    const amount = parseFloat($("rec-amount").value);
+    const day = Math.min(31, Math.max(1, parseInt($("rec-day").value, 10) || 1));
+    const every = parseInt($("rec-freq").value, 10) || 1;
+    if (!name) { toast("Give it a name"); $("rec-name").focus(); return; }
+    if (!(amount > 0)) { toast("Enter an amount"); $("rec-amount").focus(); return; }
+    const now = new Date();
+    /* Backdate lastMonth by one interval so the first entry lands in the
+       CURRENT month (dated its day) as soon as materializeRecurring runs. */
+    const start = new Date(now.getFullYear(), now.getMonth() - every, 1);
+    state.recurring.push({
+      merchant: name.slice(0, 40), amount: Math.round(amount * 100) / 100,
+      category: (recCat && recCat.value) || "Bills", scope: "Personal",
+      day, every, note: "", lastMonth: monthKeyOf(start)
+    });
+    await DB.setSetting("recurringTemplates", state.recurring);
+    $("rec-name").value = ""; $("rec-amount").value = ""; $("rec-day").value = "";
+    renderRecurringList();
+    await materializeRecurring();
+    toast("Added — it'll repeat automatically");
+  });
+
   const csel = $("currency-select");
   if (csel) csel.addEventListener("change", async () => {
     state.currency = csel.value || "RM";

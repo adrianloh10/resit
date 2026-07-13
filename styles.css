@@ -16,6 +16,7 @@
   --gold: #A8823B;
   --terracotta: #B4572F;
   --terracotta-deep: #8F3F1E;
+  --fab: #D6944B; /* light warm orange — camera FAB */
   --ochre: #A8823B;
   --sage: #2E6B58;
   --clay: #7A4526;
@@ -44,6 +45,7 @@ html[data-theme="dark"] {
   --gold: #CBA45C;
   --terracotta: #C9714A;
   --terracotta-deep: #A34F28;
+  --fab: #D89A57; /* light warm orange — camera FAB */
   --ochre: #CBA45C;
   --sage: #6FA893;
   --clay: #C08A5E;
@@ -194,7 +196,7 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 .nav-btn svg { width: 22px; height: 22px; }
 .fab {
   width: 58px; height: 58px; border-radius: 50%;
-  background: var(--teal); color: #FDF6E9;
+  background: var(--fab); color: #FDF6E9;
   border: 3px solid var(--sienna-deep); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   margin-top: -30px;
