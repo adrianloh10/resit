@@ -262,6 +262,9 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
   padding: 9px 16px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: inherit;
 }
 
+/* Hero shortcuts are tappable. */
+#month-total, #hero-budget-col { cursor: pointer; }
+
 /* Insights: the month stays pinned while the page scrolls. */
 #view-insights .month-row {
   position: sticky; top: 0; z-index: 15;

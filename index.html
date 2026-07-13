@@ -46,10 +46,10 @@ try {
       <p class="month-label" id="month-label" title="Tap to jump to this month">June</p>
       <button class="icon-btn" id="month-next" aria-label="Next month">&#8250;</button>
     </div>
-    <p class="big-amount" id="month-total">0<span class="cents">.00</span></p>
+    <p class="big-amount" id="month-total" title="See this month's summary">0<span class="cents">.00</span></p>
     <div class="hero-cols" id="hero-cols" hidden>
       <span class="hero-col teal" id="hero-remaining-col">REMAINING<b id="hero-remaining"></b></span>
-      <span class="hero-col sienna">TOTAL BUDGET<b id="hero-budget"></b></span>
+      <span class="hero-col sienna" id="hero-budget-col" title="Adjust your monthly budget">TOTAL BUDGET<b id="hero-budget"></b></span>
     </div>
     <div class="budget-track" id="budget-track">
       <div class="budget-fill" id="budget-fill"></div>
@@ -150,30 +150,9 @@ try {
     </div>
 
     <div class="settings-group">
-      <p class="settings-group-title">Receipt reading</p>
+      <p class="settings-group-title">Plan</p>
       <div class="settings-card">
-        <div class="field" id="inbox-field" hidden>
-          <span class="field-label">Claude inbox (free — your receipts get checked by Claude on your PC)</span>
-          <input type="password" id="gh-token" placeholder="GitHub token (github_pat_...)">
-          <div class="btn-pair">
-            <button class="ghost-btn small" id="gh-test">Test connection</button>
-            <button class="ghost-btn small" id="sync-now">Check for Claude's updates</button>
-          </div>
-          <p class="sync-status" id="sync-status"></p>
-          <div class="settings-divider" style="margin-top: 14px;"></div>
-        </div>
-        <div class="field" id="cloud-field" hidden>
-          <span class="field-label">Smarter receipt reading (cloud)</span>
-          <p class="settings-sub">Receipts your phone can't read clearly get a second read from a cloud AI — details in the <a href="privacy.html" target="_blank" rel="noopener">privacy notice</a>.</p>
-          <div class="btn-pair">
-            <button class="ghost-btn small" id="cloud-toggle">Turn on</button>
-            <a class="ghost-btn small cloud-privacy" href="privacy.html" target="_blank" rel="noopener">Privacy</a>
-          </div>
-          <p class="sync-status" id="cloud-status"></p>
-        </div>
-        <div class="settings-divider"></div>
         <div class="field">
-          <span class="field-label">Plan</span>
           <p class="sync-status" id="plan-status" style="text-align:left;margin-top:2px;"></p>
           <button class="ghost-btn small" id="plan-btn" style="margin-top:8px;">Upgrade to Pro</button>
         </div>
@@ -220,23 +199,26 @@ try {
         </div>
         <button class="ghost-btn small" id="export-filtered">Filtered export / claim report…</button>
         <p class="sync-status" id="backup-status" style="margin-top: 2px;"></p>
-      </div>
-    </div>
-
-    <div class="settings-group">
-      <p class="settings-group-title">Learning &amp; advanced</p>
-      <div class="settings-card">
-        <details class="adv-details">
-          <summary>Learned rules <span class="rules-count" id="rules-count"></span></summary>
-          <p class="settings-sub">Resit learns as you save and correct receipts — and from cloud reads — so it reads better on its own over time. Remove any rule to unlearn it.</p>
-          <div class="rules-list" id="rules-list"></div>
-        </details>
         <div class="settings-divider"></div>
-        <details class="adv-details">
-          <summary>Advanced</summary>
-          <p class="settings-sub" style="margin-top: 10px;">The raw text of your last scan — useful when a receipt read wrongly and you want to see what the camera actually saw.</p>
-          <button class="ghost-btn small" id="copy-scan">Copy last scan text</button>
-        </details>
+        <div class="field" id="cloud-field" hidden>
+          <span class="field-label">Smarter receipt reading (cloud)</span>
+          <p class="settings-sub">Receipts your phone can't read clearly get a second read from a cloud AI — details in the <a href="privacy.html" target="_blank" rel="noopener">privacy notice</a>.</p>
+          <div class="btn-pair">
+            <button class="ghost-btn small" id="cloud-toggle">Turn on</button>
+            <a class="ghost-btn small cloud-privacy" href="privacy.html" target="_blank" rel="noopener">Privacy</a>
+          </div>
+          <p class="sync-status" id="cloud-status"></p>
+        </div>
+        <div class="field" id="inbox-field" hidden>
+          <div class="settings-divider" style="margin-bottom: 14px;"></div>
+          <span class="field-label">Claude inbox (free — your receipts get checked by Claude on your PC)</span>
+          <input type="password" id="gh-token" placeholder="GitHub token (github_pat_...)">
+          <div class="btn-pair">
+            <button class="ghost-btn small" id="gh-test">Test connection</button>
+            <button class="ghost-btn small" id="sync-now">Check for Claude's updates</button>
+          </div>
+          <p class="sync-status" id="sync-status"></p>
+        </div>
       </div>
     </div>
 

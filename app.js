@@ -519,52 +519,9 @@ function scopeRuleFor(merchant) {
   return rule && rule.n >= 2 && SCOPES.includes(rule.scope) ? rule.scope : null;
 }
 
-/* Everything the app has learned, shown in Settings so it can be unlearned —
-   grouped by what the rule does, with a live count in the section summary. */
-function renderRules() {
-  const wrap = $("rules-list");
-  if (!wrap) return;
-  wrap.innerHTML = "";
-  let total = 0;
-  const mkRow = (text, onForget) => {
-    const row = document.createElement("div");
-    row.className = "rule-row";
-    const span = document.createElement("span");
-    span.textContent = text;
-    const x = document.createElement("button");
-    x.className = "item-del";
-    x.textContent = "✕";
-    x.setAttribute("aria-label", "Forget this rule");
-    x.addEventListener("click", onForget);
-    row.append(span, x);
-    return row;
-  };
-  const forget = (map, key, setting) => async () => { delete map[key]; await DB.setSetting(setting, map); renderRules(); };
-  const addGroup = (label, rows) => {
-    if (!rows.length) return;
-    const h = document.createElement("p");
-    h.className = "rule-group-label";
-    h.textContent = label;
-    wrap.appendChild(h);
-    for (const r of rows) { wrap.appendChild(r); total++; }
-  };
-  addGroup("Files itself under", Object.entries(state.merchantCats).map(([k, v]) =>
-    mkRow(k + " → " + v, forget(state.merchantCats, k, "merchantCats"))));
-  addGroup("Personal / Shared / Company", Object.entries(state.merchantScopes).filter(([, v]) => v.n >= 2).map(([k, v]) =>
-    mkRow(k + " → " + v.scope, forget(state.merchantScopes, k, "merchantScopes"))));
-  addGroup("Preferred shop names", Object.entries(state.merchantNames).map(([k, v]) =>
-    mkRow(k + " → “" + v + "”", forget(state.merchantNames, k, "merchantNames"))));
-  addGroup("Where each shop prints its total", Object.entries(state.totalHints).map(([k, v]) =>
-    mkRow(k + " → the “" + v + "” line", forget(state.totalHints, k, "totalHints"))));
-  const count = $("rules-count");
-  if (count) count.textContent = total ? "(" + total + ")" : "";
-  if (!total) {
-    const p = document.createElement("p");
-    p.className = "settings-sub";
-    p.textContent = "Nothing learned yet — rules appear as you save, correct, and cloud-read receipts.";
-    wrap.appendChild(p);
-  }
-}
+/* Learning is fully self-managed since 1.6.0 (Adrian's call): the rule
+   stores (merchantCats/Scopes/Names, totalHints) keep teaching themselves
+   from saves, corrections and cloud reads — there is no inspection UI. */
 
 /* ---------- Learning from corrections ----------
    When a scanned field is corrected before saving, remember the lesson:
@@ -1522,7 +1479,6 @@ function switchView(name) {
     renderCloudSetting();
     renderPlan();
     renderBackupStatus();
-    renderRules();
     renderRecurringList();
     const cs = $("currency-select");
     if (cs) cs.value = state.currency;
@@ -2686,6 +2642,17 @@ async function init() {
     if (co && !co.hidden) closeConfirmSheet();
   });
 
+  /* Hero shortcuts: the big total jumps to the spending summary; the
+     budget figure jumps straight to editing the budget. */
+  on("month-total", () => switchView("insights"));
+  on("hero-budget-col", () => {
+    switchView("settings");
+    setTimeout(() => {
+      const b = $("budget-input");
+      if (b) { b.scrollIntoView({ block: "center", behavior: "smooth" }); b.focus(); }
+    }, 80);
+  });
+
   /* Multi-select bar */
   on("select-cancel", exitSelectMode);
   on("select-delete", async () => {
@@ -2938,16 +2905,6 @@ async function init() {
       state._inboxReveal = true;
       renderInboxSetting();
       toast("Claude inbox settings revealed");
-    }
-  });
-  $("copy-scan").addEventListener("click", async () => {
-    const t = await DB.getSetting("lastScan", "");
-    if (!t) { toast("No scan yet"); return; }
-    try {
-      await navigator.clipboard.writeText(t);
-      toast("Copied — paste it to Claude to improve reading");
-    } catch (e) {
-      toast("Couldn't copy on this browser");
     }
   });
   $("erase-data").addEventListener("click", async () => {
