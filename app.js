@@ -27,7 +27,13 @@ const SCOPES = ["Personal", "Shared", "Company"];
 const SCOPE_CLASS = { Personal: "scope-personal", Shared: "scope-shared", Company: "scope-company" };
 const SCOPE_FILL = { Personal: "var(--teal)", Shared: "var(--gold)", Company: "var(--sienna-red)" };
 const SCOPE_TAG = { Personal: "t-personal", Shared: "t-shared", Company: "t-company" };
-const scopeOf = e => (e && SCOPES.includes(e.scope)) ? e.scope : "Personal";
+/* Types are user-extendable (1.7.0): the three built-ins keep their own
+   colours; user-added types share one terracotta look. */
+const allScopes = () => SCOPES.concat(state.customScopes || []);
+const scopeClass = s => SCOPE_CLASS[s] || "scope-custom";
+const scopeFill = s => SCOPE_FILL[s] || "var(--terracotta)";
+const scopeTag = s => SCOPE_TAG[s] || "t-custom";
+const scopeOf = e => (e && allScopes().includes(e.scope)) ? e.scope : "Personal";
 
 /* Geometric line-art icons per category (stroke = currentColor). */
 const CAT_ICONS = {
@@ -57,8 +63,9 @@ let state = {
   merchantScopes: {},
   catBudgets: {},
   currency: "RM",   /* display only — no conversion */
-  selectMode: false, /* multi-select for bulk delete (long-press to enter) */
+  selectMode: false, /* multi-select for bulk delete/edit (long-press to enter) */
   selected: null,    /* Set of selected expense ids while selectMode is on */
+  customScopes: [],  /* user-added expense types beyond Personal/Shared/Company */
   country: "MY",    /* profile: drives date/number locale */
   language: "en",   /* profile: UI language (English only for now) */
   recurring: [],    /* monthly expense templates */
@@ -508,7 +515,7 @@ function rememberMerchantCategory(merchant, category) {
    scope is saved twice in a row for a brand. */
 function rememberMerchantScope(merchant, scope) {
   const b = brandOf(normMerchant(merchant));
-  if (!b || b.length < 3 || !SCOPES.includes(scope)) return;
+  if (!b || b.length < 3 || !allScopes().includes(scope)) return;
   const cur = state.merchantScopes[b];
   state.merchantScopes[b] = cur && cur.scope === scope ? { scope, n: cur.n + 1 } : { scope, n: 1 };
   DB.setSetting("merchantScopes", state.merchantScopes);
@@ -516,7 +523,7 @@ function rememberMerchantScope(merchant, scope) {
 
 function scopeRuleFor(merchant) {
   const rule = state.merchantScopes[brandOf(normMerchant(merchant || ""))];
-  return rule && rule.n >= 2 && SCOPES.includes(rule.scope) ? rule.scope : null;
+  return rule && rule.n >= 2 && allScopes().includes(rule.scope) ? rule.scope : null;
 }
 
 /* Learning is fully self-managed since 1.6.0 (Adrian's call): the rule
@@ -796,7 +803,7 @@ function renderHome() {
     if (track) track.hidden = false;
     fill.style.width = share + "%";
     fill.classList.remove("over");
-    fill.style.background = SCOPE_FILL[state.scopeFilter];
+    fill.style.background = scopeFill(state.scopeFilter);
     if (status) status.textContent = state.scopeFilter.toUpperCase() + " · " + share + "% OF MONTH";
   } else {
     fill.style.background = "";
@@ -929,7 +936,7 @@ function renderHome() {
     const camera = e.photo ? `<span class="has-photo" aria-hidden="true">▦ </span>` : "";
     const sc = scopeOf(e);
     /* "Category | TYPE" account tag, colour-coded. */
-    const tag = `<span class="acct-tag ${SCOPE_TAG[sc]}">${escapeHtml(e.category)} | ${sc.toUpperCase()}</span>`;
+    const tag = `<span class="acct-tag ${scopeTag(sc)}">${escapeHtml(e.category)} | ${escapeHtml(sc.toUpperCase())}</span>`;
     const amountHtml = e.pending
       ? `<span class="entry-amount waiting">waiting…</span>`
       : `<span class="entry-amount">${fmtRM(e.amount)}</span>`;
@@ -1002,7 +1009,7 @@ function renderHome() {
         <span class="cat-icon">${catIcon(e.category)}</span>
         <span class="entry-main">
           <span class="entry-merchant"><span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span></span>
-          <span class="entry-cat"><span class="acct-tag ${SCOPE_TAG[sc]}">${escapeHtml(e.category)} | ${sc.toUpperCase()}</span><span class="mut">${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}</span></span>
+          <span class="entry-cat"><span class="acct-tag ${scopeTag(sc)}">${escapeHtml(e.category)} | ${escapeHtml(sc.toUpperCase())}</span><span class="mut">${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}</span></span>
         </span>
         <span class="entry-amount">${fmtRM(e.amount)}</span>`;
       row.addEventListener("click", () => openConfirmSheet(e));
@@ -1050,7 +1057,7 @@ function renderScopeFilter(targetId, rerender) {
     row.appendChild(b);
   };
   mk("All", "", "scope-all");
-  for (const s of SCOPES) mk(s, s, SCOPE_CLASS[s]);
+  for (const s of allScopes()) mk(s, s, scopeClass(s));
 }
 
 function renderScopeChips() {
@@ -1060,10 +1067,10 @@ function renderScopeChips() {
   if (!chips) return;
   const cur = scopeOf(e);
   chips.innerHTML = "";
-  for (const s of SCOPES) {
+  for (const s of allScopes()) {
     const b = document.createElement("button");
     const sel = s === cur;
-    b.className = "chip scope-opt " + SCOPE_CLASS[s] + (sel ? " selected" : "");
+    b.className = "chip scope-opt " + scopeClass(s) + (sel ? " selected" : "");
     b.textContent = s;
     b.addEventListener("click", () => {
       state.editing.scope = s;
@@ -1075,6 +1082,25 @@ function renderScopeChips() {
     });
     chips.appendChild(b);
   }
+  /* "+ New" lets the user add their own type (e.g. Family, Side business). */
+  const add = document.createElement("button");
+  add.className = "chip scope-opt scope-new";
+  add.textContent = "+ New";
+  add.addEventListener("click", async () => {
+    const name = (prompt("Name the new type (e.g. Family, Side business)") || "").trim();
+    if (!name) return;
+    if (name.length > 14) { toast("Keep it under 14 characters"); return; }
+    const existing = allScopes().find(s => s.toLowerCase() === name.toLowerCase());
+    if (!existing) {
+      state.customScopes.push(name);
+      await DB.setSetting("customScopes", state.customScopes);
+    }
+    state.editing.scope = existing || name;
+    state.editing.userPickedScope = true;
+    renderScopeChips();
+    renderClaimChips();
+  });
+  chips.appendChild(add);
 }
 
 /* Claim status picker — only meaningful for Shared/Company expenses. */
@@ -1178,16 +1204,16 @@ function renderInsights() {
       <p class="big-amount" style="font-size:34px">${fmtRM(total)}</p>
     </div>`;
 
-  /* Stacked Personal/Shared/Company strip (All view only). */
+  /* Stacked by-type strip (All view only) — includes user-added types. */
   if (!state.scopeFilter && total > 0) {
-    const st = { Personal: 0, Shared: 0, Company: 0 };
-    for (const e of exps) st[scopeOf(e)] += e.amount;
-    const present = SCOPES.filter(s => st[s] > 0);
+    const st = {};
+    for (const e of exps) { const s = scopeOf(e); st[s] = (st[s] || 0) + e.amount; }
+    const present = allScopes().filter(s => st[s] > 0);
     if (present.length > 1) {
       html += `<div class="scope-strip">` + present.map(s =>
-        `<i style="width:${(st[s] / total * 100).toFixed(1)}%;background:${SCOPE_FILL[s]}"></i>`).join("") + `</div>
+        `<i style="width:${(st[s] / total * 100).toFixed(1)}%;background:${scopeFill(s)}"></i>`).join("") + `</div>
         <p class="scope-strip-legend">` + present.map(s =>
-        `<span class="${SCOPE_CLASS[s]}">${s} ${Math.round(st[s] / total * 100)}%</span>`).join(" · ") + `</p>`;
+        `<span class="${scopeClass(s)}">${escapeHtml(s)} ${Math.round(st[s] / total * 100)}%</span>`).join(" · ") + `</p>`;
     }
   }
 
@@ -1360,7 +1386,7 @@ function openDaySheet(label, dayExps) {
       <span class="cat-icon">${catIcon(e.category)}</span>
       <span class="entry-main">
         <span class="entry-merchant"><span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span></span>
-        <span class="entry-cat"><span class="acct-tag ${SCOPE_TAG[sc]}">${escapeHtml(e.category)} | ${sc.toUpperCase()}</span></span>
+        <span class="entry-cat"><span class="acct-tag ${scopeTag(sc)}">${escapeHtml(e.category)} | ${escapeHtml(sc.toUpperCase())}</span></span>
       </span>
       <span class="entry-amount${e.pending ? " waiting" : ""}">${e.pending ? "waiting…" : fmtRM(e.amount)}</span>`;
     row.addEventListener("click", () => { ov.hidden = true; openConfirmSheet(e); });
@@ -1400,11 +1426,12 @@ function openStatement(m) {
   if (!exps.length) { toast("Nothing this month to report"); return; }
   const total = exps.reduce((s, e) => s + e.amount, 0);
   const title = MONTH_NAMES[m.getMonth()] + " " + m.getFullYear();
-  const st = { Personal: 0, Shared: 0, Company: 0 };
+  const st = {};
   const byCat = {}, byMer = {};
   let toClaim = 0;
   for (const e of exps) {
-    st[scopeOf(e)] += e.amount;
+    const sc0 = scopeOf(e);
+    st[sc0] = (st[sc0] || 0) + e.amount;
     byCat[e.category] = (byCat[e.category] || 0) + e.amount;
     const k = e.merchant || "Unnamed";
     (byMer[k] = byMer[k] || { amt: 0, n: 0 }); byMer[k].amt += e.amount; byMer[k].n++;
@@ -1432,7 +1459,7 @@ function openStatement(m) {
     <h1>Resit — monthly statement</h1>
     <p class="sub">${title} · generated ${new Date().toLocaleDateString(appLocale())}</p>
     <p class="big">${fmtRM(total)}</p>
-    <p class="sub">${exps.length} expenses · Personal ${fmtRM(st.Personal)} · Shared ${fmtRM(st.Shared)} · Company ${fmtRM(st.Company)}${toClaim > 0 ? " · still to claim " + fmtRM(toClaim) : ""}</p>
+    <p class="sub">${exps.length} expenses · ${allScopes().filter(s => st[s] > 0).map(s => escapeHtml(s) + " " + fmtRM(st[s])).join(" · ")}${toClaim > 0 ? " · still to claim " + fmtRM(toClaim) : ""}</p>
     <p class="sect">By category</p>
     <table><tr><th>Category</th><th class="num">Spent</th><th class="num">Budget</th><th class="num">±</th></tr>${catRows}</table>
     <p class="sect">Top places</p>
@@ -1636,6 +1663,31 @@ function updateSelectBar() {
   const n = state.selected ? state.selected.size : 0;
   $("select-count").textContent = n + " selected";
   $("select-delete").textContent = "Delete (" + n + ")";
+}
+
+/* Bulk update (Pro): set a category and/or type on everything selected.
+   Tapping a chip picks it; tapping again clears it (= leave unchanged). */
+function renderBulkChips() {
+  const bc = $("bulk-cat-chips"), bs = $("bulk-scope-chips");
+  if (!bc || !bs) return;
+  bc.innerHTML = ""; bs.innerHTML = "";
+  for (const c of CATS) {
+    const b = document.createElement("button");
+    const sel = state._bulk.cat === c.name;
+    b.className = "chip" + (sel ? " selected" : "");
+    if (sel) { b.style.background = c.color; b.style.borderColor = c.color; }
+    b.textContent = c.name;
+    b.addEventListener("click", () => { state._bulk.cat = sel ? null : c.name; renderBulkChips(); });
+    bc.appendChild(b);
+  }
+  for (const s of allScopes()) {
+    const b = document.createElement("button");
+    const sel = state._bulk.scope === s;
+    b.className = "chip scope-opt " + scopeClass(s) + (sel ? " selected" : "");
+    b.textContent = s;
+    b.addEventListener("click", () => { state._bulk.scope = sel ? null : s; renderBulkChips(); });
+    bs.appendChild(b);
+  }
 }
 
 /* Merge the AI's reading over the on-device parse — the AI only runs when
@@ -2350,7 +2402,7 @@ function sanitizeRestoredExpense(e, fallbackId) {
     amount: Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0,
     merchant: e.merchant ? String(e.merchant).slice(0, 80) : "Expense",
     category: isRealCategory(e.category) ? e.category : "Other",
-    scope: SCOPES.includes(e.scope) ? e.scope : "Personal",
+    scope: allScopes().includes(e.scope) ? e.scope : "Personal",
     claimStatus: e.claimStatus === "to-claim" || e.claimStatus === "claimed" ? e.claimStatus : "",
     date: dateOk ? new Date(e.date).toISOString() : new Date().toISOString(),
     items,
@@ -2369,6 +2421,19 @@ async function importBackup(file) {
   catch (e) { toast("That file isn't a valid backup"); return; }
   if (!data || data.app !== "resit" || !Array.isArray(data.expenses)) { toast("That doesn't look like a Resit backup"); return; }
   if (!confirm("Restore " + data.expenses.length + " expenses from this backup? It replaces everything currently in the app.")) return;
+
+  /* Adopt custom types from the backup (settings and any sane scope strings
+     on the expenses themselves) BEFORE sanitizing, so no expense loses its
+     type by falling back to Personal. */
+  const fromSettings = data.settings && Array.isArray(data.settings.customScopes) ? data.settings.customScopes : [];
+  const foundScopes = new Set(fromSettings.filter(s => typeof s === "string" && s && s.length <= 14));
+  for (const e of data.expenses) {
+    const s = e && e.scope;
+    if (typeof s === "string" && s && s.length <= 14 && !SCOPES.includes(s)) foundScopes.add(s);
+  }
+  let scopesChanged = false;
+  for (const s of foundScopes) if (!state.customScopes.includes(s)) { state.customScopes.push(s); scopesChanged = true; }
+  if (scopesChanged) await DB.setSetting("customScopes", state.customScopes);
 
   /* Sanitize everything BEFORE touching storage, so we never clear the store
      and then fail mid-write. Assign ids above any existing one to avoid clashes. */
@@ -2432,6 +2497,8 @@ async function init() {
     state.currency = /^[A-Z]{2,4}$/.test(cur) ? cur : "RM";
     state.country = await DB.getSetting("country", "MY");
     state.language = await DB.getSetting("language", "en");
+    const cscopes = await DB.getSetting("customScopes", []);
+    state.customScopes = Array.isArray(cscopes) ? cscopes.filter(s => typeof s === "string" && s && s.length <= 14) : [];
     state.recurring = await DB.getSetting("recurringTemplates", []);
     state.ghProven = await DB.getSetting("ghProven", false);
     state.skipResults = await DB.getSetting("skipResults", []);
@@ -2629,7 +2696,7 @@ async function init() {
   document.addEventListener("keydown", ev => {
     if (ev.key !== "Escape") return;
     for (const id of ["photo-overlay", "menu-overlay", "chooser-overlay", "upgrade-overlay",
-      "export-overlay", "day-overlay", "statement-overlay"]) {
+      "export-overlay", "day-overlay", "statement-overlay", "bulk-overlay"]) {
       const ov = $(id);
       if (ov && !ov.hidden) {
         if (id === "statement-overlay") { const fr = $("statement-frame"); if (fr) fr.srcdoc = ""; }
@@ -2655,6 +2722,35 @@ async function init() {
 
   /* Multi-select bar */
   on("select-cancel", exitSelectMode);
+  on("select-edit", () => {
+    if (!isPro()) { showUpgrade("Bulk editing is a Pro feature."); return; }
+    if (!state.selected || !state.selected.size) return;
+    state._bulk = { cat: null, scope: null };
+    $("bulk-title").textContent = "Bulk update (" + state.selected.size + ")";
+    renderBulkChips();
+    $("bulk-overlay").hidden = false;
+  });
+  on("bulk-back", () => { $("bulk-overlay").hidden = true; });
+  on("bulk-overlay", ev => { if (ev.target === $("bulk-overlay")) $("bulk-overlay").hidden = true; });
+  on("bulk-apply", async () => {
+    const { cat, scope } = state._bulk || {};
+    if (!cat && !scope) { toast("Pick a category or type first"); return; }
+    let n = 0;
+    for (const e of state.expenses) {
+      if (!state.selected || !state.selected.has(e.id)) continue;
+      if (cat) e.category = cat;
+      if (scope) {
+        e.scope = scope;
+        if (scope === "Personal") e.claimStatus = "";
+        else if (isPro() && scope === "Company" && !e.claimStatus) e.claimStatus = "to-claim";
+      }
+      await DB.updateExpense(e);
+      n++;
+    }
+    $("bulk-overlay").hidden = true;
+    exitSelectMode();
+    toast("Updated " + n + " expense" + (n > 1 ? "s" : ""));
+  });
   on("select-delete", async () => {
     const victims = state.expenses.filter(x => state.selected && state.selected.has(x.id));
     if (!victims.length) { exitSelectMode(); return; }

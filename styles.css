@@ -265,6 +265,13 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 /* Hero shortcuts are tappable. */
 #month-total, #hero-budget-col { cursor: pointer; }
 
+/* User-added types share one terracotta look; "+ New" is a dashed ghost. */
+.acct-tag.t-custom { color: var(--terracotta); background: rgba(180, 87, 47, .12); }
+.scope-chip.scope-custom.selected, .chip.scope-opt.scope-custom.selected {
+  background: var(--terracotta); border-color: var(--terracotta); color: #FDF6E9;
+}
+.chip.scope-new { border-style: dashed; color: var(--muted); }
+
 /* Insights: the month stays pinned while the page scrolls. */
 #view-insights .month-row {
   position: sticky; top: 0; z-index: 15;

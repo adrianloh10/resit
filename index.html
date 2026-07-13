@@ -268,7 +268,23 @@ try {
 <div class="select-bar" id="select-bar" hidden>
   <span class="select-count" id="select-count">0 selected</span>
   <button class="ghost-btn small" id="select-cancel">Cancel</button>
+  <button class="ghost-btn small" id="select-edit">Edit</button>
   <button class="select-delete-btn" id="select-delete">Delete</button>
+</div>
+
+<div class="overlay sheet-overlay" id="bulk-overlay" hidden>
+  <div class="confirm-sheet">
+    <header class="sheet-header">
+      <button class="icon-btn" id="bulk-back" aria-label="Close">&#10005;</button>
+      <p class="sheet-title" id="bulk-title">Bulk update</p>
+      <span class="spacer"></span>
+    </header>
+    <p class="chip-group-label">Category — tap to set for all selected; tap again to leave unchanged</p>
+    <div class="chip-row" id="bulk-cat-chips"></div>
+    <p class="chip-group-label">Type</p>
+    <div class="chip-row" id="bulk-scope-chips"></div>
+    <button class="save-btn" id="bulk-apply" style="margin-top: 14px;">Apply</button>
+  </div>
 </div>
 
 <div class="overlay sheet-overlay" id="confirm-overlay" hidden>
@@ -289,12 +305,12 @@ try {
       <input type="date" id="confirm-date">
       <input type="time" id="confirm-time">
     </div>
+    <p class="chip-group-label">Category</p>
+    <div class="chip-row" id="category-chips"></div>
     <p class="chip-group-label">Type</p>
     <div class="chip-row" id="scope-chips"></div>
     <p class="chip-group-label" id="claim-label" hidden>Claim</p>
     <div class="chip-row" id="claim-chips" hidden></div>
-    <p class="chip-group-label">Category</p>
-    <div class="chip-row" id="category-chips"></div>
     <div class="items-block" id="items-block"></div>
     <textarea class="confirm-note" id="confirm-note" rows="1" placeholder="Note (optional)"></textarea>
     <label class="repeat-row" id="repeat-row"><input type="checkbox" id="confirm-repeat"><span>Repeats every month</span></label>
@@ -398,7 +414,7 @@ try {
     <ul class="upgrade-list">
       <li>Unlimited receipt scans — no daily limit, no ads</li>
       <li>Company claims — track what's owed to you</li>
-      <li>Subscriptions radar &amp; auto-rules</li>
+      <li>Subscriptions radar, auto-rules &amp; bulk editing</li>
       <li>No tracking — ever</li>
     </ul>
     <button class="save-btn" id="upgrade-buy">Upgrade</button>
