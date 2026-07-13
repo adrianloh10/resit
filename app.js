@@ -1276,11 +1276,7 @@ function renderInsights() {
     }
   }
 
-  html += `<div class="home-settings-row"><button class="settings-link" id="ins-statement">Monthly statement</button><button class="settings-link" id="open-settings">Settings</button></div>`;
   body.innerHTML = html;
-  $("open-settings").addEventListener("click", () => switchView("settings"));
-  const st = $("ins-statement");
-  if (st) st.addEventListener("click", () => { if (isPro()) openStatement(m); else showUpgrade("Monthly statements are a Pro feature."); });
   const ru = $("ins-radar-upgrade");
   if (ru) ru.addEventListener("click", () => showUpgrade("The recurring-charge radar is a Pro feature."));
   /* Tap a rhythm day -> open that day's expenses; empty days just toast. */
@@ -1358,7 +1354,9 @@ function computeUnusualIds() {
 }
 
 /* Printable, paper-styled statement for the viewed month — opens in a new tab
-   and triggers the print dialog (share sheet -> save as PDF on the phone). */
+   and triggers the print dialog (share sheet -> save as PDF on the phone).
+   CURRENTLY UNLINKED (the Insights entry row was removed 13 Jul 2026 on
+   Adrian's instruction) — kept so a menu entry can bring it back cheaply. */
 function openStatement(m) {
   const exps = state.expenses.filter(e => { const d = new Date(e.date); return d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth() && !e.pending; });
   if (!exps.length) { toast("Nothing this month to report"); return; }
