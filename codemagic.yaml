@@ -3,9 +3,13 @@
 # produces an installable APK. The web app is copied into www/ and wrapped by
 # Capacitor; the native android/ project is generated fresh each build.
 #
-# First goal: a DEBUG apk you can sideload to confirm the wrap works.
-# Later (for Google Play): switch `assembleDebug` -> `bundleRelease`, add
-# Codemagic Android code signing, and publish the .aab.
+# Two workflows:
+#  - "Resit Android (debug)"          -> sideloadable APK for testing
+#  - "Resit Android (release .aab)"   -> signed bundle for Google Play.
+#    Prerequisite ONE-TIME step in the Codemagic UI: Team/Personal settings ->
+#    Code signing identities -> Android -> generate (or upload) a keystore and
+#    name the reference `resit_upload`. BACK THE KEYSTORE UP — losing it means
+#    the app can never be updated on Play again.
 workflows:
   android:
     name: Resit Android (debug)
@@ -38,3 +42,60 @@ workflows:
           ./gradlew assembleDebug
     artifacts:
       - android/app/build/outputs/**/*.apk
+
+  android-release:
+    name: Resit Android (release .aab)
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      android_signing:
+        - resit_upload # keystore reference created once in the Codemagic UI
+      node: 20
+      java: 21
+    scripts:
+      - name: Assemble web app into www/
+        script: |
+          rm -rf www && mkdir www
+          cp index.html app.js db.js ocr.js styles.css version.js manifest.webmanifest www/
+          cp eula.html privacy.html www/
+          cp -r icons www/icons
+      - name: Install Capacitor and add Android
+        script: |
+          npm install
+          npx cap add android
+          npx cap sync android
+      - name: Generate app icons (best-effort)
+        script: |
+          npx @capacitor/assets generate --android || echo "skipped icon generation"
+      - name: Version + signing config (derived from version.js)
+        script: |
+          V=$(grep -o '"[0-9][0-9.]*"' version.js | tr -d '"')
+          MAJOR=${V%%.*}; REST=${V#*.}; MINOR=${REST%%.*}; PATCH=${REST#*.}
+          CODE=$((MAJOR*10000 + MINOR*100 + PATCH))
+          echo "versionName $V -> versionCode $CODE"
+          sed -i '' "s/versionCode 1$/versionCode $CODE/" android/app/build.gradle
+          sed -i '' "s/versionName \"1.0\"/versionName \"$V\"/" android/app/build.gradle
+          cat >> android/app/build.gradle <<'EOF'
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file(System.getenv("CM_KEYSTORE_PATH"))
+                      storePassword System.getenv("CM_KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("CM_KEY_ALIAS")
+                      keyPassword System.getenv("CM_KEY_PASSWORD")
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          EOF
+      - name: Build signed release bundle
+        script: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew bundleRelease
+    artifacts:
+      - android/app/build/outputs/**/*.aab
