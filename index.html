@@ -227,20 +227,15 @@ try {
       <p class="settings-group-title">Learning &amp; advanced</p>
       <div class="settings-card">
         <details class="adv-details">
-          <summary>Learned rules</summary>
-          <p class="settings-sub">What Resit has learned from your habits — shop categories, types and preferred names. Remove one to unlearn it.</p>
+          <summary>Learned rules <span class="rules-count" id="rules-count"></span></summary>
+          <p class="settings-sub">Resit learns as you save and correct receipts — and from cloud reads — so it reads better on its own over time. Remove any rule to unlearn it.</p>
           <div class="rules-list" id="rules-list"></div>
         </details>
         <div class="settings-divider"></div>
         <details class="adv-details">
           <summary>Advanced</summary>
-          <div class="field" style="margin-top: 12px;">
-            <span class="field-label">Cloud reader URL (optional override)</span>
-            <input type="url" id="ai-url" placeholder="https://resit-relay.&lt;you&gt;.workers.dev" style="margin-bottom: 8px;">
-            <input type="password" id="ai-secret" placeholder="Access code (only for the old relay)">
-            <button class="ghost-btn small" id="ai-test" style="margin-top: 8px;">Test connection</button>
-          </div>
-          <button class="ghost-btn small" id="copy-scan" style="margin-top: 12px;">Copy last scan text</button>
+          <p class="settings-sub" style="margin-top: 10px;">The raw text of your last scan — useful when a receipt read wrongly and you want to see what the camera actually saw.</p>
+          <button class="ghost-btn small" id="copy-scan">Copy last scan text</button>
         </details>
       </div>
     </div>
@@ -287,6 +282,12 @@ try {
 </div>
 
 <div class="scan-pill" id="scan-pill" hidden></div>
+
+<div class="select-bar" id="select-bar" hidden>
+  <span class="select-count" id="select-count">0 selected</span>
+  <button class="ghost-btn small" id="select-cancel">Cancel</button>
+  <button class="select-delete-btn" id="select-delete">Delete</button>
+</div>
 
 <div class="overlay sheet-overlay" id="confirm-overlay" hidden>
   <div class="confirm-sheet" id="confirm-sheet">

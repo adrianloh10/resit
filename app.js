@@ -57,6 +57,8 @@ let state = {
   merchantScopes: {},
   catBudgets: {},
   currency: "RM",   /* display only — no conversion */
+  selectMode: false, /* multi-select for bulk delete (long-press to enter) */
+  selected: null,    /* Set of selected expense ids while selectMode is on */
   country: "MY",    /* profile: drives date/number locale */
   language: "en",   /* profile: UI language (English only for now) */
   recurring: [],    /* monthly expense templates */
@@ -517,12 +519,14 @@ function scopeRuleFor(merchant) {
   return rule && rule.n >= 2 && SCOPES.includes(rule.scope) ? rule.scope : null;
 }
 
-/* Everything the app has learned, shown in Settings so it can be unlearned. */
+/* Everything the app has learned, shown in Settings so it can be unlearned —
+   grouped by what the rule does, with a live count in the section summary. */
 function renderRules() {
   const wrap = $("rules-list");
   if (!wrap) return;
   wrap.innerHTML = "";
-  const add = (key, text, map, setting) => {
+  let total = 0;
+  const mkRow = (text, onForget) => {
     const row = document.createElement("div");
     row.className = "rule-row";
     const span = document.createElement("span");
@@ -531,17 +535,33 @@ function renderRules() {
     x.className = "item-del";
     x.textContent = "✕";
     x.setAttribute("aria-label", "Forget this rule");
-    x.addEventListener("click", async () => { delete map[key]; await DB.setSetting(setting, map); renderRules(); });
+    x.addEventListener("click", onForget);
     row.append(span, x);
-    wrap.appendChild(row);
+    return row;
   };
-  for (const [k, v] of Object.entries(state.merchantCats)) add(k, k + " → " + v, state.merchantCats, "merchantCats");
-  for (const [k, v] of Object.entries(state.merchantScopes)) { if (v.n >= 2) add(k, k + " → " + v.scope, state.merchantScopes, "merchantScopes"); }
-  for (const [k, v] of Object.entries(state.merchantNames)) add(k, k + " → “" + v + "”", state.merchantNames, "merchantNames");
-  if (!wrap.children.length) {
+  const forget = (map, key, setting) => async () => { delete map[key]; await DB.setSetting(setting, map); renderRules(); };
+  const addGroup = (label, rows) => {
+    if (!rows.length) return;
+    const h = document.createElement("p");
+    h.className = "rule-group-label";
+    h.textContent = label;
+    wrap.appendChild(h);
+    for (const r of rows) { wrap.appendChild(r); total++; }
+  };
+  addGroup("Files itself under", Object.entries(state.merchantCats).map(([k, v]) =>
+    mkRow(k + " → " + v, forget(state.merchantCats, k, "merchantCats"))));
+  addGroup("Personal / Shared / Company", Object.entries(state.merchantScopes).filter(([, v]) => v.n >= 2).map(([k, v]) =>
+    mkRow(k + " → " + v.scope, forget(state.merchantScopes, k, "merchantScopes"))));
+  addGroup("Preferred shop names", Object.entries(state.merchantNames).map(([k, v]) =>
+    mkRow(k + " → “" + v + "”", forget(state.merchantNames, k, "merchantNames"))));
+  addGroup("Where each shop prints its total", Object.entries(state.totalHints).map(([k, v]) =>
+    mkRow(k + " → the “" + v + "” line", forget(state.totalHints, k, "totalHints"))));
+  const count = $("rules-count");
+  if (count) count.textContent = total ? "(" + total + ")" : "";
+  if (!total) {
     const p = document.createElement("p");
     p.className = "settings-sub";
-    p.textContent = "Nothing learned yet — rules appear as you save and correct expenses.";
+    p.textContent = "Nothing learned yet — rules appear as you save, correct, and cloud-read receipts.";
     wrap.appendChild(p);
   }
 }
@@ -962,7 +982,10 @@ function renderHome() {
     const note = e.note ? `<span class="mut">${escapeHtml(e.note)}</span>` : "";
     const row = document.createElement("button");
     row.className = "entry";
+    const ticked = state.selectMode && state.selected && state.selected.has(e.id);
+    if (ticked) row.classList.add("selected");
     row.innerHTML = `
+      ${state.selectMode ? `<span class="tick${ticked ? " on" : ""}"></span>` : ""}
       <span class="cat-icon">${catIcon(e.category)}</span>
       <span class="entry-main">
         <span class="entry-merchant">${camera}<span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span></span>
@@ -978,11 +1001,7 @@ function renderHome() {
       lpTimer = setTimeout(() => {
         lpFired = true;
         try { if (navigator.vibrate) navigator.vibrate(15); } catch (err) {}
-        state.expenses = state.expenses.filter(x => x.id !== e.id);
-        renderCurrent();
-        toastAction("Deleted " + (e.merchant || "expense"), "Undo",
-          () => { state.expenses.push(e); renderCurrent(); },
-          async () => { await DB.deleteExpense(e.id); });
+        if (!state.selectMode) enterSelectMode(e.id); else toggleSelect(e.id);
       }, 550);
     });
     row.addEventListener("pointermove", ev => {
@@ -991,12 +1010,17 @@ function renderHome() {
     for (const evName of ["pointerup", "pointercancel", "pointerleave"])
       row.addEventListener(evName, () => { clearTimeout(lpTimer); lpTimer = null; });
     row.addEventListener("contextmenu", ev => ev.preventDefault());
-    row.addEventListener("click", () => { if (lpFired) { lpFired = false; return; } openConfirmSheet(e); });
+    row.addEventListener("click", () => {
+      if (lpFired) { lpFired = false; return; }
+      if (state.selectMode) { toggleSelect(e.id); return; }
+      openConfirmSheet(e);
+    });
     /* The "duplicate?" flag is actionable: tapping it offers removal with
        the same soft-delete + undo the sheet's Delete button uses. */
     const dupEl = row.querySelector(".dup-flag");
     if (dupEl) dupEl.addEventListener("click", ev => {
       ev.stopPropagation();
+      if (state.selectMode) { toggleSelect(e.id); return; }
       state.expenses = state.expenses.filter(x => x.id !== e.id);
       renderCurrent();
       toastAction("Duplicate removed", "Undo",
@@ -1490,8 +1514,6 @@ function switchView(name) {
   if (name === "insights") renderInsights();
   if (name === "settings") {
     $("budget-input").value = state.budget || "";
-    $("ai-url").value = state.aiUrl || "";
-    $("ai-secret").value = state.aiSecret || "";
     $("gh-token").value = state.ghToken || "";
     renderThemeChips();
     renderSyncStatus();
@@ -1627,6 +1649,37 @@ function hideScanPill() {
   clearTimeout(p._t);
   p.hidden = true;
   p.classList.remove("done");
+}
+
+/* Multi-select: long-press enters the mode, taps toggle ticks, the floating
+   bar deletes everything selected (with one Undo). */
+function enterSelectMode(id) {
+  state.selectMode = true;
+  state.selected = new Set(id != null ? [id] : []);
+  renderHome();
+  updateSelectBar();
+}
+function exitSelectMode() {
+  state.selectMode = false;
+  state.selected = new Set();
+  const bar = $("select-bar");
+  if (bar) bar.hidden = true;
+  renderHome();
+}
+function toggleSelect(id) {
+  if (!state.selected) state.selected = new Set();
+  if (state.selected.has(id)) state.selected.delete(id); else state.selected.add(id);
+  if (!state.selected.size) { exitSelectMode(); return; }
+  renderHome();
+  updateSelectBar();
+}
+function updateSelectBar() {
+  const bar = $("select-bar");
+  if (!bar) return;
+  bar.hidden = !state.selectMode;
+  const n = state.selected ? state.selected.size : 0;
+  $("select-count").textContent = n + " selected";
+  $("select-delete").textContent = "Delete (" + n + ")";
 }
 
 /* Merge the AI's reading over the on-device parse — the AI only runs when
@@ -2628,8 +2681,21 @@ async function init() {
         return;
       }
     }
+    if (state.selectMode) { exitSelectMode(); return; }
     const co = $("confirm-overlay");
     if (co && !co.hidden) closeConfirmSheet();
+  });
+
+  /* Multi-select bar */
+  on("select-cancel", exitSelectMode);
+  on("select-delete", async () => {
+    const victims = state.expenses.filter(x => state.selected && state.selected.has(x.id));
+    if (!victims.length) { exitSelectMode(); return; }
+    state.expenses = state.expenses.filter(x => !state.selected.has(x.id));
+    exitSelectMode();
+    toastAction("Deleted " + victims.length + " expense" + (victims.length > 1 ? "s" : ""), "Undo",
+      () => { state.expenses.push(...victims); renderCurrent(); },
+      async () => { for (const v of victims) { try { await DB.deleteExpense(v.id); } catch (e) {} } });
   });
 
   /* Receipt photo lightbox — tap anywhere to close. */
@@ -2847,35 +2913,8 @@ async function init() {
       toast("Could not reach GitHub — check your connection");
     }
   });
-  $("ai-url").addEventListener("change", async () => {
-    state.aiUrl = $("ai-url").value.trim();
-    await DB.setSetting("aiUrl", state.aiUrl);
-  });
-  $("ai-secret").addEventListener("change", async () => {
-    state.aiSecret = $("ai-secret").value.trim();
-    await DB.setSetting("aiSecret", state.aiSecret);
-  });
-  $("ai-test").addEventListener("click", async () => {
-    const url = $("ai-url").value.trim(), secret = $("ai-secret").value.trim();
-    if (!url) { toast("Enter the cloud reader URL first"); return; }
-    state.aiUrl = url; state.aiSecret = secret;
-    await DB.setSetting("aiUrl", url);
-    await DB.setSetting("aiSecret", secret);
-    renderCloudSetting();
-    toast("Testing…");
-    try {
-      /* 1x1 white pixel — verifies URL, key and connectivity end-to-end. */
-      const px = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==";
-      const payload = { image: px, mediaType: "image/jpeg", deviceId: state.deviceId };
-      if (secret) payload.secret = secret;
-      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const body = await res.json().catch(() => ({}));
-      if (res.ok) toast("Connected — cloud reader is ready");
-      else toast(body.error || ("Connection failed (" + res.status + ")"));
-    } catch (e) {
-      toast("Could not reach the reader — check the URL");
-    }
-  });
+  /* (The legacy custom-relay fields were removed from Advanced; a stored
+     aiUrl override is still honoured by cloudEndpoint() for old installs.) */
   on("cloud-toggle", async () => {
     state.cloudConsent = state.cloudConsent === "yes" ? "no" : "yes";
     await DB.setSetting("cloudConsent", state.cloudConsent);
