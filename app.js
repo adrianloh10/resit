@@ -580,7 +580,51 @@ function applyLearnedTotalHint(parsed) {
   const amt = window.ReceiptOCR.amountFromLine(line);
   if (amt && (parsed.total === null || (parsed.totalConf || 0) <= 1)) {
     parsed.total = amt;
+    /* A hint hit is a confident recovery — good enough that the cloud
+       fallback isn't consulted. This is what lets learning reduce cloud use. */
+    parsed.totalConf = 2;
   }
+}
+
+/* On-device reading learns from every cloud read: the AI's answers become
+   the same locally-stored rules a user correction would teach (shop name,
+   category, and WHERE this shop prints its total), so the phone reads more
+   receipts by itself over time. AI never overwrites a rule that already
+   exists — user corrections stay authoritative. */
+function learnFromAI(rawText, ai, localTotal, localMerchant) {
+  if (!ai || ai.readable === false || !rawText) return;
+  const localBrand = brandOf(normMerchant(localMerchant || ""));
+  const aiBrand = brandOf(normMerchant(ai.merchant || ""));
+  /* 1. The OCR's garbled shop name now maps to the AI's clean one. */
+  if (localBrand.length >= 3 && ai.merchant && ai.merchant.length >= 2 && !state.merchantNames[localBrand]) {
+    state.merchantNames[localBrand] = ai.merchant;
+    DB.setSetting("merchantNames", state.merchantNames);
+  }
+  /* 2. Category rule for the shop (a later user correction overwrites it). */
+  if (ai.merchant && ai.category && CATS.some(c => c.name === ai.category) &&
+      !state.merchantCats[normMerchant(ai.merchant)]) {
+    rememberMerchantCategory(ai.merchant, ai.category);
+  }
+  /* 3. The core lesson: find the OCR line carrying the AI's total and keep
+     that line's keyword as this shop's total hint — filed under BOTH the
+     AI's brand and the OCR's brand, since the next scan only knows the
+     OCR's (possibly garbled) name. */
+  if (!(ai.total > 0)) return;
+  if (localTotal !== null && Math.abs(localTotal - ai.total) <= 0.005) return; /* on-device already had it */
+  const f = ai.total.toFixed(2);
+  const variants = [f, f.replace(".", " "), f.replace(".", ","), f.replace(/\.00$/, "")];
+  let hintLine = null;
+  for (const line of rawText.split("\n")) {
+    if (variants.some(v => v && line.includes(v))) { hintLine = line; break; }
+  }
+  if (!hintLine) return;
+  const kw = (hintLine.match(/[A-Za-z][A-Za-z .]{3,24}/) || [""])[0].trim().toLowerCase();
+  if (kw.length < 4) return;
+  let saved = false;
+  for (const b of new Set([aiBrand, localBrand])) {
+    if (b.length >= 3 && !state.totalHints[b]) { state.totalHints[b] = kw; saved = true; }
+  }
+  if (saved) DB.setSetting("totalHints", state.totalHints);
 }
 
 function viewedMonth() {
@@ -1360,10 +1404,18 @@ function openStatement(m) {
     <p class="foot">Generated on-device by Resit — no data leaves your phone.</p>
     <script>setTimeout(function(){window.print()},400)<\/script>
   </body></html>`;
-  const w = window.open("", "_blank");
-  if (!w) { toast("Allow pop-ups to open the statement"); return; }
-  w.document.write(html);
-  w.document.close();
+  /* document.write into a blank popup is dead on modern mobile browsers —
+     serve the statement as a Blob URL instead, and if the pop-up itself is
+     blocked (installed-PWA shells), show it in an in-app overlay. */
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, "_blank");
+  if (!w) {
+    const ov = $("statement-overlay"), fr = $("statement-frame");
+    if (ov && fr) { fr.srcdoc = html; ov.hidden = false; }
+    else toast("Allow pop-ups to open the statement");
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 function escapeHtml(s) {
@@ -1688,6 +1740,7 @@ async function handleImage(file) {
         try {
           const ai = await cloudRead(file);
           if (state.ocrCancelled) return;
+          learnFromAI(parsed.rawText, ai, parsed.total, parsed.merchant);
           mergeAIResult(parsed, ai);
         } catch (err) {
           toast(err.message || "Cloud reading failed");
@@ -2541,6 +2594,11 @@ async function init() {
     catch (e) {} /* storage broken → the gate simply returns next launch; never a dead button */
     $("eula-overlay").hidden = true;
     for (const el of document.querySelectorAll("body > [inert]")) el.inert = false;
+  });
+  on("statement-close", () => {
+    const ov = $("statement-overlay"), fr = $("statement-frame");
+    if (fr) fr.srcdoc = "";
+    if (ov) ov.hidden = true;
   });
   on("day-back", () => { $("day-overlay").hidden = true; });
   on("day-overlay", ev => { if (ev.target === $("day-overlay")) $("day-overlay").hidden = true; });
