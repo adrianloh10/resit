@@ -2963,7 +2963,15 @@ async function init() {
      Skipped in the native shell, which bundles its own assets offline. */
   if ("serviceWorker" in navigator && !isNative()) {
     const hadController = !!navigator.serviceWorker.controller;
-    navigator.serviceWorker.register("sw.js").then(reg => {
+    /* updateViaCache:"none" — the update check must never read version.js
+       (imported by sw.js) from the HTTP cache, or a new release can hide
+       behind Pages' ~10-minute max-age and feel like it "didn't deploy". */
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => {
+      /* Also re-check whenever the app comes back to the foreground, not
+         only at launch — an app left open picks updates up too. */
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) reg.update().catch(() => {});
+      });
       reg.addEventListener("updatefound", () => {
         const nw = reg.installing;
         if (nw) nw.addEventListener("statechange", () => {
