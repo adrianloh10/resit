@@ -292,6 +292,18 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
   font-family: inherit;
 }
 .setup-input:focus { border-color: var(--teal); outline: none; }
+/* The wizard covers the WHOLE screen: solid parchment, dots pinned at the
+   top, the active step centred, comfortable reading width on tablets. */
+#setup-overlay { background: var(--paper); align-items: stretch; }
+#setup-overlay .confirm-sheet {
+  max-width: none; max-height: none; height: 100%; border-radius: 0;
+  display: flex; flex-direction: column;
+  padding: 18px 26px calc(26px + env(safe-area-inset-bottom));
+}
+#setup-overlay .setup-dots { margin: 12px 0 0; }
+#setup-overlay .setup-step { margin: auto 0; width: 100%; max-width: 420px; align-self: center; }
+#setup-overlay .sheet-title { font-size: 21px; color: var(--ink); font-weight: 600; }
+#setup-overlay .consent-text { font-size: 14px; }
 
 /* Insights: the month stays pinned while the page scrolls. */
 #view-insights .month-row {
