@@ -189,7 +189,7 @@ async function unlockPro() {
       await DB.setSetting("licenseKey", code);
       const ov = $("upgrade-overlay"); if (ov) ov.hidden = true;
       renderPlan();
-      toast("Pro unlocked — thank you!");
+      toast("Welcome to Pro — everything's unlocked");
     } else {
       toast("That code didn't work");
     }
@@ -200,12 +200,12 @@ function renderPlan() {
   const status = $("plan-status");
   const btn = $("plan-btn");
   if (isPro()) {
-    if (status) status.textContent = "Pro — unlimited receipt scans. Thank you!";
+    if (status) status.textContent = "Pro — every limit removed. Thank you for backing Resit.";
     if (btn) btn.hidden = true;
   } else {
-    if (status) status.textContent = "Free — " + FREE_SCANS_PER_DAY + " scanned receipt per day (" +
-      (scanAllowed() ? "available today" : "used today — manual entry until tomorrow") + "), unlimited manual entries. " +
-      "Pro adds unlimited scans and claims tracking.";
+    if (status) status.textContent = "Free — " + FREE_SCANS_PER_DAY + " scanned receipt a day (" +
+      (scanAllowed() ? "today's is ready" : "used for today — back tomorrow") + "), plus unlimited manual entries. " +
+      "Pro removes every limit.";
     if (btn) { btn.hidden = false; btn.textContent = "Upgrade to Pro"; }
   }
 }
@@ -554,7 +554,7 @@ function learnFromCorrections(e, record) {
       if (kw.length >= 4) {
         state.totalHints[parsedBrand] = kw;
         DB.setSetting("totalHints", state.totalHints);
-        toast("Learned where " + (record.merchant || "this shop") + " prints its total");
+        toast("Noted — Resit now knows where " + (record.merchant || "this shop") + " prints its total");
       }
     }
   }
@@ -905,7 +905,7 @@ function renderHome() {
     /* First-run onboarding copy only when the app is truly empty; an empty
        other month just says so. */
     empty.innerHTML = state.expenses.length === 0
-      ? "No expenses yet.<br>Tap the camera to snap your first receipt."
+      ? "Nothing here yet.<br>Tap the orange camera — your first receipt files itself."
       : "Nothing in " + MONTH_NAMES[m.getMonth()] + (m.getFullYear() === now.getFullYear() ? "" : " " + m.getFullYear()) + ".";
   } else if (!exps.length && !others.length) {
     empty.hidden = false;
@@ -1342,7 +1342,7 @@ function renderInsights() {
 
   body.innerHTML = html;
   const ru = $("ins-radar-upgrade");
-  if (ru) ru.addEventListener("click", () => showUpgrade("The recurring-charge radar is a Pro feature."));
+  if (ru) ru.addEventListener("click", () => showUpgrade("The radar quietly catches subscriptions that creep up on you — it comes with Pro."));
   /* Tap a rhythm day -> open that day's expenses; empty days just toast. */
   for (const day of body.querySelectorAll(".rh-day[data-label]")) {
     day.addEventListener("click", () => {
@@ -1853,8 +1853,8 @@ async function handleImage(file) {
       }
     } else {
       const thumb = await fileToThumb(file, 700);
-      toastAction("Daily free scan used — enter this one manually", "Go Pro",
-        () => showUpgrade("Free includes " + FREE_SCANS_PER_DAY + " scanned receipt a day; Pro scans them all."), null, 5500);
+      toastAction("Today's free scan is used — type this one in", "Go Pro",
+        () => showUpgrade("Free reads " + FREE_SCANS_PER_DAY + " receipt a day. Pro reads them all — every receipt, every day."), null, 5500);
       openConfirmSheet({
         amount: null, merchant: "", category: "Other", scope: "Personal",
         date: new Date().toISOString(), items: [], note: "",
@@ -1902,7 +1902,7 @@ async function handleImage(file) {
       completeScanPill("Scan complete ✓");
     } else {
       hideScanPill();
-      toast(state.ghToken ? "Couldn't read it — save anyway, Claude will fill it in" : "Couldn't read that — try better lighting, or enter manually");
+      toast(state.ghToken ? "Couldn't read it — save anyway, Claude will fill it in" : "That one was too blurry — try more light, or just type it in");
     }
     /* Only a read that actually produced something consumes the free daily
        scan — a blurry failure costs the user nothing. */
@@ -2725,7 +2725,7 @@ async function init() {
   /* Multi-select bar */
   on("select-cancel", exitSelectMode);
   on("select-edit", () => {
-    if (!isPro()) { showUpgrade("Bulk editing is a Pro feature."); return; }
+    if (!isPro()) { showUpgrade("Fix a whole month in one move — bulk editing comes with Pro."); return; }
     if (!state.selected || !state.selected.size) return;
     state._bulk = { cat: null, scope: null };
     $("bulk-title").textContent = "Bulk update (" + state.selected.size + ")";
@@ -2879,7 +2879,7 @@ async function init() {
     $("rec-name").value = ""; $("rec-amount").value = ""; $("rec-day").value = "";
     renderRecurringList();
     await materializeRecurring();
-    toast("Added — it'll repeat automatically");
+    toast("Added — Resit takes it from here");
   });
 
   const csel = $("currency-select");

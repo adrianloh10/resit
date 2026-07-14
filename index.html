@@ -72,7 +72,7 @@ try {
     <button class="backup-nudge-x" id="backup-nudge-close" aria-label="Dismiss">&#10005;</button>
   </div>
   <section class="ledger" id="ledger"></section>
-  <p class="empty-note" id="empty-note">No expenses yet.<br>Tap the camera to snap your first receipt.</p>
+  <p class="empty-note" id="empty-note">Nothing here yet.<br>Tap the orange camera — your first receipt files itself.</p>
 </main>
 
 <main id="view-insights" class="view" hidden>
@@ -162,7 +162,7 @@ try {
     <div class="settings-group">
       <p class="settings-group-title">Monthly expenses</p>
       <div class="settings-card">
-        <p class="settings-sub" style="margin-top: 0;">Bills that repeat (rent, subscriptions). Added automatically on their day — set one up below, or tick "Repeats every month" when entering an expense.</p>
+        <p class="settings-sub" style="margin-top: 0;">The bills that never forget you — rent, Netflix, insurance. Resit adds them automatically on their day. Set one up below, or tick "Repeats every month" when saving an expense.</p>
         <div class="field" id="recurring-add">
           <input type="text" id="rec-name" placeholder="Name (e.g. Rent, Netflix)" autocomplete="off">
           <div class="btn-pair" style="margin-top: 8px;">
@@ -223,7 +223,7 @@ try {
     </div>
 
     <button class="ghost-btn danger" id="erase-data">Erase all data</button>
-    <p class="settings-note"><span id="app-version"></span>Resit keeps everything on this phone and learns from your corrections — categories, shop names, and where each shop prints its total. Nothing leaves your phone unless you turn on cloud reading. <a href="eula.html" target="_blank" rel="noopener">Terms</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
+    <p class="settings-note"><span id="app-version"></span>Resit lives entirely on this phone — and quietly gets smarter with every receipt: your categories, your shop names, even where each shop hides its total. Nothing leaves your phone unless you turn on cloud reading. <a href="eula.html" target="_blank" rel="noopener">Terms</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
   </section>
 </main>
 
@@ -325,7 +325,7 @@ try {
 
     <div class="setup-step" data-step="1">
       <p class="sheet-title" id="eula-title" style="margin: 6px 0 12px;">Welcome to Resit</p>
-      <p class="consent-text">Snap a receipt and it files itself. Your records live on this phone — cloud reading is optional and always asks first. Before you start, please have a look at the terms.</p>
+      <p class="consent-text">The fastest way to know where your money goes: snap a receipt and Resit reads it, files it, and keeps every record on this phone. Cloud reading is optional and always asks first. One quick look at the terms and you're in.</p>
       <p class="consent-text" style="margin-top: 10px;"><a href="eula.html" target="_blank" rel="noopener">Terms of Use</a> &nbsp;·&nbsp; <a href="privacy.html" target="_blank" rel="noopener">Privacy Notice</a></p>
       <button class="save-btn" id="eula-accept" style="margin-top: 14px;">I agree — continue</button>
       <p class="edit-hint">By continuing you confirm you're at least 13 (or have a parent's consent), accept the Terms of Use, and acknowledge the Privacy Notice.</p>
@@ -333,7 +333,7 @@ try {
 
     <div class="setup-step" data-step="2">
       <p class="sheet-title" style="margin: 6px 0 12px;">Where are you?</p>
-      <p class="consent-text">This sets your date and number formats — you can change it anytime in Settings.</p>
+      <p class="consent-text">So dates, numbers and currency read the way you expect — set once, change anytime in Settings.</p>
       <select id="setup-country" class="setup-input">
         <option value="MY">Malaysia</option><option value="SG">Singapore</option>
         <option value="ID">Indonesia</option><option value="TH">Thailand</option>
@@ -352,8 +352,8 @@ try {
     </div>
 
     <div class="setup-step" data-step="3">
-      <p class="sheet-title" style="margin: 6px 0 12px;">Monthly budget</p>
-      <p class="consent-text">What should a month cost? The home screen shows how much of it you've used. Optional — change or set it later by tapping the budget.</p>
+      <p class="sheet-title" style="margin: 6px 0 12px;">Give the month a target</p>
+      <p class="consent-text">Set a budget and the home screen tracks how much of it you've used — live, every day. Optional: tap the budget on the home screen anytime.</p>
       <input type="number" id="setup-budget" class="setup-input" inputmode="decimal" min="0" step="50" placeholder="e.g. 3000">
       <button class="save-btn" id="setup-budget-save" style="margin-top: 14px;">Save budget</button>
       <button class="ghost-btn" id="setup-budget-skip" style="margin-top: 10px; border: none;">Skip for now</button>
@@ -361,7 +361,7 @@ try {
 
     <div class="setup-step" data-step="4">
       <p class="sheet-title" style="margin: 6px 0 12px;">You're set</p>
-      <p class="consent-text">Tap the orange camera button whenever you get a receipt — it reads and files itself. Everything you track stays on this phone.</p>
+      <p class="consent-text">From here it's one habit: receipt in hand, tap the orange camera — it reads and files itself in seconds. And everything you track stays on this phone.</p>
       <button class="save-btn" id="setup-finish" style="margin-top: 14px;">Start using Resit</button>
     </div>
   </div>
@@ -450,14 +450,14 @@ try {
     <p class="upgrade-price" id="upgrade-price">RM 6.99 / month or RM 79 / year</p>
     <p class="consent-text" id="upgrade-reason"></p>
     <ul class="upgrade-list">
-      <li>Unlimited receipt scans — no daily limit, no ads</li>
-      <li>Company claims — track what's owed to you</li>
-      <li>Subscriptions radar, auto-rules &amp; bulk editing</li>
-      <li>No tracking — ever</li>
+      <li>Scan every receipt, every day — unlimited, ad-free</li>
+      <li>Claims that keep score — always know what the company owes you</li>
+      <li>A radar for creeping subscriptions, auto-filing rules &amp; bulk editing</li>
+      <li>And still no accounts, no tracking — ever</li>
     </ul>
-    <button class="save-btn" id="upgrade-buy">Upgrade</button>
+    <button class="save-btn" id="upgrade-buy">Go Pro</button>
     <button class="ghost-btn" id="upgrade-code" style="margin-top: 10px;">I have an unlock code</button>
-    <button class="ghost-btn" id="upgrade-close" style="margin-top: 10px; border: none;">Not now</button>
+    <button class="ghost-btn" id="upgrade-close" style="margin-top: 10px; border: none;">Maybe later</button>
   </div>
 </div>
 
