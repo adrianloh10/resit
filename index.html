@@ -319,13 +319,51 @@ try {
   </div>
 </div>
 
-<div class="overlay sheet-overlay" id="eula-overlay" hidden>
+<div class="overlay sheet-overlay" id="setup-overlay" hidden data-step="1" data-mode="full">
   <div class="confirm-sheet" style="text-align: center;">
-    <p class="sheet-title" id="eula-title" style="margin: 6px 0 12px;">Welcome to Resit</p>
-    <p class="consent-text">Snap a receipt and it files itself. Your records live on this phone — cloud reading is optional and always asks first. Before you start, please have a look at the terms.</p>
-    <p class="consent-text" style="margin-top: 10px;"><a href="eula.html" target="_blank" rel="noopener">Terms of Use</a> &nbsp;·&nbsp; <a href="privacy.html" target="_blank" rel="noopener">Privacy Notice</a></p>
-    <button class="save-btn" id="eula-accept" style="margin-top: 14px;">I agree — start using Resit</button>
-    <p class="edit-hint">By continuing you confirm you're at least 13 (or have a parent's consent), accept the Terms of Use, and acknowledge the Privacy Notice.</p>
+    <div class="setup-dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
+    <div class="setup-step" data-step="1">
+      <p class="sheet-title" id="eula-title" style="margin: 6px 0 12px;">Welcome to Resit</p>
+      <p class="consent-text">Snap a receipt and it files itself. Your records live on this phone — cloud reading is optional and always asks first. Before you start, please have a look at the terms.</p>
+      <p class="consent-text" style="margin-top: 10px;"><a href="eula.html" target="_blank" rel="noopener">Terms of Use</a> &nbsp;·&nbsp; <a href="privacy.html" target="_blank" rel="noopener">Privacy Notice</a></p>
+      <button class="save-btn" id="eula-accept" style="margin-top: 14px;">I agree — continue</button>
+      <p class="edit-hint">By continuing you confirm you're at least 13 (or have a parent's consent), accept the Terms of Use, and acknowledge the Privacy Notice.</p>
+    </div>
+
+    <div class="setup-step" data-step="2">
+      <p class="sheet-title" style="margin: 6px 0 12px;">Where are you?</p>
+      <p class="consent-text">This sets your date and number formats — you can change it anytime in Settings.</p>
+      <select id="setup-country" class="setup-input">
+        <option value="MY">Malaysia</option><option value="SG">Singapore</option>
+        <option value="ID">Indonesia</option><option value="TH">Thailand</option>
+        <option value="PH">Philippines</option><option value="VN">Vietnam</option>
+        <option value="BN">Brunei</option><option value="IN">India</option>
+        <option value="AU">Australia</option><option value="GB">United Kingdom</option>
+        <option value="US">United States</option><option value="OT">Other</option>
+      </select>
+      <select id="setup-currency" class="setup-input">
+        <option>RM</option><option>SGD</option><option>USD</option><option>EUR</option>
+        <option>GBP</option><option>AUD</option><option>IDR</option><option>THB</option>
+        <option>PHP</option><option>VND</option><option>INR</option><option>JPY</option>
+        <option>KRW</option><option>TWD</option><option>HKD</option><option>CNY</option><option>BND</option>
+      </select>
+      <button class="save-btn" id="setup-country-next" style="margin-top: 14px;">Continue</button>
+    </div>
+
+    <div class="setup-step" data-step="3">
+      <p class="sheet-title" style="margin: 6px 0 12px;">Monthly budget</p>
+      <p class="consent-text">What should a month cost? The home screen shows how much of it you've used. Optional — change or set it later by tapping the budget.</p>
+      <input type="number" id="setup-budget" class="setup-input" inputmode="decimal" min="0" step="50" placeholder="e.g. 3000">
+      <button class="save-btn" id="setup-budget-save" style="margin-top: 14px;">Save budget</button>
+      <button class="ghost-btn" id="setup-budget-skip" style="margin-top: 10px; border: none;">Skip for now</button>
+    </div>
+
+    <div class="setup-step" data-step="4">
+      <p class="sheet-title" style="margin: 6px 0 12px;">You're set</p>
+      <p class="consent-text">Tap the orange camera button whenever you get a receipt — it reads and files itself. Everything you track stays on this phone.</p>
+      <button class="save-btn" id="setup-finish" style="margin-top: 14px;">Start using Resit</button>
+    </div>
   </div>
 </div>
 

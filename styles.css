@@ -272,6 +272,27 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 }
 .chip.scope-new { border-style: dashed; color: var(--muted); }
 
+/* First-run setup wizard: one pane per step + progress dots. */
+#setup-overlay .setup-step { display: none; }
+#setup-overlay[data-step="1"] .setup-step[data-step="1"],
+#setup-overlay[data-step="2"] .setup-step[data-step="2"],
+#setup-overlay[data-step="3"] .setup-step[data-step="3"],
+#setup-overlay[data-step="4"] .setup-step[data-step="4"] { display: block; }
+.setup-dots { display: flex; gap: 6px; justify-content: center; margin: 8px 0 12px; }
+.setup-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--divider-soft); }
+#setup-overlay[data-step="1"] .setup-dots i:nth-child(1),
+#setup-overlay[data-step="2"] .setup-dots i:nth-child(2),
+#setup-overlay[data-step="3"] .setup-dots i:nth-child(3),
+#setup-overlay[data-step="4"] .setup-dots i:nth-child(4) { background: var(--teal); }
+#setup-overlay[data-mode="terms"] .setup-dots { display: none; }
+.setup-input {
+  display: block; width: 100%; box-sizing: border-box; margin-top: 10px;
+  background: var(--paper-raised); border: 1.5px solid var(--divider);
+  border-radius: 12px; padding: 12px; font-size: 14.5px; color: var(--ink);
+  font-family: inherit;
+}
+.setup-input:focus { border-color: var(--teal); outline: none; }
+
 /* Insights: the month stays pinned while the page scrolls. */
 #view-insights .month-row {
   position: sticky; top: 0; z-index: 15;

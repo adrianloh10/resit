@@ -2552,14 +2552,16 @@ async function init() {
     }, wait);
   }
 
-  /* The Terms of Use must be accepted once per TERMS_VERSION before use.
-     The overlay has no backdrop-close and no cancel — Agree is the only way
+  /* First run = the 4-step setup wizard (terms → country/currency → budget
+     → done). A returning user after a TERMS_VERSION bump only re-accepts
+     the terms card. No backdrop-close, no cancel — Agree is the only way
      in. (If storage failed above, eulaAccepted reads "" — showing the gate
      again is the safe direction.) */
   if ((state.eulaAccepted || "").split("|")[0] !== TERMS_VERSION) {
-    const ov = $("eula-overlay");
+    const ov = $("setup-overlay");
     if (ov) {
-      /* Returning users after a terms change get an "updated" heading. */
+      ov.dataset.mode = state.eulaAccepted ? "terms" : "full";
+      ov.dataset.step = "1";
       if (state.eulaAccepted) {
         const t = $("eula-title");
         if (t) t.textContent = "We've updated the terms";
@@ -2567,7 +2569,7 @@ async function init() {
       ov.hidden = false;
       /* The veil only blocks pointers — make everything else inert so
          keyboard / screen-reader users can't operate the app beneath it. */
-      for (const el of document.querySelectorAll("body > *:not(#eula-overlay):not(script)")) el.inert = true;
+      for (const el of document.querySelectorAll("body > *:not(#setup-overlay):not(script)")) el.inert = true;
       const btn = $("eula-accept");
       if (btn) btn.focus();
     }
@@ -2899,13 +2901,47 @@ async function init() {
     from: $("exp-from").value, to: $("exp-to").value,
     scope: $("exp-scope").value, category: $("exp-cat").value, claim: $("exp-claim").value
   });
+  /* --- First-run setup wizard --- */
+  const finishSetup = () => {
+    const ov = $("setup-overlay");
+    if (ov) ov.hidden = true;
+    for (const el of document.querySelectorAll("body > [inert]")) el.inert = false;
+    renderHome();
+  };
+  const COUNTRY_CURRENCY = { MY: "RM", SG: "SGD", ID: "IDR", TH: "THB", PH: "PHP", VN: "VND", BN: "BND", IN: "INR", AU: "AUD", GB: "GBP", US: "USD", OT: "RM" };
   on("eula-accept", async () => {
     state.eulaAccepted = TERMS_VERSION + "|" + new Date().toISOString(); /* terms version | when */
     try { await DB.setSetting("eulaAccepted", state.eulaAccepted); }
     catch (e) {} /* storage broken → the gate simply returns next launch; never a dead button */
-    $("eula-overlay").hidden = true;
-    for (const el of document.querySelectorAll("body > [inert]")) el.inert = false;
+    const ov = $("setup-overlay");
+    if (!ov || ov.dataset.mode === "terms") { finishSetup(); return; }
+    const sc = $("setup-country"), scur = $("setup-currency");
+    if (sc) sc.value = state.country || "MY";
+    if (scur) scur.value = state.currency || "RM";
+    ov.dataset.step = "2";
   });
+  const scSel = $("setup-country");
+  if (scSel) scSel.addEventListener("change", () => {
+    const scur = $("setup-currency");
+    if (scur) scur.value = COUNTRY_CURRENCY[scSel.value] || "RM";
+  });
+  on("setup-country-next", async () => {
+    state.country = $("setup-country").value;
+    const cur = $("setup-currency").value;
+    if (/^[A-Z]{2,4}$/.test(cur)) state.currency = cur;
+    await DB.setSetting("country", state.country);
+    await DB.setSetting("currency", state.currency);
+    const cp = $("currency-prefix");
+    if (cp) cp.textContent = state.currency;
+    $("setup-overlay").dataset.step = "3";
+  });
+  on("setup-budget-save", async () => {
+    const v = parseFloat($("setup-budget").value);
+    if (v > 0) { state.budget = v; await DB.setSetting("budget", v); }
+    $("setup-overlay").dataset.step = "4";
+  });
+  on("setup-budget-skip", () => { $("setup-overlay").dataset.step = "4"; });
+  on("setup-finish", finishSetup);
   on("statement-close", () => {
     const ov = $("statement-overlay"), fr = $("statement-frame");
     if (fr) fr.srcdoc = "";
