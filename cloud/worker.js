@@ -254,6 +254,16 @@ async function bumpQuota(db, deviceId) {
   ).bind(deviceId, day).run();
 }
 
+/* Constant-time string compare so a === short-circuit can't leak the secret
+   byte-by-byte via timing (security review, 1.9.0). */
+function safeEqual(a, b) {
+  a = String(a == null ? "" : a); b = String(b == null ? "" : b);
+  let diff = a.length ^ b.length;
+  const n = Math.max(a.length, b.length);
+  for (let i = 0; i < n; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
@@ -280,7 +290,7 @@ export default {
       try { u = await request.json(); } catch (e) { return json({ error: "Bad request" }, 400, cors); }
       const code = u && typeof u.code === "string" ? u.code.trim() : "";
       if (!code) return json({ error: "Invalid code" }, 403, cors);
-      if (env.PRO_UNLOCK && code === env.PRO_UNLOCK) return json({ ok: true }, 200, cors);
+      if (env.PRO_UNLOCK && safeEqual(code, env.PRO_UNLOCK)) return json({ ok: true }, 200, cors);
       /* A transient store problem must NEVER read as "Invalid code" — the app
          permanently downgrades on that message. */
       if (!env.DB) return json({ error: "Temporarily unavailable" }, 503, cors);
@@ -301,7 +311,7 @@ export default {
     if (path.endsWith("/mint") || path.endsWith("/revoke")) {
       let u;
       try { u = await request.json(); } catch (e) { return json({ error: "Bad request" }, 400, cors); }
-      if (!env.PRO_UNLOCK || !u || u.secret !== env.PRO_UNLOCK) return json({ error: "Not allowed" }, 403, cors);
+      if (!env.PRO_UNLOCK || !u || !safeEqual(u.secret, env.PRO_UNLOCK)) return json({ error: "Not allowed" }, 403, cors);
       if (!env.DB) return json({ error: "No database bound" }, 500, cors);
       await ensureLicenseTable(env.DB);
       if (path.endsWith("/mint")) {
@@ -331,13 +341,20 @@ export default {
       if (!ok) return json({ error: "Couldn't verify you're human — reload and try again" }, 403, cors);
     }
 
+    /* Quota key: prefer the caller's deviceId, but ALWAYS fall back to the
+       Cloudflare edge IP (which the client cannot forge) so omitting or
+       rotating deviceId can't mint unlimited reads and run up the bill
+       (security review, 1.9.0). */
     let quota = null; /* set only when a successful read should be counted */
-    if (env.DB && deviceId && typeof deviceId === "string") {
+    if (env.DB) {
+      const ip = request.headers.get("CF-Connecting-IP") || "noip";
+      const key = (deviceId && typeof deviceId === "string" && deviceId.trim())
+        ? "d:" + deviceId.slice(0, 64) : "ip:" + ip.slice(0, 64);
       const cap = parseInt(env.DAILY_CAP || "20", 10);
       try {
-        if (await quotaExceeded(env.DB, deviceId.slice(0, 64), cap))
+        if (await quotaExceeded(env.DB, key, cap))
           return json({ error: "Daily limit reached — read on-device or enter it manually" }, 429, cors);
-        quota = { db: env.DB, id: deviceId.slice(0, 64) };
+        quota = { db: env.DB, id: key };
       } catch (e) { /* quota table missing/erroring must not block reading */ }
     }
 

@@ -105,7 +105,10 @@ const GH_REPO = "adrianloh10/resit-inbox";
    override URL in Settings takes precedence, so it can be tested before baking
    the URL in. */
 const CLOUD_OCR_URL = "https://resit.adrianloh10.workers.dev";
-function cloudEndpoint() { return (state.aiUrl && state.aiUrl.trim()) || CLOUD_OCR_URL; }
+/* The cloud endpoint is HARD-PINNED to our Worker — never a stored override.
+   (A restored backup could otherwise plant an arbitrary aiUrl and exfiltrate
+   receipt photos; see the REJECT set + security review, 1.9.0.) */
+function cloudEndpoint() { return CLOUD_OCR_URL; }
 
 /* ---------- Freemium ----------
    Free = ONE scanned receipt per day. Scans 2-5 can be unlocked by watching a
@@ -1052,7 +1055,7 @@ function renderScopeFilter(targetId, rerender) {
   const mk = (label, value, cls) => {
     const b = document.createElement("button");
     b.className = "scope-chip " + cls + (state.scopeFilter === value ? " selected" : "");
-    b.innerHTML = `<span class="scope-chip-name">${label}</span>`;
+    b.innerHTML = `<span class="scope-chip-name">${escapeHtml(label)}</span>`;
     b.addEventListener("click", () => { state.scopeFilter = (state.scopeFilter === value) ? "" : value; redo(); });
     row.appendChild(b);
   };
@@ -1179,7 +1182,7 @@ function renderInsights() {
   const body = $("insights-body");
 
   if (!exps.length) {
-    body.innerHTML = `<p class="empty-note" style="margin-top:40px">Nothing ${state.scopeFilter ? "for " + state.scopeFilter : ""} this month yet.</p>`;
+    body.innerHTML = `<p class="empty-note" style="margin-top:40px">Nothing ${state.scopeFilter ? "for " + escapeHtml(state.scopeFilter) : ""} this month yet.</p>`;
     return;
   }
 
@@ -1568,7 +1571,6 @@ async function cloudRead(file) {
      cutting the image-token cost well below the old 1568px upload. */
   const image = await fileToJpegBase64(file, 1280, 0.8);
   const payload = { image, mediaType: "image/jpeg", deviceId: state.deviceId };
-  if (state.aiSecret) payload.secret = state.aiSecret; /* back-compat with the old relay */
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2446,7 +2448,10 @@ async function importBackup(file) {
     if (Array.isArray(data.settings)) {
       /* A backup file must never carry entitlement, secrets, or another
          device's identity into this install (old backups may contain them). */
-      const REJECT = new Set(["pro", "deviceId", "ghToken", "aiSecret", "licenseKey", "lastKeyCheck", "ghProven", "skipResults"]);
+      /* aiUrl + cloudConsent are rejected too: a crafted backup must not be
+         able to plant a photo-exfil endpoint or silently pre-approve cloud
+         reading (security review, 1.9.0). */
+      const REJECT = new Set(["pro", "deviceId", "ghToken", "aiSecret", "aiUrl", "cloudConsent", "licenseKey", "lastKeyCheck", "ghProven", "skipResults"]);
       for (const s of data.settings) { if (s && s.key && !REJECT.has(s.key)) await DB.setSetting(s.key, s.value); }
     }
   } catch (err) {
@@ -2465,7 +2470,8 @@ async function importBackup(file) {
   const rcur = await DB.getSetting("currency", "RM");
   state.currency = /^[A-Z]{2,4}$/.test(rcur) ? rcur : "RM";
   state.recurring = await DB.getSetting("recurringTemplates", []);
-  state.cloudConsent = await DB.getSetting("cloudConsent", "");
+  /* Consent is never inherited from a backup — the user re-opts-in on device. */
+  state.cloudConsent = "";
   state.theme = await DB.getSetting("theme", "light");
   applyTheme();
   switchView("home");
