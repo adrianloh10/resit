@@ -1,4 +1,4 @@
-/* Resit — snap receipts, track spending. All data stays on-device. */
+/* Recap — snap receipts, track spending. All data stays on-device. */
 
 const APP_VERSION = self.RESIT_VERSION || "v?"; /* set once in version.js; sw.js shares it */
 const TERMS_VERSION = "1.0"; /* bump when eula.html changes materially — the accept gate re-shows */
@@ -210,7 +210,7 @@ function renderPlan() {
   const status = $("plan-status");
   const btn = $("plan-btn");
   if (isPro()) {
-    if (status) status.textContent = "Pro — every limit removed. Thank you for backing Resit.";
+    if (status) status.textContent = "Pro — every limit removed. Thank you for backing Recap.";
     if (btn) btn.hidden = true;
   } else {
     if (status) status.textContent = "Free — " + FREE_SCANS_PER_DAY + " scanned receipt a day (" +
@@ -564,7 +564,7 @@ function learnFromCorrections(e, record) {
       if (kw.length >= 4) {
         state.totalHints[parsedBrand] = kw;
         DB.setSetting("totalHints", state.totalHints);
-        toast("Noted — Resit now knows where " + (record.merchant || "this shop") + " prints its total");
+        toast("Noted — Recap now knows where " + (record.merchant || "this shop") + " prints its total");
       }
     }
   }
@@ -1516,7 +1516,7 @@ function openStatement(m) {
   }).join("");
   const merRows = Object.entries(byMer).sort((a, b) => b[1].amt - a[1].amt).slice(0, 10).map(([n, v]) =>
     `<tr><td>${escapeHtml(n)}</td><td class="num">${v.n}×</td><td class="num">${fmtRM(v.amt)}</td></tr>`).join("");
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resit — ${title}</title><style>
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Recap — ${title}</title><style>
     body{font-family:Georgia,serif;background:#F4EDDE;color:#2C2318;max-width:640px;margin:0 auto;padding:36px 28px}
     h1{font-size:21px;font-weight:normal;margin:0}
     .sub{color:#78705E;font-size:13px;margin:4px 0 22px}
@@ -1529,7 +1529,7 @@ function openStatement(m) {
     .foot{color:#A99D88;font-size:11px;margin-top:30px;text-align:center}
     @media print{body{background:#fff}}
   </style></head><body>
-    <h1>Resit — monthly statement</h1>
+    <h1>Recap — monthly statement</h1>
     <p class="sub">${title} · generated ${new Date().toLocaleDateString(appLocale())}</p>
     <p class="big">${fmtRM(total)}</p>
     <p class="sub">${exps.length} expenses · ${allScopes().filter(s => st[s] > 0).map(s => escapeHtml(s) + " " + fmtRM(st[s])).join(" · ")}${toClaim > 0 ? " · still to claim " + fmtRM(toClaim) : ""}</p>
@@ -1537,7 +1537,7 @@ function openStatement(m) {
     <table><tr><th>Category</th><th class="num">Spent</th><th class="num">Budget</th><th class="num">±</th></tr>${catRows}</table>
     <p class="sect">Top places</p>
     <table><tr><th>Merchant</th><th class="num">Visits</th><th class="num">Total</th></tr>${merRows}</table>
-    <p class="foot">Generated on-device by Resit — no data leaves your phone.</p>
+    <p class="foot">Generated on-device by Recap — no data leaves your phone.</p>
     <script>setTimeout(function(){window.print()},400)<\/script>
   </body></html>`;
   /* document.write into a blank popup is dead on modern mobile browsers —
@@ -2335,7 +2335,7 @@ async function exportCSV(filter) {
   const rows = [exportHeaders()];
   for (const r of recs) rows.push([r.date, r.time, r.merchant, r.category, r.type, r.claim, r.amount.toFixed(2), r.note, r.items]);
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
-  downloadBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), "resit-expenses.csv");
+  downloadBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), "recap-expenses.csv");
   return recs.length;
 }
 
@@ -2375,7 +2375,7 @@ async function exportXLS(filter, baseName) {
       <td style="mso-number-format:'0.00';text-align:right">${total.toFixed(2)}</td><td></td><td></td></tr>
     </tbody>
   </table></body></html>`;
-  downloadBlob(new Blob(["﻿" + html], { type: "application/vnd.ms-excel;charset=utf-8" }), (baseName || "resit-expenses") + ".xls");
+  downloadBlob(new Blob(["﻿" + html], { type: "application/vnd.ms-excel;charset=utf-8" }), (baseName || "recap-expenses") + ".xls");
   return recs.length;
 }
 
@@ -2389,9 +2389,9 @@ async function exportBackup() {
   const SKIP = new Set(["ghToken", "aiSecret", "lastScan", "pro", "deviceId", "lastBackupAt", "backupNudgeSnooze", "licenseKey", "lastKeyCheck", "ghProven", "skipResults"]);
   const settings = settingsAll.filter(s => s && s.key && !SKIP.has(s.key));
   const expenses = state.expenses.map(({ photo, ...rest }) => rest);
-  const backup = { app: "resit", type: "backup", version: 1, exportedAt: new Date().toISOString(), expenses, settings };
+  const backup = { app: "recap", type: "backup", version: 1, exportedAt: new Date().toISOString(), expenses, settings };
   const stamp = new Date().toISOString().slice(0, 10);
-  downloadBlob(new Blob([JSON.stringify(backup)], { type: "application/json" }), "resit-backup-" + stamp + ".json");
+  downloadBlob(new Blob([JSON.stringify(backup)], { type: "application/json" }), "recap-backup-" + stamp + ".json");
   state.lastBackupAt = new Date().toISOString();
   await DB.setSetting("lastBackupAt", state.lastBackupAt);
   renderBackupStatus();
@@ -2466,7 +2466,8 @@ async function importBackup(file) {
   let data;
   try { data = JSON.parse(await file.text()); }
   catch (e) { toast("That file isn't a valid backup"); return; }
-  if (!data || data.app !== "resit" || !Array.isArray(data.expenses)) { toast("That doesn't look like a Resit backup"); return; }
+  /* Accept both the new "recap" tag and legacy "resit" backups (pre-rename). */
+  if (!data || (data.app !== "recap" && data.app !== "resit") || !Array.isArray(data.expenses)) { toast("That doesn't look like a Recap backup"); return; }
   if (!confirm("Restore " + data.expenses.length + " expenses from this backup? It replaces everything currently in the app.")) return;
 
   /* Adopt custom types from the backup (settings and any sane scope strings
@@ -2940,7 +2941,7 @@ async function init() {
     $("rec-name").value = ""; $("rec-amount").value = ""; $("rec-day").value = "";
     renderRecurringList();
     await materializeRecurring();
-    toast("Added — Resit takes it from here");
+    toast("Added — Recap takes it from here");
   });
 
   const csel = $("currency-select");
@@ -3021,14 +3022,14 @@ async function init() {
   on("export-back", () => { $("export-overlay").hidden = true; });
   on("export-overlay", ev => { if (ev.target === $("export-overlay")) $("export-overlay").hidden = true; });
   on("exp-csv", async () => { if (await exportCSV(readExportFilter())) $("export-overlay").hidden = true; });
-  on("exp-xls", async () => { if (await exportXLS(readExportFilter(), "resit-filtered")) $("export-overlay").hidden = true; });
+  on("exp-xls", async () => { if (await exportXLS(readExportFilter(), "recap-filtered")) $("export-overlay").hidden = true; });
   on("exp-claim-preset", async () => {
     if (!isPro()) { $("export-overlay").hidden = true; showUpgrade("Claim tracking and claim reports are Pro features."); return; }
     const f = readExportFilter();
     f.claim = "to-claim";
     const matches = filteredExpenses(f);
     if (!matches.length) { toast("No to-claim expenses in that range"); return; }
-    await exportXLS(f, "resit-claim-report");
+    await exportXLS(f, "recap-claim-report");
     $("export-overlay").hidden = true;
     setTimeout(async () => {
       if (!confirm("Claim report exported (" + matches.length + " expenses). Mark them all as claimed?")) return;
@@ -3093,7 +3094,7 @@ async function init() {
   on("upgrade-code", unlockPro);
   on("upgrade-close", () => { const ov = $("upgrade-overlay"); if (ov) ov.hidden = true; });
   on("upgrade-overlay", ev => { if (ev.target === $("upgrade-overlay")) $("upgrade-overlay").hidden = true; });
-  $("app-version").textContent = "Resit " + APP_VERSION + " · ";
+  $("app-version").textContent = "Recap " + APP_VERSION + " · ";
   /* Owner backdoor: 7 taps on the version line reveal the Claude-inbox setup. */
   let verTaps = 0, verTimer = null;
   $("app-version").addEventListener("click", () => {
@@ -3132,7 +3133,7 @@ async function init() {
       reg.addEventListener("updatefound", () => {
         const nw = reg.installing;
         if (nw) nw.addEventListener("statechange", () => {
-          if (nw.state === "installed" && navigator.serviceWorker.controller) toast("Updating Resit…");
+          if (nw.state === "installed" && navigator.serviceWorker.controller) toast("Updating Recap…");
         });
       });
     }).catch(() => {});

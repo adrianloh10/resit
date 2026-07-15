@@ -1,8 +1,8 @@
 {
-  "name": "resit",
+  "name": "recap",
   "version": "1.0.0",
   "private": true,
-  "description": "Resit — snap receipts, track spending. PWA + Capacitor native shell.",
+  "description": "Recap — snap receipts, track spending. PWA + Capacitor native shell.",
   "scripts": {
     "cap:add:android": "cap add android",
     "cap:sync": "cap sync"

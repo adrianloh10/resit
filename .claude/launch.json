@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "resit",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8902"],
+      "port": 8902
+    }
+  ]
+}

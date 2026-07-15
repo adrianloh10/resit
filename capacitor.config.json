@@ -1,6 +1,6 @@
 {
-  "appId": "com.promaxdigita.resit",
-  "appName": "Resit",
+  "appId": "com.promaxdigita.recap",
+  "appName": "Recap",
   "webDir": "www",
   "backgroundColor": "#F4EDDE",
   "android": {

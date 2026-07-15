@@ -1,6 +1,6 @@
 {
-  "name": "Resit — Expense Tracker",
-  "short_name": "Resit",
+  "name": "Recap — Expense Tracker",
+  "short_name": "Recap",
   "description": "Snap receipts, track spending. Everything stays on your phone.",
   "start_url": "./",
   "scope": "./",
