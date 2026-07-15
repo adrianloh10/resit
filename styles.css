@@ -168,10 +168,21 @@ html, body {
 }
 .acct-tag.t-personal { color: var(--teal); background: rgba(17, 101, 95, .13); }
 .acct-tag.t-shared { color: var(--gold); background: rgba(168, 130, 59, .16); }
+.acct-tag.t-family { color: var(--gold); background: rgba(168, 130, 59, .16); }
 .acct-tag.t-company { color: var(--sienna-red); background: rgba(153, 52, 31, .12); }
 html[data-theme="dark"] .acct-tag.t-personal { background: rgba(79, 167, 159, .18); }
-html[data-theme="dark"] .acct-tag.t-shared { background: rgba(203, 164, 92, .18); }
+html[data-theme="dark"] .acct-tag.t-shared,
+html[data-theme="dark"] .acct-tag.t-family { background: rgba(203, 164, 92, .18); }
 html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18); }
+/* Family chip = gold, matching its tag. */
+.scope-chip.scope-family.selected, .chip.scope-opt.scope-family.selected {
+  background: var(--gold); border-color: var(--gold); color: #FDF6E9;
+}
+/* Search-history group header. */
+.group-head {
+  font-size: 11.5px; font-weight: 700; color: var(--sienna);
+  margin: 14px 4px 6px; letter-spacing: .01em;
+}
 .entry-amount { font-family: var(--mono); font-size: 14.5px; font-weight: 600; color: var(--ink); }
 .empty-note { text-align: center; color: var(--muted); font-size: 14px; line-height: 1.7; margin-top: 80px; }
 
@@ -277,13 +288,15 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 #setup-overlay[data-step="1"] .setup-step[data-step="1"],
 #setup-overlay[data-step="2"] .setup-step[data-step="2"],
 #setup-overlay[data-step="3"] .setup-step[data-step="3"],
-#setup-overlay[data-step="4"] .setup-step[data-step="4"] { display: block; }
+#setup-overlay[data-step="4"] .setup-step[data-step="4"],
+#setup-overlay[data-step="5"] .setup-step[data-step="5"] { display: block; }
 .setup-dots { display: flex; gap: 6px; justify-content: center; margin: 8px 0 12px; }
 .setup-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--divider-soft); }
 #setup-overlay[data-step="1"] .setup-dots i:nth-child(1),
 #setup-overlay[data-step="2"] .setup-dots i:nth-child(2),
 #setup-overlay[data-step="3"] .setup-dots i:nth-child(3),
-#setup-overlay[data-step="4"] .setup-dots i:nth-child(4) { background: var(--teal); }
+#setup-overlay[data-step="4"] .setup-dots i:nth-child(4),
+#setup-overlay[data-step="5"] .setup-dots i:nth-child(5) { background: var(--teal); }
 #setup-overlay[data-mode="terms"] .setup-dots { display: none; }
 .setup-input {
   display: block; width: 100%; box-sizing: border-box; margin-top: 10px;

@@ -202,7 +202,7 @@ try {
         <div class="settings-divider"></div>
         <div class="field" id="cloud-field" hidden>
           <span class="field-label">Smarter receipt reading (cloud)</span>
-          <p class="settings-sub">Receipts your phone can't read clearly get a second read from a cloud AI — details in the <a href="privacy.html" target="_blank" rel="noopener">privacy notice</a>.</p>
+          <p class="settings-sub"><b>On by default.</b> Receipts your phone can't read clearly get a second read from a secure cloud AI. Turn it off to keep every photo on your phone — details in the <a href="privacy.html" target="_blank" rel="noopener">privacy notice</a>.</p>
           <div class="btn-pair">
             <button class="ghost-btn small" id="cloud-toggle">Turn on</button>
             <a class="ghost-btn small cloud-privacy" href="privacy.html" target="_blank" rel="noopener">Privacy</a>
@@ -223,7 +223,7 @@ try {
     </div>
 
     <button class="ghost-btn danger" id="erase-data">Erase all data</button>
-    <p class="settings-note"><span id="app-version"></span>Resit lives entirely on this phone — and quietly gets smarter with every receipt: your categories, your shop names, even where each shop hides its total. Nothing leaves your phone unless you turn on cloud reading. <a href="eula.html" target="_blank" rel="noopener">Terms</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
+    <p class="settings-note"><span id="app-version"></span>Resit lives entirely on this phone — and quietly gets smarter with every receipt: your categories, your shop names, even where each shop hides its total. Your records never leave your phone; only receipt photos you cloud-read do (on by default — turn it off above). <a href="eula.html" target="_blank" rel="noopener">Terms</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
   </section>
 </main>
 
@@ -321,11 +321,11 @@ try {
 
 <div class="overlay sheet-overlay" id="setup-overlay" hidden data-step="1" data-mode="full">
   <div class="confirm-sheet" style="text-align: center;">
-    <div class="setup-dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="setup-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
 
     <div class="setup-step" data-step="1">
       <p class="sheet-title" id="eula-title" style="margin: 6px 0 12px;">Welcome to Resit</p>
-      <p class="consent-text">The fastest way to know where your money goes: snap a receipt and Resit reads it, files it, and keeps every record on this phone. Cloud reading is optional and always asks first. One quick look at the terms and you're in.</p>
+      <p class="consent-text">The fastest way to know where your money goes: snap a receipt and Resit reads it, files it, and keeps every record on this phone. To read tricky receipts it can send just that photo to a secure cloud AI — this is on by default and you can switch it off anytime in Settings. One quick look at the terms and you're in.</p>
       <p class="consent-text" style="margin-top: 10px;"><a href="eula.html" target="_blank" rel="noopener">Terms of Use</a> &nbsp;·&nbsp; <a href="privacy.html" target="_blank" rel="noopener">Privacy Notice</a></p>
       <button class="save-btn" id="eula-accept" style="margin-top: 14px;">I agree — continue</button>
       <p class="edit-hint">By continuing you confirm you're at least 13 (or have a parent's consent), accept the Terms of Use, and acknowledge the Privacy Notice.</p>
@@ -352,6 +352,13 @@ try {
     </div>
 
     <div class="setup-step" data-step="3">
+      <p class="sheet-title" style="margin: 6px 0 12px;">How do you split spending?</p>
+      <p class="consent-text">Tag each expense so personal and work stay apart. Pick the types you'll use — change them anytime in Settings.</p>
+      <div class="chip-row" id="setup-type-chips" style="justify-content: center; margin: 10px 0;"></div>
+      <button class="save-btn" id="setup-types-next" style="margin-top: 14px;">Continue</button>
+    </div>
+
+    <div class="setup-step" data-step="4">
       <p class="sheet-title" style="margin: 6px 0 12px;">Give the month a target</p>
       <p class="consent-text">Set a budget and the home screen tracks how much of it you've used — live, every day. Optional: tap the budget on the home screen anytime.</p>
       <input type="number" id="setup-budget" class="setup-input" inputmode="decimal" min="0" step="50" placeholder="e.g. 3000">
@@ -359,21 +366,11 @@ try {
       <button class="ghost-btn" id="setup-budget-skip" style="margin-top: 10px; border: none;">Skip for now</button>
     </div>
 
-    <div class="setup-step" data-step="4">
+    <div class="setup-step" data-step="5">
       <p class="sheet-title" style="margin: 6px 0 12px;">You're set</p>
       <p class="consent-text">From here it's one habit: receipt in hand, tap the orange camera — it reads and files itself in seconds. And everything you track stays on this phone.</p>
       <button class="save-btn" id="setup-finish" style="margin-top: 14px;">Start using Resit</button>
     </div>
-  </div>
-</div>
-
-<div class="overlay sheet-overlay" id="consent-overlay" hidden>
-  <div class="confirm-sheet" style="text-align: center;">
-    <p class="sheet-title" style="margin: 6px 0 12px;">Read this receipt in the cloud?</p>
-    <p class="consent-text">Your phone couldn't read this one clearly. With your OK, Resit sends the photo to <strong>a cloud AI</strong> (through Resit's private server) to read it. Resit's server keeps nothing — but the AI provider may keep the photo and use it to improve its AI (that's what makes this feature free). Skip it for receipts you'd rather keep private.</p>
-    <button class="save-btn" id="consent-yes">Use cloud reading</button>
-    <button class="ghost-btn" id="consent-no" style="margin-top: 10px;">Keep on-device only</button>
-    <p class="edit-hint"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · change anytime in Settings</p>
   </div>
 </div>
 

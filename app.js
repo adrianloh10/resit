@@ -23,17 +23,23 @@ const isRealCategory = c => typeof c === "string" && hasOwn(CAT_COLOR, c);
 
 /* A second classification axis, independent of category: who the spend is for.
    Each gets its own earth-tone accent. Default for new/old expenses: Personal. */
-const SCOPES = ["Personal", "Shared", "Company"];
-const SCOPE_CLASS = { Personal: "scope-personal", Shared: "scope-shared", Company: "scope-company" };
-const SCOPE_FILL = { Personal: "var(--teal)", Shared: "var(--gold)", Company: "var(--sienna-red)" };
-const SCOPE_TAG = { Personal: "t-personal", Shared: "t-shared", Company: "t-company" };
-/* Types are user-extendable (1.7.0): the three built-ins keep their own
-   colours; user-added types share one terracotta look. */
-const allScopes = () => SCOPES.concat(state.customScopes || []);
+/* Built-in expense types. Defaults are Personal / Company / Family (1.10.0);
+   "Shared" is kept RECOGNISED (colour + claimable) so pre-1.10 data never
+   collapses, but it is no longer offered as a default. */
+const DEFAULT_SCOPES = ["Personal", "Company", "Family"];
+const SCOPE_CLASS = { Personal: "scope-personal", Company: "scope-company", Family: "scope-family", Shared: "scope-shared" };
+const SCOPE_FILL = { Personal: "var(--teal)", Company: "var(--sienna-red)", Family: "var(--gold)", Shared: "var(--gold)" };
+const SCOPE_TAG = { Personal: "t-personal", Company: "t-company", Family: "t-family", Shared: "t-shared" };
+const CLAIMABLE = new Set(["Company", "Shared"]); /* types that can be "to claim" */
+/* state.scopes = the user's active built-ins (chosen at setup); customScopes =
+   Pro-added types. allScopes() is what the sheet/filters offer. */
+const allScopes = () => (state.scopes && state.scopes.length ? state.scopes : DEFAULT_SCOPES).concat(state.customScopes || []);
 const scopeClass = s => SCOPE_CLASS[s] || "scope-custom";
 const scopeFill = s => SCOPE_FILL[s] || "var(--terracotta)";
 const scopeTag = s => SCOPE_TAG[s] || "t-custom";
-const scopeOf = e => (e && allScopes().includes(e.scope)) ? e.scope : "Personal";
+/* Trust a stored scope string so legacy data (e.g. "Shared") or a
+   deselected type never silently becomes Personal; only empty is defaulted. */
+const scopeOf = e => (e && typeof e.scope === "string" && e.scope.trim()) ? e.scope : "Personal";
 
 /* Geometric line-art icons per category (stroke = currentColor). */
 const CAT_ICONS = {
@@ -69,6 +75,7 @@ let state = {
   country: "MY",    /* profile: drives date/number locale */
   language: "en",   /* profile: UI language (English only for now) */
   recurring: [],    /* monthly expense templates */
+  scopes: ["Personal", "Company", "Family"], /* active built-in types (chosen at setup) */
   theme: "light",
   aiUrl: "",
   aiSecret: "",
@@ -997,26 +1004,44 @@ function renderHome() {
     ledger.appendChild(row);
   }
 
-  /* Matches from other months, with a month tag; tap opens the expense. */
+  /* Search history: past-month matches GROUPED by shop, each group headed by
+     its visit count + total spent (1.10.0), so searching a shop reads like a
+     mini history. Tap a row to open the expense. */
   if (others.length) {
     const label = document.createElement("p");
     label.className = "day-label";
-    label.textContent = "In other months";
+    label.textContent = "Earlier";
     ledger.appendChild(label);
+    const groups = {};
     for (const e of others) {
-      const d = new Date(e.date);
-      const sc = scopeOf(e);
-      const row = document.createElement("button");
-      row.className = "entry";
-      row.innerHTML = `
-        <span class="cat-icon">${catIcon(e.category)}</span>
-        <span class="entry-main">
-          <span class="entry-merchant"><span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span></span>
-          <span class="entry-cat"><span class="acct-tag ${scopeTag(sc)}">${escapeHtml(e.category)} | ${escapeHtml(sc.toUpperCase())}</span><span class="mut">${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}</span></span>
-        </span>
-        <span class="entry-amount">${fmtRM(e.amount)}</span>`;
-      row.addEventListener("click", () => openConfirmSheet(e));
-      ledger.appendChild(row);
+      const key = brandOf(normMerchant(e.merchant)) || ("~" + (e.merchant || "").toLowerCase());
+      (groups[key] = groups[key] || { name: e.merchant || "Expense", items: [], total: 0 }).items.push(e);
+      groups[key].total += e.amount;
+    }
+    const ordered = Object.values(groups)
+      .sort((a, b) => new Date(b.items[0].date) - new Date(a.items[0].date));
+    for (const g of ordered) {
+      if (g.items.length > 1) {
+        const gh = document.createElement("p");
+        gh.className = "group-head";
+        gh.textContent = g.name + " · " + g.items.length + " visits · " + fmtRM(g.total, true);
+        ledger.appendChild(gh);
+      }
+      for (const e of g.items) {
+        const d = new Date(e.date);
+        const sc = scopeOf(e);
+        const row = document.createElement("button");
+        row.className = "entry";
+        row.innerHTML = `
+          <span class="cat-icon">${catIcon(e.category)}</span>
+          <span class="entry-main">
+            <span class="entry-merchant"><span class="merchant-name">${escapeHtml(e.merchant || "Expense")}</span></span>
+            <span class="entry-cat"><span class="acct-tag ${scopeTag(sc)}">${escapeHtml(e.category)} | ${escapeHtml(sc.toUpperCase())}</span><span class="mut">${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}</span></span>
+          </span>
+          <span class="entry-amount">${fmtRM(e.amount)}</span>`;
+        row.addEventListener("click", () => openConfirmSheet(e));
+        ledger.appendChild(row);
+      }
     }
   }
 
@@ -1070,7 +1095,11 @@ function renderScopeChips() {
   if (!chips) return;
   const cur = scopeOf(e);
   chips.innerHTML = "";
-  for (const s of allScopes()) {
+  /* Always show this expense's own type even if it's legacy (e.g. "Shared")
+     or a type the user deselected, so editing never drops it. */
+  const opts = allScopes().slice();
+  if (!opts.includes(cur)) opts.unshift(cur);
+  for (const s of opts) {
     const b = document.createElement("button");
     const sel = s === cur;
     b.className = "chip scope-opt " + scopeClass(s) + (sel ? " selected" : "");
@@ -1085,34 +1114,75 @@ function renderScopeChips() {
     });
     chips.appendChild(b);
   }
-  /* "+ New" lets the user add their own type (e.g. Family, Side business). */
+  /* "+ New" adds a custom type — a Pro feature (1.10.0). */
   const add = document.createElement("button");
   add.className = "chip scope-opt scope-new";
   add.textContent = "+ New";
   add.addEventListener("click", async () => {
-    const name = (prompt("Name the new type (e.g. Family, Side business)") || "").trim();
+    if (!isPro()) { showUpgrade("Create your own expense types (Family, Side business…) with Pro."); return; }
+    const name = addCustomScopePrompt();
     if (!name) return;
-    if (name.length > 14) { toast("Keep it under 14 characters"); return; }
-    const existing = allScopes().find(s => s.toLowerCase() === name.toLowerCase());
-    if (!existing) {
-      state.customScopes.push(name);
-      await DB.setSetting("customScopes", state.customScopes);
-    }
-    state.editing.scope = existing || name;
+    state.editing.scope = name;
     state.editing.userPickedScope = true;
+    await DB.setSetting("customScopes", state.customScopes);
     renderScopeChips();
     renderClaimChips();
   });
   chips.appendChild(add);
 }
 
-/* Claim status picker — only meaningful for Shared/Company expenses. */
+/* Shared "+ New type" helper (sheet + setup). Returns the chosen name, or
+   "" if cancelled/invalid. Adds to customScopes if genuinely new. */
+function addCustomScopePrompt() {
+  const name = (prompt("Name the new type (e.g. Family, Side business)") || "").trim();
+  if (!name) return "";
+  if (name.length > 14) { toast("Keep it under 14 characters"); return ""; }
+  const existing = allScopes().find(s => s.toLowerCase() === name.toLowerCase());
+  if (existing) return existing;
+  state.customScopes.push(name);
+  return name;
+}
+
+/* Setup wizard: pick which expense types you'll use (Personal/Company/Family
+   default all on). Pro can add custom types. Keeps at least one active. */
+function renderSetupTypeChips() {
+  const row = $("setup-type-chips");
+  if (!row) return;
+  row.innerHTML = "";
+  const active = new Set(state.scopes && state.scopes.length ? state.scopes : DEFAULT_SCOPES);
+  for (const s of DEFAULT_SCOPES.concat(state.customScopes)) {
+    const b = document.createElement("button");
+    b.className = "chip scope-opt " + scopeClass(s) + (active.has(s) ? " selected" : "");
+    b.textContent = s;
+    b.addEventListener("click", () => {
+      const set = new Set(state.scopes);
+      if (set.has(s)) { if (set.size <= 1) { toast("Keep at least one type"); return; } set.delete(s); }
+      else set.add(s);
+      state.scopes = DEFAULT_SCOPES.concat(state.customScopes).filter(x => set.has(x));
+      renderSetupTypeChips();
+    });
+    row.appendChild(b);
+  }
+  const add = document.createElement("button");
+  add.className = "chip scope-opt scope-new";
+  add.textContent = "+ Add your own";
+  add.addEventListener("click", () => {
+    if (!isPro()) { showUpgrade("Create your own expense types (Family, Side business…) with Pro."); return; }
+    const name = addCustomScopePrompt();
+    if (!name) return;
+    if (!state.scopes.includes(name)) state.scopes.push(name);
+    renderSetupTypeChips();
+  });
+  row.appendChild(add);
+}
+
+/* Claim status picker — only meaningful for claimable types (Company/Shared). */
 function renderClaimChips() {
   const e = state.editing;
   const label = $("claim-label"), row = $("claim-chips");
   if (!label || !row) return;
-  /* Claims are a Pro feature (and only meaningful for Shared/Company). */
-  const show = !!e && scopeOf(e) !== "Personal" && isPro();
+  /* Claims are a Pro feature, only for claimable types (Company / legacy Shared). */
+  const show = !!e && CLAIMABLE.has(scopeOf(e)) && isPro();
   label.hidden = !show;
   row.hidden = !show;
   /* Don't wipe claimStatus here — toggling scope back and forth must not
@@ -1585,29 +1655,6 @@ async function cloudRead(file) {
 
 /* Explicit, one-time consent before any photo leaves the device (PDPA). The
    choice is remembered and can be changed in Settings. */
-function ensureCloudConsent() {
-  if (state.cloudConsent === "yes") return Promise.resolve(true);
-  if (state.cloudConsent === "no") return Promise.resolve(false);
-  return new Promise(resolve => {
-    const ov = $("consent-overlay");
-    const yes = $("consent-yes");
-    const no = $("consent-no");
-    if (!ov || !yes || !no) { resolve(false); return; }
-    const finish = (val) => async () => {
-      yes.removeEventListener("click", onYes);
-      no.removeEventListener("click", onNo);
-      ov.hidden = true;
-      state.cloudConsent = val ? "yes" : "no";
-      await DB.setSetting("cloudConsent", state.cloudConsent);
-      resolve(val);
-    };
-    const onYes = finish(true);
-    const onNo = finish(false);
-    yes.addEventListener("click", onYes);
-    no.addEventListener("click", onNo);
-    ov.hidden = false;
-  });
-}
 
 /* The scan pill: a small breathing status chip above the nav while a
    receipt is being read — never a blocking overlay. */
@@ -1878,13 +1925,11 @@ async function handleImage(file) {
     if (state.ocrCancelled) return;
     DB.setSetting("lastScan", parsed.rawText || "");
     applyLearnedTotalHint(parsed);
-    /* Cloud fallback: only when on-device reading came up empty or weak, the
-       cloud reader is configured, and the user has opted in (asked once). */
+    /* Cloud fallback: only when on-device reading came up empty or weak, and
+       the user hasn't switched cloud reading off (it's on by default). */
     const weak = parsed.total === null || (parsed.totalConf || 0) <= 1;
-    if (cloudEndpoint() && weak) {
-      const consented = await ensureCloudConsent();
-      if (state.ocrCancelled) return;
-      if (consented) {
+    if (cloudEndpoint() && weak && state.cloudConsent !== "no") {
+      {
         showScanPill("Reading with cloud…");
         try {
           const ai = await cloudRead(file);
@@ -2431,7 +2476,7 @@ async function importBackup(file) {
   const foundScopes = new Set(fromSettings.filter(s => typeof s === "string" && s && s.length <= 14));
   for (const e of data.expenses) {
     const s = e && e.scope;
-    if (typeof s === "string" && s && s.length <= 14 && !SCOPES.includes(s)) foundScopes.add(s);
+    if (typeof s === "string" && s && s.length <= 14 && !DEFAULT_SCOPES.includes(s) && s !== "Shared") foundScopes.add(s);
   }
   let scopesChanged = false;
   for (const s of foundScopes) if (!state.customScopes.includes(s)) { state.customScopes.push(s); scopesChanged = true; }
@@ -2470,8 +2515,13 @@ async function importBackup(file) {
   const rcur = await DB.getSetting("currency", "RM");
   state.currency = /^[A-Z]{2,4}$/.test(rcur) ? rcur : "RM";
   state.recurring = await DB.getSetting("recurringTemplates", []);
-  /* Consent is never inherited from a backup — the user re-opts-in on device. */
-  state.cloudConsent = "";
+  const rsc = await DB.getSetting("scopes", DEFAULT_SCOPES);
+  state.scopes = Array.isArray(rsc) && rsc.length ? rsc.filter(s => DEFAULT_SCOPES.includes(s) || s === "Shared") : DEFAULT_SCOPES.slice();
+  if (!state.scopes.length) state.scopes = DEFAULT_SCOPES.slice();
+  const rcsc = await DB.getSetting("customScopes", []);
+  state.customScopes = Array.isArray(rcsc) ? rcsc.filter(s => typeof s === "string" && s && s.length <= 14) : [];
+  /* Cloud reading is on by default (1.10.0); a restore keeps the on-device setting. */
+  state.cloudConsent = await DB.getSetting("cloudConsent", "yes");
   state.theme = await DB.getSetting("theme", "light");
   applyTheme();
   switchView("home");
@@ -2505,6 +2555,9 @@ async function init() {
     state.language = await DB.getSetting("language", "en");
     const cscopes = await DB.getSetting("customScopes", []);
     state.customScopes = Array.isArray(cscopes) ? cscopes.filter(s => typeof s === "string" && s && s.length <= 14) : [];
+    const sscopes = await DB.getSetting("scopes", DEFAULT_SCOPES);
+    state.scopes = Array.isArray(sscopes) && sscopes.length ? sscopes.filter(s => DEFAULT_SCOPES.includes(s) || s === "Shared") : DEFAULT_SCOPES.slice();
+    if (!state.scopes.length) state.scopes = DEFAULT_SCOPES.slice();
     state.recurring = await DB.getSetting("recurringTemplates", []);
     state.ghProven = await DB.getSetting("ghProven", false);
     state.skipResults = await DB.getSetting("skipResults", []);
@@ -2512,7 +2565,9 @@ async function init() {
     state.aiUrl = await DB.getSetting("aiUrl", "");
     state.aiSecret = await DB.getSetting("aiSecret", "");
     state.ghToken = await DB.getSetting("ghToken", "");
-    state.cloudConsent = await DB.getSetting("cloudConsent", "");
+    /* Cloud reading is ON by default (1.10.0, informed default disclosed at
+       setup); a user who turns it off in Settings persists "no". */
+    state.cloudConsent = await DB.getSetting("cloudConsent", "yes");
     state.deviceId = await DB.getSetting("deviceId", "");
     if (!state.deviceId) {
       state.deviceId = Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
@@ -2558,7 +2613,7 @@ async function init() {
     }, wait);
   }
 
-  /* First run = the 4-step setup wizard (terms → country/currency → budget
+  /* First run = the 5-step setup wizard (terms → country → types → budget
      → done). A returning user after a TERMS_VERSION bump only re-accepts
      the terms card. No backdrop-close, no cancel — Agree is the only way
      in. (If storage failed above, eulaAccepted reads "" — showing the gate
@@ -2939,14 +2994,21 @@ async function init() {
     await DB.setSetting("currency", state.currency);
     const cp = $("currency-prefix");
     if (cp) cp.textContent = state.currency;
+    renderSetupTypeChips();
     $("setup-overlay").dataset.step = "3";
+  });
+  on("setup-types-next", async () => {
+    if (!state.scopes.length) state.scopes = DEFAULT_SCOPES.slice();
+    await DB.setSetting("scopes", state.scopes);
+    await DB.setSetting("customScopes", state.customScopes);
+    $("setup-overlay").dataset.step = "4";
   });
   on("setup-budget-save", async () => {
     const v = parseFloat($("setup-budget").value);
     if (v > 0) { state.budget = v; await DB.setSetting("budget", v); }
-    $("setup-overlay").dataset.step = "4";
+    $("setup-overlay").dataset.step = "5";
   });
-  on("setup-budget-skip", () => { $("setup-overlay").dataset.step = "4"; });
+  on("setup-budget-skip", () => { $("setup-overlay").dataset.step = "5"; });
   on("setup-finish", finishSetup);
   on("statement-close", () => {
     const ov = $("statement-overlay"), fr = $("statement-frame");

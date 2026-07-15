@@ -41,15 +41,15 @@
 <table>
   <tr><th>Data</th><th>Where it is stored</th><th>Notes</th></tr>
   <tr><td>Expense records (amounts, merchants, categories, dates, notes, tags)</td><td><strong>Your device only</strong> (local app storage)</td><td>Never transmitted to us (except data printed on receipts you choose to cloud-read, which travels inside the photo — see section 3). Deleted when you erase data or uninstall.</td></tr>
-  <tr><td>Receipt photos</td><td><strong>Your device</strong> — plus Google, only for photos you choose to cloud-read</td><td>Resit's server never stores them. Google may retain photos sent for cloud reading — see section 3.</td></tr>
+  <tr><td>Receipt photos</td><td><strong>Your device</strong> — plus Google for hard-to-read photos that go through cloud reading (on by default; turn it off in Settings)</td><td>Resit's server never stores them. Google may retain photos sent for cloud reading — see section 3.</td></tr>
   <tr><td>Settings, budgets, learned preferences</td><td><strong>Your device only</strong></td><td>—</td></tr>
   <tr><td>Anonymous device identifier + daily usage counter</td><td>Our server (Cloudflare)</td><td>A random ID with a number — used solely to prevent abuse of cloud reading. It contains no name, contact detail, or receipt content and cannot identify you.</td></tr>
   <tr><td>Pro licence key (if you buy Pro)</td><td>Our server (Cloudflare)</td><td>The key, an optional label you gave at purchase, and activation date — the minimum needed to honour your licence.</td></tr>
 </table>
 <p>We collect <strong>no</strong> names, contact details, location data, advertising identifiers or analytics. We do not build profiles and we never sell or share personal data for marketing.</p>
 
-<h2>3. Cloud receipt reading (optional, consent-based)</h2>
-<p>By default, receipts are read on your device and the photo never leaves it. If you switch on cloud reading <em>and</em> accept the in-app consent prompt, then when a receipt is too hard to read locally:</p>
+<h2>3. Cloud receipt reading (on by default; you can turn it off)</h2>
+<p>Cloud reading is <strong>on by default</strong>, and this is disclosed to you when you first set up the app. When a receipt is too hard for your phone to read on its own, Resit sends just that photo for a sharper read. You can turn cloud reading off at any time in Settings → "Smarter receipt reading" — with it off, no photo ever leaves your phone. When it runs:</p>
 <ul>
   <li>the photo is sent over an encrypted connection to our reader service (hosted on Cloudflare) and passed to <strong>Google's AI service</strong> to extract the text;</li>
   <li>on <strong>our side</strong> it is processed in memory only — never written to any disk, database or log — and discarded as soon as the result returns;</li>
