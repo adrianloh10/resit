@@ -71,6 +71,8 @@ let state = {
   currency: "RM",   /* display only — no conversion */
   selectMode: false, /* multi-select for bulk delete/edit (long-press to enter) */
   selected: null,    /* Set of selected expense ids while selectMode is on */
+  batchMode: false,  /* scanning a stack of receipts one after another (Pro) */
+  batchFiles: [], batchIndex: 0, batchTotal: 0, batchSaved: 0,
   customScopes: [],  /* user-added expense types beyond Personal/Shared/Company */
   country: "MY",    /* profile: drives date/number locale */
   language: "en",   /* profile: UI language (English only for now) */
@@ -1967,6 +1969,67 @@ async function handleImage(file) {
   }
 }
 
+/* ---- Batch scan (Pro): read a stack of receipts one after another, confirming
+   the TYPE (Personal/Company/Family) on each before it saves. ---- */
+async function startBatch(fileList) {
+  const files = Array.from(fileList || []).filter(f => f && f.type && f.type.indexOf("image/") === 0);
+  if (!files.length) return;
+  const MAX = 20;
+  if (files.length > MAX) toast("Up to " + MAX + " at once — reading the first " + MAX);
+  state.batchFiles = files.slice(0, MAX);
+  state.batchIndex = 0;
+  state.batchSaved = 0;
+  state.batchTotal = state.batchFiles.length;
+  state.batchMode = true;
+  switchView("home");
+  processNextInBatch();
+}
+
+async function processNextInBatch() {
+  if (!state.batchMode) return;
+  if (state.batchIndex >= state.batchTotal) { finishBatch(); return; }
+  const file = state.batchFiles[state.batchIndex];
+  state.ocrCancelled = false;
+  const pos = (state.batchIndex + 1) + " of " + state.batchTotal;
+  showScanPill("Reading receipt " + pos + "…");
+  try {
+    const parsed = await window.ReceiptOCR.scanReceipt(file, msg => showScanPill(msg + " (" + pos + ")"));
+    if (state.ocrCancelled || !state.batchMode) { finishBatch(); return; }
+    applyLearnedTotalHint(parsed);
+    const weak = parsed.total === null || (parsed.totalConf || 0) <= 1;
+    if (cloudEndpoint() && weak && state.cloudConsent !== "no") {
+      showScanPill("Reading with cloud… (" + pos + ")");
+      try {
+        const ai = await cloudRead(file);
+        if (state.ocrCancelled || !state.batchMode) { finishBatch(); return; }
+        learnFromAI(parsed.rawText, ai, parsed.total, parsed.merchant);
+        mergeAIResult(parsed, ai);
+      } catch (err) { /* keep the on-device result and carry on */ }
+    }
+    hideScanPill();
+    const draft = parsedToDraft(parsed);
+    draft._file = file;
+    openConfirmSheet(draft);
+  } catch (err) {
+    hideScanPill();
+    /* Unreadable one — still queue it so the user can type it in and keep going. */
+    openConfirmSheet({
+      amount: null, merchant: "", category: "Other", scope: "Personal",
+      date: new Date().toISOString(), items: [], note: "", fromReceipt: true, _file: file
+    });
+  }
+}
+
+function finishBatch() {
+  const saved = state.batchSaved, total = state.batchTotal;
+  state.batchMode = false;
+  state.batchFiles = []; state.batchIndex = 0; state.batchTotal = 0; state.batchSaved = 0;
+  hideScanPill();
+  switchView("home");
+  renderHome();
+  if (saved > 0) toast("Added " + saved + " receipt" + (saved > 1 ? "s" : "") + (saved < total ? " of " + total : ""));
+}
+
 function parsedToDraft(parsed) {
   const d = parsed.date || new Date();
   if (parsed.time) d.setHours(parsed.time.h, parsed.time.min, 0, 0);
@@ -1999,6 +2062,19 @@ function openConfirmSheet(expense) {
   const e = state.editing;
 
   $("confirm-title").textContent = e.id ? "Edit expense" : (e.fromReceipt ? "Check & save" : "New expense");
+  /* Batch mode: a "Receipt X of N" badge, a Skip button, and a Save button that
+     rolls straight on to the next receipt. The user's job here is the Type. */
+  const bBadge = $("batch-badge"), bSkip = $("batch-skip"), bSave = $("save-btn");
+  if (state.batchMode && !e.id) {
+    const last = state.batchIndex + 1 >= state.batchTotal;
+    if (bBadge) { bBadge.hidden = false; bBadge.textContent = "Receipt " + (state.batchIndex + 1) + " of " + state.batchTotal; }
+    if (bSkip) bSkip.hidden = false;
+    if (bSave) bSave.textContent = last ? "Save & finish" : "Save & next";
+  } else {
+    if (bBadge) bBadge.hidden = true;
+    if (bSkip) bSkip.hidden = true;
+    if (bSave) bSave.textContent = "Save";
+  }
   const cp = $("currency-prefix");
   if (cp) cp.textContent = state.currency;
   const rr = $("repeat-row");
@@ -2174,6 +2250,9 @@ function closeConfirmSheet(force) {
   state._sheetSnapshot = undefined;
   $("confirm-overlay").hidden = true;
   state.editing = null;
+  /* Dismissing the sheet mid-stack (X / backdrop / Esc) ends the batch and
+     keeps whatever was already saved. A save passes force=true and advances. */
+  if (!force && state.batchMode) finishBatch();
 }
 
 async function saveExpense() {
@@ -2249,6 +2328,14 @@ async function saveExpense() {
   learnFromCorrections(e, record);
 
   closeConfirmSheet(true);
+  /* Batch: this receipt is saved — roll straight on to the next one. */
+  if (state.batchMode && !e.id) {
+    state.batchSaved++;
+    state.batchIndex++;
+    renderHome();
+    processNextInBatch();
+    return;
+  }
   const saved = new Date(record.date);
   const now = new Date();
   state.monthOffset = (saved.getFullYear() - now.getFullYear()) * 12 + (saved.getMonth() - now.getMonth());
@@ -2856,6 +2943,12 @@ async function init() {
   $("fab-camera").addEventListener("click", openChooser);
   $("choose-camera").addEventListener("click", () => pickImage("camera"));
   $("choose-gallery").addEventListener("click", () => pickImage("gallery"));
+  $("choose-batch").addEventListener("click", () => {
+    $("chooser-overlay").hidden = true;
+    if (!isPro()) { showUpgrade("Scan a whole stack of receipts in one go with Pro — confirm the type on each as it flies past."); return; }
+    $("batch-input").click();
+  });
+  $("batch-input").addEventListener("change", ev => { startBatch(ev.target.files); ev.target.value = ""; });
   $("choose-manual").addEventListener("click", () => { $("chooser-overlay").hidden = true; openConfirmSheet(null); });
   $("chooser-overlay").addEventListener("click", ev => { if (ev.target === $("chooser-overlay")) $("chooser-overlay").hidden = true; });
 
@@ -2898,6 +2991,12 @@ async function init() {
   $("confirm-back").addEventListener("click", () => closeConfirmSheet());
   $("confirm-overlay").addEventListener("click", ev => { if (ev.target === $("confirm-overlay")) closeConfirmSheet(); });
   $("save-btn").addEventListener("click", saveExpense);
+  $("batch-skip").addEventListener("click", () => {
+    if (!state.batchMode) return;
+    state.batchIndex++;
+    closeConfirmSheet(true); /* force = don't end the batch */
+    processNextInBatch();
+  });
 
   $("budget-input").addEventListener("change", async () => {
     const v = parseFloat($("budget-input").value) || 0;

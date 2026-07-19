@@ -178,6 +178,17 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 .scope-chip.scope-family.selected, .chip.scope-opt.scope-family.selected {
   background: var(--gold); border-color: var(--gold); color: #FDF6E9;
 }
+/* Batch scan: "Receipt X of N" badge in the confirm header + PRO pill. */
+.batch-badge {
+  display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .02em;
+  color: var(--sienna); background: rgba(122, 69, 38, .1); border-radius: 99px;
+  padding: 4px 10px; white-space: nowrap;
+}
+.chooser-btn .pro-pill {
+  font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .06em;
+  color: #FDF6E9; background: var(--gold); border-radius: 99px; padding: 2px 7px; margin-left: 6px;
+  vertical-align: 1px;
+}
 /* Search-history group header. */
 .group-head {
   font-size: 11.5px; font-weight: 700; color: var(--sienna);
