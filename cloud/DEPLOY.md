@@ -71,6 +71,15 @@ then the app just uses on-device reading and nothing changes.
 
 That's the prototype — live, multi-user, RM 0/month.
 
+## Shared learning pool (no personal data)
+The Worker also pools anonymous reading rules so every device's reader improves.
+Apps that opted into cloud reading + sharing `POST /rules` (at most weekly) the
+`{garbled, clean, hint}` tokens they learned — never ids, amounts, dates, or
+images; the Worker stores only `(garbled, clean, hint, week, seen_count)` in a
+lazily-created `shared_rules` table. To review the pool for curation, run
+`curl "https://resit.adrianloh10.workers.dev/rules/export?code=<PRO_UNLOCK>&weeks=2"`
+(same master code as `/mint`; wrong code → `Invalid code`).
+
 ---
 
 ## Going live (later, before real strangers use it)

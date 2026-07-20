@@ -264,6 +264,57 @@ function safeEqual(a, b) {
   return diff === 0;
 }
 
+/* ---- Shared learning pool (no personal data) ----
+   Devices that opted into cloud reading AND sharing upload, at most weekly, the
+   AI-derived rules their on-device reader learned from a cloud read: an OCR
+   "garbled" shop token, the "clean" name printed on the receipt, and the
+   total-line "hint" keyword. We store only the aggregate
+   (garbled, clean, hint, week, seen_count) -- NEVER a device id, amount, date,
+   image, location, or any timestamp beyond the server-computed ISO week. The
+   table is created lazily (same pattern as license_keys), so no migration is
+   ever needed. */
+async function ensureRulesTable(db) {
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS shared_rules (garbled TEXT, clean TEXT, hint TEXT, week TEXT, seen INTEGER, PRIMARY KEY(garbled, clean, hint, week))"
+  ).run();
+}
+
+/* ISO-8601 year-week ("YYYY-Www"), computed server-side so the client never
+   sends a timestamp. Zero-padded and monotonic with time, so lexical
+   comparison (week >= minWeek) selects a trailing window correctly, even
+   across a year boundary (e.g. "2025-W52" < "2026-W01"). */
+function isoYearWeek(date) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayNum = d.getUTCDay() || 7;          /* Mon=1..Sun=7 */
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);  /* Thursday of this ISO week */
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return d.getUTCFullYear() + "-W" + String(weekNo).padStart(2, "0");
+}
+
+/* GET /rules/export?code=<PRO_UNLOCK>&weeks=N -- owner-only curation dump.
+   Gated exactly like /unlock (wrong/absent code -> the same "Invalid code"
+   403). Returns the last N weeks (default 2), ordered by seen DESC. */
+async function rulesExport(request, env, cors) {
+  const url = new URL(request.url);
+  const code = (url.searchParams.get("code") || "").trim();
+  if (!env.PRO_UNLOCK || !safeEqual(code, env.PRO_UNLOCK)) return json({ error: "Invalid code" }, 403, cors);
+  if (!env.DB) return json({ error: "No database bound" }, 500, cors);
+  let weeks = parseInt(url.searchParams.get("weeks") || "2", 10);
+  if (!Number.isFinite(weeks) || weeks < 1) weeks = 2;
+  if (weeks > 26) weeks = 26;
+  try {
+    await ensureRulesTable(env.DB);
+    const minWeek = isoYearWeek(new Date(Date.now() - (weeks - 1) * 7 * 86400000));
+    const res = await env.DB.prepare(
+      "SELECT garbled, clean, hint, week, seen FROM shared_rules WHERE week >= ?1 ORDER BY seen DESC, garbled ASC LIMIT 2000"
+    ).bind(minWeek).all();
+    return json({ ok: true, weeks, since: minWeek, rules: (res && res.results) || [] }, 200, cors);
+  } catch (e) {
+    return json({ error: "Export failed" }, 500, cors);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
@@ -272,7 +323,13 @@ export default {
     const cors = corsHeaders(origin, allowList);
 
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-    if (request.method === "GET") return json({ ok: true, service: "resit-relay" }, 200, cors);
+    if (request.method === "GET") {
+      /* Owner-only curation export lives on GET (called by curl with a code
+         query param, no Origin); every other GET is the health probe. */
+      const gpath = new URL(request.url).pathname.replace(/\/+$/, "");
+      if (gpath.endsWith("/rules/export")) return rulesExport(request, env, cors);
+      return json({ ok: true, service: "resit-relay" }, 200, cors);
+    }
     if (request.method !== "POST") return json({ error: "POST only" }, 405, cors);
     if (!cors["Access-Control-Allow-Origin"]) return json({ error: "Origin not allowed" }, 403, cors);
 
@@ -322,6 +379,49 @@ export default {
       }
       const res2 = await env.DB.prepare("UPDATE license_keys SET revoked=1 WHERE key=?1").bind(String(u.code || "").trim()).run();
       return json({ ok: true, revoked: res2.meta.changes > 0 }, 200, cors);
+    }
+
+    /* ---- Shared learning pool ----
+       POST /rules {rules:[{garbled,clean,hint}], appVer}
+       Same Origin gate as the reader (already enforced above). Validate hard
+       (<=25 rules, each field a string <=64 chars, control chars stripped),
+       then UPSERT the aggregate. Nothing personal is stored and no body is ever
+       logged. Best-effort by design: a DB error still answers {ok:true} so a
+       sharing hiccup can never break a scan on the client. */
+    if (path.endsWith("/rules")) {
+      let u;
+      try { u = await request.json(); } catch (e) { return json({ error: "Bad request" }, 400, cors); }
+      const list = u && Array.isArray(u.rules) ? u.rules : null;
+      if (!list || list.length > 25) return json({ error: "Bad request" }, 400, cors);
+      /* "" for a missing field (lenient); null for a wrong type or an
+         over-long value (rejected). */
+      const sane = s => {
+        if (s == null) return "";
+        if (typeof s !== "string") return null;
+        let out = "";
+        for (const ch of s) { const c = ch.charCodeAt(0); if (c > 31 && c !== 127 && (c < 128 || c > 159)) out += ch; }
+        const t = out.trim();
+        return t.length > 64 ? null : t;
+      };
+      const clean = [];
+      for (const r of list) {
+        if (!r || typeof r !== "object") return json({ error: "Bad request" }, 400, cors);
+        const g = sane(r.garbled), c = sane(r.clean), h = sane(r.hint);
+        if (g === null || c === null || h === null) return json({ error: "Bad request" }, 400, cors);
+        if (g && c) clean.push({ garbled: g, clean: c, hint: h });   /* skip empty-core rows silently */
+      }
+      if (env.DB && clean.length) {
+        try {
+          await ensureRulesTable(env.DB);
+          const week = isoYearWeek(new Date());
+          const stmt = env.DB.prepare(
+            "INSERT INTO shared_rules(garbled, clean, hint, week, seen) VALUES(?1,?2,?3,?4,1) " +
+            "ON CONFLICT(garbled, clean, hint, week) DO UPDATE SET seen = seen + 1"
+          );
+          await env.DB.batch(clean.map(x => stmt.bind(x.garbled, x.clean, x.hint, week)));
+        } catch (e) { /* sharing must never break the client */ }
+      }
+      return json({ ok: true }, 200, cors);
     }
 
     if (!env.GEMINI_API_KEY && !fallbackConfigured(env)) return json({ error: "Reader not configured" }, 500, cors);

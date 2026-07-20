@@ -87,6 +87,9 @@ let state = {
   pro: false,        /* Pro entitlement (unlimited cloud reads) */
   ghProven: false,   /* ghToken verified against the private inbox repo */
   skipResults: [],   /* deleted-while-pending expenses whose results to discard */
+  shareQueue: [],    /* outbox: AI-derived {garbled,clean,hint} rules staged for the weekly pool upload */
+  shareRules: "",    /* "" | "yes" = share (default on when cloud consent is on), "no" = never share */
+  lastRuleUpload: 0, /* ISO timestamp of the last successful /rules upload (weekly cadence) */
   scanDay: "",       /* local "YYYY-MM-DD" the free scan counter belongs to */
   scanCount: 0,      /* scanned receipts used today (free tier: 1/day) */
   lastBackupAt: null,
@@ -118,6 +121,80 @@ const CLOUD_OCR_URL = "https://resit.adrianloh10.workers.dev";
    (A restored backup could otherwise plant an arbitrary aiUrl and exfiltrate
    receipt photos; see the REJECT set + security review, 1.9.0.) */
 function cloudEndpoint() { return CLOUD_OCR_URL; }
+
+/* Shipped fallback rules from the shared learning loop (curated by the owner
+   from the pooled uploads — see SHARED-RULES-PLAN.md). Consulted ONLY when this
+   device has not learned its own rule; a device's own learned rule always wins
+   and seeds are NEVER copied into the stores (so future seed updates stay
+   clean). Keys are brandOf(normMerchant(...)) tokens, matching the learning
+   stores.
+
+   v1, 20 Jul 2026 (Phase 4). Every key below is the ACTUAL brandOf() token
+   produced by running window.ReceiptOCR.scanReceipt on the real receipt
+   photos in resit/test-receipts/my/ (bench, gitignored) — never guessed.
+   Chains with generic/legal-suffix-only merchant guesses (e.g. OCR reducing
+   "Pasaraya Borong Pintar Sdn Bhd" or "Nando's ... Sdn Bhd" to just "SDN
+   BHD" -> brand "sdn") were deliberately left out: "sdn" is the standard
+   Malaysian company suffix and would mislabel almost any other business.
+   Same reasoning excluded "perniagaan" (Malay for "business", equally
+   generic) and Popular Book Co. (its merchant guess collapsed to "Company
+   No. ..." / the mall name "Sunway Velocity", not the shop). */
+const SEED_RULES = {
+  names: {
+    /* MR D.I.Y. — 079,081,084,085.json: OCR reads bare "MR.D.I.Y"/"MR. D.I.Y"
+       (no branch qualifier) as literally "mr d i y" (each letter of D.I.Y is
+       parsed as its own 1-char token, so brandOf falls through to the whole
+       normalized string). Branch-qualified reads (002 "MR D.I.Y. JOHOR" ->
+       "johor", 086 "... KUCHAI" -> "kuchai") were skipped: those tokens are
+       branch names, not brand-specific. */
+    "mr d i y": "MR DIY",
+    /* 99 Speed Mart — 028,062,069,070.json: consistently "speed". */
+    "speed": "99 Speed Mart",
+    /* Teo Heng Stationery & Books — 021,023,024,025.json: OCR consistently
+       misreads "TEO" as "TED" for this store's receipt font. */
+    "ted": "Teo Heng Stationery",
+    /* Unihakka International (trades as Bar Wang Rice — visible in
+       032.json's raw text: "BAR WANG RICE@PERMAS JAYA", "...comBaWangRice").
+       032,033,044.json read "unihakka" cleanly; 030.json drops the "i". */
+    "unihakka": "Bar Wang Rice",
+    "unhakka": "Bar Wang Rice",
+    /* Lightroom Gallery — 016,017,018.json: consistently "lightroom". */
+    "lightroom": "Lightroom Gallery",
+    /* Lian Hing Stationery — 073,075,076.json: OCR misreads "LIAN" as a
+       different 3-letter word on each photo ("uan"/"lan"/"jan") — no single
+       stable token, so all three real misreads are seeded individually.
+       Lower confidence: these are short, common-looking fragments (esp.
+       "jan") with some collision risk against an unrelated business. */
+    "uan": "Lian Hing Stationery",
+    "lan": "Lian Hing Stationery",
+    "jan": "Lian Hing Stationery",
+    /* Tri Shaas — 090,091.json: consistently "tri". */
+    "tri": "Tri Shaas",
+    /* Ikano Handel (IKEA's Malaysian retail operator) — 087,088.json. */
+    "ikano": "Ikano Handel",
+    /* Home Master Hardware & Electrical — 012,015.json: OCR misreads "HOME"
+       as "HOWE" for this store's receipt font. */
+    "howe": "Home Master Hardware",
+    /* Hon Hwa Hardware Trading — 080,082.json: consistently "hon". */
+    "hon": "Hon Hwa Hardware"
+  },
+  hints: {
+    /* Each value is the literal keyword learnFromAI's own extraction regex
+       (/[A-Za-z][A-Za-z .]{3,24}/, lowercased) would produce from the real
+       total-line text in the cited receipt — same derivation the app uses
+       for a live cloud-read rule, just run by hand against the bench. */
+    "mr d i y": "total incl.gstoby rm",   /* 079.json — OCR-mangled "TOTAL INCL.GST(BY) RM"; fragile, least confident of this set */
+    "speed": "total sales",               /* 028.json — "Total Sales (Inclusive GST) RM 2.50" */
+    "ted": "total",                       /* 021.json — "TOTAL : 4.90" */
+    "unihakka": "total amount",           /* 032.json — "Total Amount: $8.20" */
+    "unhakka": "ct total amount",         /* 030.json — ") CT Total Amount; $8.20 :" */
+    "lightroom": "total",                 /* 017.json — "TOTAL : RM 39.80" */
+    "uan": "total amt payable",           /* 073.json — "Total Amt Payable : 79.50" */
+    "lan": "total amt incl. gst",         /* 075.json — "Total Amt Incl. GST 6% : 159.00" */
+    "ikano": "total rm including",        /* 088.json — "Total RM Including 6% 99.80" */
+    "hon": "total inclusive gst"          /* 080.json — "Total Inclusive GST: 10.40" */
+  }
+};
 
 /* ---------- Freemium ----------
    Free = ONE scanned receipt per day. Scans 2-5 can be unlocked by watching a
@@ -263,14 +340,24 @@ function renderSyncStatus() {
    exists (so nothing about it shows before the backend is deployed). */
 function renderCloudSetting() {
   const wrap = $("cloud-field");
+  const shareWrap = $("share-field");
   if (!wrap) return;
-  if (!cloudEndpoint()) { wrap.hidden = true; return; }
+  if (!cloudEndpoint()) { wrap.hidden = true; if (shareWrap) shareWrap.hidden = true; return; }
   wrap.hidden = false;
   const on = state.cloudConsent === "yes";
   const btn = $("cloud-toggle");
   const status = $("cloud-status");
   if (btn) btn.textContent = on ? "Turn off" : "Turn on";
   if (status) status.textContent = on ? "On" : "Off — receipts stay on your phone";
+  /* Sharing is reachable only when cloud reading is on; default is on. */
+  if (shareWrap) {
+    shareWrap.hidden = !on;
+    const sharing = state.shareRules !== "no";
+    const sbtn = $("share-toggle");
+    const sstatus = $("share-status");
+    if (sbtn) sbtn.textContent = sharing ? "Turn off" : "Turn on";
+    if (sstatus) sstatus.textContent = sharing ? "On — thank you for helping" : "Off — nothing is shared";
+  }
 }
 
 /* The Claude-inbox block is owner plumbing — invisible unless a token is
@@ -401,7 +488,8 @@ async function applyClaudeResult(data) {
     e.amount = Math.round(data.total * 100) / 100;
   }
   if (data.merchant && String(data.merchant).length >= 2) {
-    const preferred = state.merchantNames[brandOf(normMerchant(data.merchant))];
+    const b = brandOf(normMerchant(data.merchant));
+    const preferred = state.merchantNames[b] || SEED_RULES.names[b];
     e.merchant = preferred || String(data.merchant).slice(0, 60);
   }
   if (isRealCategory(data.category)) e.category = data.category;
@@ -574,7 +662,7 @@ function learnFromCorrections(e, record) {
 
 function applyLearnedTotalHint(parsed) {
   const brand = brandOf(normMerchant(parsed.merchant || ""));
-  const hint = state.totalHints[brand];
+  const hint = state.totalHints[brand] || SEED_RULES.hints[brand];
   if (!hint || !parsed.rawText) return;
   const line = parsed.rawText.split("\n").find(l => l.toLowerCase().includes(hint));
   if (!line) return;
@@ -600,6 +688,10 @@ function learnFromAI(rawText, ai, localTotal, localMerchant) {
   if (localBrand.length >= 3 && ai.merchant && ai.merchant.length >= 2 && !state.merchantNames[localBrand]) {
     state.merchantNames[localBrand] = ai.merchant;
     DB.setSetting("merchantNames", state.merchantNames);
+    /* Stage this AI-derived name mapping for the shared pool. clean is ALWAYS
+       ai.merchant (this read) — never state.merchantNames[...], which can hold
+       a user-typed correction (privacy invariant #1). */
+    queueSharedRule(localBrand, ai.merchant, "");
   }
   /* 2. Category rule for the shop (a later user correction overwrites it). */
   if (ai.merchant && ai.category && CATS.some(c => c.name === ai.category) &&
@@ -626,6 +718,29 @@ function learnFromAI(rawText, ai, localTotal, localMerchant) {
     if (b.length >= 3 && !state.totalHints[b]) { state.totalHints[b] = kw; saved = true; }
   }
   if (saved) DB.setSetting("totalHints", state.totalHints);
+  /* Stage the AI-derived total-line keyword for the pool, keyed by the OCR
+     token a future device will actually see (localBrand). Replaces any queued
+     name-only row for the same token (dedupe by garbled). */
+  if (saved) queueSharedRule(localBrand, ai.merchant, kw);
+}
+
+/* Outbox for the shared learning loop: when learnFromAI saves a NEW rule, stage
+   the AI-derived triple {garbled OCR token, clean name, total-line keyword} for
+   the weekly, consent-gated, best-effort upload. Everything here originates in
+   the current cloud read — NEVER user-typed text and never learnFromCorrections
+   (privacy invariant #1); no ids, amounts, dates or images ever go in. Capped at
+   25, deduped by garbled token, drop-oldest. See SHARED-RULES-PLAN.md. */
+function queueSharedRule(garbled, clean, hint) {
+  garbled = String(garbled || "").trim();
+  clean = String(clean || "").trim();
+  hint = String(hint || "").trim();
+  if (garbled.length < 3 || !clean) return;
+  if (!Array.isArray(state.shareQueue)) state.shareQueue = [];
+  const q = state.shareQueue.filter(r => r && r.garbled !== garbled);
+  q.push({ garbled: garbled.slice(0, 64), clean: clean.slice(0, 64), hint: hint.slice(0, 64) });
+  while (q.length > 25) q.shift();
+  state.shareQueue = q;
+  DB.setSetting("shareQueue", state.shareQueue);
 }
 
 function viewedMonth() {
@@ -1270,7 +1385,7 @@ function renderInsights() {
     const g = byBrand[b] = byBrand[b] || { amt: 0, n: 0, name: e.merchant || "Unnamed", last: 0 };
     g.amt += e.amount; g.n++;
     const t = new Date(e.date).getTime();
-    if (t >= g.last) { g.last = t; g.name = state.merchantNames[b] || e.merchant || "Unnamed"; }
+    if (t >= g.last) { g.last = t; g.name = state.merchantNames[b] || SEED_RULES.names[b] || e.merchant || "Unnamed"; }
   }
   const merchants = Object.values(byBrand).sort((a, b) => b.amt - a.amt).slice(0, 5);
 
@@ -2036,7 +2151,7 @@ function parsedToDraft(parsed) {
   else if (!parsed.date) { /* keep now */ }
   else { const now = new Date(); d.setHours(now.getHours(), now.getMinutes(), 0, 0); }
   const brand = brandOf(normMerchant(parsed.merchant || ""));
-  const preferredName = state.merchantNames[brand];
+  const preferredName = state.merchantNames[brand] || SEED_RULES.names[brand];
   return {
     id: null,
     amount: parsed.total || null,
@@ -2584,7 +2699,7 @@ async function importBackup(file) {
       /* aiUrl + cloudConsent are rejected too: a crafted backup must not be
          able to plant a photo-exfil endpoint or silently pre-approve cloud
          reading (security review, 1.9.0). */
-      const REJECT = new Set(["pro", "deviceId", "ghToken", "aiSecret", "aiUrl", "cloudConsent", "licenseKey", "lastKeyCheck", "ghProven", "skipResults"]);
+      const REJECT = new Set(["pro", "deviceId", "ghToken", "aiSecret", "aiUrl", "cloudConsent", "licenseKey", "lastKeyCheck", "ghProven", "skipResults", "shareQueue", "shareRules", "lastRuleUpload"]);
       for (const s of data.settings) { if (s && s.key && !REJECT.has(s.key)) await DB.setSetting(s.key, s.value); }
     }
   } catch (err) {
@@ -2669,6 +2784,11 @@ async function init() {
     state.licenseKey = await DB.getSetting("licenseKey", "");
     state.lastKeyCheck = await DB.getSetting("lastKeyCheck", "");
     state.eulaAccepted = await DB.getSetting("eulaAccepted", "");
+    /* Shared learning loop: outbox + share preference + weekly-upload clock. */
+    state.shareQueue = await DB.getSetting("shareQueue", []);
+    if (!Array.isArray(state.shareQueue)) state.shareQueue = [];
+    state.shareRules = await DB.getSetting("shareRules", "");
+    state.lastRuleUpload = await DB.getSetting("lastRuleUpload", 0);
     state.expenses = await DB.getAllExpenses();
     safeSession("remove", "dbRetry");
   } catch (err) {
@@ -2768,6 +2888,37 @@ async function init() {
         renderPlan();
       }
     } catch (e) { /* offline — keep current state */ }
+  })();
+
+  /* Shared learning loop: at most once a week, upload the AI-derived reading
+     rules this device has staged, so everyone's reader improves. Gated HARD on
+     explicit cloud consent AND the share toggle (no consent -> no cloud -> no
+     sharing). Fire-and-forget: only the {garbled,clean,hint} triples leave —
+     no ids, amounts, dates or images — and any failure just retries next boot.
+     See SHARED-RULES-PLAN.md privacy invariants. */
+  (async () => {
+    if (!cloudEndpoint() || state.cloudConsent !== "yes" || state.shareRules === "no") return;
+    if (!navigator.onLine || !Array.isArray(state.shareQueue) || !state.shareQueue.length) return;
+    const last = state.lastRuleUpload ? new Date(state.lastRuleUpload).getTime() : 0;
+    if (last && Date.now() - last < 7 * 86400000) return;
+    const rules = state.shareQueue.slice(0, 25);
+    try {
+      const res = await fetch(cloudEndpoint().replace(/\/+$/, "") + "/rules", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rules, appVer: APP_VERSION })
+      });
+      if (res.ok) {
+        /* Remove ONLY the rows we uploaded (by identity), never the whole
+           queue — a scan can enqueue a fresh rule during the in-flight POST,
+           and learnFromAI stages each rule once, so wiping it would drop it
+           from the pool for good. */
+        const sent = new Set(rules);
+        state.shareQueue = (Array.isArray(state.shareQueue) ? state.shareQueue : []).filter(r => !sent.has(r));
+        state.lastRuleUpload = new Date().toISOString();
+        await DB.setSetting("shareQueue", state.shareQueue);
+        await DB.setSetting("lastRuleUpload", state.lastRuleUpload);
+      }
+    } catch (e) { /* offline/transient — retry next boot */ }
   })();
 
   /* Commit any pending undo-delete before the page goes away, so a quick
@@ -3187,6 +3338,12 @@ async function init() {
     await DB.setSetting("cloudConsent", state.cloudConsent);
     renderCloudSetting();
     toast(state.cloudConsent === "yes" ? "Cloud reading on" : "Cloud reading off — staying on-device");
+  });
+  on("share-toggle", async () => {
+    state.shareRules = state.shareRules === "no" ? "yes" : "no";
+    await DB.setSetting("shareRules", state.shareRules);
+    renderCloudSetting();
+    toast(state.shareRules === "no" ? "Sharing off — nothing leaves your phone" : "Thanks — sharing anonymous reading tips");
   });
   on("plan-btn", () => showUpgrade(""));
   on("upgrade-buy", () => { if (PAY_URL) window.open(PAY_URL, "_blank", "noopener"); else toast("Online checkout is coming soon"); });
