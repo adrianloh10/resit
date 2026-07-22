@@ -78,43 +78,61 @@ public class RecapMlkitOcrPlugin extends Plugin {
         }
 
         final Bitmap bmp = bitmap;
-        final TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
-        InputImage input = InputImage.fromBitmap(bmp, 0);
-        recognizer
-            .process(input)
-            .addOnSuccessListener(result -> {
-                JSObject ret = new JSObject();
-                ret.put("width", bmp.getWidth());
-                ret.put("height", bmp.getHeight());
-                JSArray lines = new JSArray();
-                for (Text.TextBlock block : result.getTextBlocks()) {
-                    for (Text.Line line : block.getLines()) {
-                        lines.put(lineToJson(line));
+        // Wrap the whole ML Kit setup: any synchronous throw (getClient /
+        // fromBitmap / process — e.g. Play services missing) rejects the call so
+        // the JS side falls back to Tesseract, and the recognizer is closed.
+        TextRecognizer recognizer = null;
+        try {
+            recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+            final TextRecognizer rec = recognizer;
+            InputImage input = InputImage.fromBitmap(bmp, 0);
+            rec
+                .process(input)
+                .addOnSuccessListener(result -> {
+                    JSObject ret = new JSObject();
+                    ret.put("width", bmp.getWidth());
+                    ret.put("height", bmp.getHeight());
+                    JSArray lines = new JSArray();
+                    for (Text.TextBlock block : result.getTextBlocks()) {
+                        for (Text.Line line : block.getLines()) {
+                            JSObject lo = lineToJson(line);
+                            if (lo != null) lines.put(lo);
+                        }
                     }
-                }
-                ret.put("lines", lines);
-                recognizer.close();
-                call.resolve(ret);
-            })
-            .addOnFailureListener(e -> {
-                recognizer.close();
-                call.reject("ML Kit text recognition failed: " + e.getMessage(), e);
-            });
+                    ret.put("lines", lines);
+                    rec.close();
+                    call.resolve(ret);
+                })
+                .addOnFailureListener(e -> {
+                    rec.close();
+                    call.reject("ML Kit text recognition failed: " + e.getMessage(), e);
+                });
+        } catch (Exception e) {
+            if (recognizer != null) recognizer.close();
+            call.reject("ML Kit setup failed: " + e.getMessage(), e);
+        }
     }
 
+    // Returns null (line is dropped) when ML Kit gives no bounding box — a
+    // box-less line has no usable geometry for the JS-side digit-sniper crop,
+    // and emitting {} would produce a NaN bbox that silently breaks the rescue.
     private JSObject lineToJson(Text.Line line) {
+        Rect box = line.getBoundingBox();
+        if (box == null) return null;
         JSObject lo = new JSObject();
         lo.put("text", line.getText());
-        lo.put("frame", rectToJson(line.getBoundingBox()));
+        lo.put("frame", rectToJson(box));
         Float conf = line.getConfidence();
         if (conf != null && !conf.isNaN() && !conf.isInfinite()) {
             lo.put("confidence", conf.doubleValue());
         }
         JSArray elements = new JSArray();
         for (Text.Element el : line.getElements()) {
+            Rect eb = el.getBoundingBox();
+            if (eb == null) continue; // skip a word with no box (keeps the line)
             JSObject eo = new JSObject();
             eo.put("text", el.getText());
-            eo.put("frame", rectToJson(el.getBoundingBox()));
+            eo.put("frame", rectToJson(eb));
             elements.put(eo);
         }
         lo.put("elements", elements);
@@ -123,12 +141,10 @@ public class RecapMlkitOcrPlugin extends Plugin {
 
     private JSObject rectToJson(Rect r) {
         JSObject f = new JSObject();
-        if (r != null) {
-            f.put("left", r.left);
-            f.put("top", r.top);
-            f.put("right", r.right);
-            f.put("bottom", r.bottom);
-        }
+        f.put("left", r.left);
+        f.put("top", r.top);
+        f.put("right", r.right);
+        f.put("bottom", r.bottom);
         return f;
     }
 }

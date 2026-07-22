@@ -53,3 +53,19 @@ recognize({ image: string /* base64, optional data-URL prefix */ }):
 Gated behind the `nativeOcr` setting (default **OFF**, dark-shipped). Phase 3b
 benches it on a real device; Phase 4 flips the default on with the rest of
 Reader v2 Part 1.
+
+## Phase 3b verification notes
+
+- **EXIF orientation.** ML Kit reads the decoded bitmap at rotation 0; the JS
+  side's `loadCanvas()` decodes via `<img>`, which applies EXIF orientation in
+  the WebView. For an EXIF-rotated photo the two coordinate spaces disagree, so
+  the digit-sniper's re-crop lands off. This is *harmless* (the sniper is
+  conservative — a wrong crop yields no consensus, never a wrong total; it only
+  disables the native rescue on those photos), but on-device confirm whether
+  Capacitor Camera already normalises orientation. If not, pass the EXIF
+  rotation to `InputImage.fromBitmap(bmp, rotation)` and map boxes into display
+  space. (`ocr.js` `scanReceiptNative` carries the same note.)
+- **Model download.** First scan may briefly wait if Play services hasn't
+  finished fetching the `ocr` model (the manifest `DEPENDENCIES` meta-data asks
+  for it at install time). The native path returns null / rejects until then, so
+  it falls back to Tesseract cleanly.

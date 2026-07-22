@@ -786,14 +786,18 @@ function fileToBase64(file) {
    coordinate space, so a sniper crop taken from that canvas lines up with the
    boxes. */
 function mlkitRowsToLines(mlLines, sx, sy) {
+  /* A frame must have all-finite coords: a box-less ML Kit line would otherwise
+     yield a NaN bbox that still passes the sniper's truthy-bbox filter and then
+     throws mid-crop (defense in depth — the plugin already drops null boxes). */
+  const finiteFrame = fr => fr && [fr.left, fr.top, fr.right, fr.bottom].every(Number.isFinite);
   const frags = [];
   for (const l of mlLines) {
-    if (!l || !l.frame || typeof l.text !== "string" || !l.text.trim()) continue;
+    if (!l || !finiteFrame(l.frame) || typeof l.text !== "string" || !l.text.trim()) continue;
     const f = l.frame;
     const bbox = { x0: f.left * sx, y0: f.top * sy, x1: f.right * sx, y1: f.bottom * sy };
     const words = [];
     for (const e of (l.elements || [])) {
-      if (!e || !e.frame) continue;
+      if (!e || !finiteFrame(e.frame)) continue;
       words.push({ text: e.text || "", bbox: { x0: e.frame.left * sx, y0: e.frame.top * sy, x1: e.frame.right * sx, y1: e.frame.bottom * sy } });
     }
     frags.push({ text: l.text.trim(), bbox, words, cy: (bbox.y0 + bbox.y1) / 2, h: Math.max(1, bbox.y1 - bbox.y0) });
@@ -843,7 +847,15 @@ async function scanReceiptNative(file, onProgress, sniperV2) {
   const res = await plugin.recognize({ image: await fileToBase64(file) });
   if (!res || !Array.isArray(res.lines) || !res.lines.length) return null;
   /* Load the raw photo at the web path's scale so the sniper's crops (taken
-     from THIS canvas) line up with the ML Kit boxes we scale to match it. */
+     from THIS canvas) line up with the ML Kit boxes we scale to match it.
+     NOTE (verify in Phase 3b): ML Kit reads the bitmap as-is (rotation 0),
+     while loadCanvas() decodes via <img>, which applies EXIF orientation in the
+     WebView. For an EXIF-rotated photo the two coordinate spaces disagree, so
+     the sniper's re-crop lands off. That is HARMLESS — the sniper is
+     conservative (a wrong crop yields no digit consensus, never a wrong total),
+     it only disables the native rescue on such photos. On-device, check whether
+     Capacitor Camera already normalises orientation; if not, pass the EXIF
+     rotation to InputImage and map boxes into display space. */
   const raw = await loadCanvas(file);
   const sw = res.width > 0 ? res.width : raw.width;
   const sh = res.height > 0 ? res.height : raw.height;
