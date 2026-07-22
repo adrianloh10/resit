@@ -1,9 +1,12 @@
 test-receipts/
 
-# Capacitor / native build artifacts — generated in the cloud, never committed
+# Capacitor / native build artifacts — generated in the cloud, never committed.
+# Anchored to the repo root (leading /) so they ignore ONLY the top-level
+# Capacitor-generated projects, NOT the hand-written, tracked plugin source
+# under recap-mlkit-ocr/android/ (an unanchored `android/` matched that too).
 node_modules/
-www/
-android/
-ios/
+/www/
+/android/
+/ios/
 *.keystore
 *.jks

@@ -1,0 +1,30 @@
+{
+  "name": "recap-mlkit-ocr",
+  "version": "1.0.0",
+  "description": "Minimal Capacitor plugin: on-device receipt text recognition via Google ML Kit Text Recognition v2 (unbundled / Google Play services). One recognize() method.",
+  "private": true,
+  "main": "src/index.js",
+  "module": "src/index.js",
+  "types": "src/definitions.d.ts",
+  "files": [
+    "android/build.gradle",
+    "android/src/main/",
+    "src/"
+  ],
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  },
+  "keywords": [
+    "capacitor",
+    "plugin",
+    "native",
+    "ocr",
+    "mlkit"
+  ],
+  "peerDependencies": {
+    "@capacitor/core": "^7.0.0"
+  },
+  "license": "UNLICENSED"
+}

@@ -707,10 +707,179 @@ async function sniperCrossValidate(file, boostFlag, canvas, lines, prepGray, can
   return agreed;
 }
 
+/* ---------- Native OCR (nativeOcr, OCR-ENGINE-PLAN.md Phase 3a) ----------
+
+   On the Capacitor native app (Android), read receipts with Google ML Kit
+   Text Recognition v2 (unbundled / Play-services) through the recap-mlkit-ocr
+   plugin instead of Tesseract — near-instant, and far stronger on phone
+   photos. Gated behind the `nativeOcr` setting (default OFF — dark-shipped
+   like prepV2/sniperV2) AND behind actually running inside the native shell
+   WITH the plugin present. In a browser/PWA `window.Capacitor` is undefined,
+   so isNativeOcrAvailable() is false and this whole tier is inert: the web
+   path is byte-for-byte unchanged (the Phase 3a gate). Tesseract stays the web
+   engine and the automatic fallback when the plugin is absent or errors. */
+
+/* Mirrors app.js isNative(), kept local so ocr.js has NO load-order dependency
+   on app.js (index.html loads ocr.js first). */
+function ocrIsNative() {
+  return !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform());
+}
+
+/* The ML Kit plugin proxy, registered against the Capacitor native bridge.
+   registerPlugin only exists in the native runtime, so this is null on the web
+   — the root reason the native path can never fire in a browser. Memoised. */
+let mlkitPlugin;
+function getMlkitPlugin() {
+  if (mlkitPlugin !== undefined) return mlkitPlugin;
+  mlkitPlugin = (window.Capacitor && typeof window.Capacitor.registerPlugin === "function")
+    ? window.Capacitor.registerPlugin("RecapMlkitOcr")
+    : null;
+  return mlkitPlugin;
+}
+
+function isNativeOcrAvailable() {
+  return ocrIsNative() && getMlkitPlugin() !== null;
+}
+
+let nativeOcrMasterOverride = null;
+/* DEFAULT OFF. Ships dark behind the `nativeOcr` setting; Phase 3b benches it
+   on a real device and Phase 4 flips the default on with the rest of Part 1.
+   The AVAILABILITY gate is checked FIRST, so even a forced-on master cannot
+   activate the native path in a browser — keeping the Phase 3a web-inert gate
+   airtight (a bench double-run with the flag on vs off is identical on web). */
+async function nativeOcrEnabled() {
+  if (!isNativeOcrAvailable()) return false;
+  if (nativeOcrMasterOverride === true) return true;
+  if (nativeOcrMasterOverride === false) return false;
+  try { return (await DB.getSetting("nativeOcr", "no")) === "yes"; }
+  catch (e) { return false; }
+}
+function setNative(o) {
+  o = o || {};
+  if ("master" in o) nativeOcrMasterOverride = (o.master === "db" || o.master === null) ? null : !!o.master;
+  return getNative();
+}
+function getNative() { return { master: nativeOcrMasterOverride, available: isNativeOcrAvailable() }; }
+
+/* File -> bare base64 (no data-URL prefix) for the plugin bridge. */
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => {
+      const s = String(fr.result || "");
+      const comma = s.indexOf(",");
+      resolve(comma >= 0 ? s.slice(comma + 1) : s);
+    };
+    fr.onerror = () => reject(new Error("Could not read the image file."));
+    fr.readAsDataURL(file);
+  });
+}
+
+/* ML Kit already segments text into lines, but a receipt's label and its
+   amount often land in TWO separate ML Kit lines at the same height (two
+   visual columns). Merge lines whose vertical spans overlap into one row,
+   order each row left-to-right, and emit the SAME { text, bbox, words } shape
+   recognizeWithBoxes() produces from Tesseract — so parseReceiptText() sees
+   "TOTAL   23.50" on one line, and the digit-sniper's crop math
+   (rankTotalLineCandidates/cropXFor/digitVotesForLine) works unchanged.
+   Frames are scaled by (sx,sy) from source-image pixels into loadCanvas()'s
+   coordinate space, so a sniper crop taken from that canvas lines up with the
+   boxes. */
+function mlkitRowsToLines(mlLines, sx, sy) {
+  const frags = [];
+  for (const l of mlLines) {
+    if (!l || !l.frame || typeof l.text !== "string" || !l.text.trim()) continue;
+    const f = l.frame;
+    const bbox = { x0: f.left * sx, y0: f.top * sy, x1: f.right * sx, y1: f.bottom * sy };
+    const words = [];
+    for (const e of (l.elements || [])) {
+      if (!e || !e.frame) continue;
+      words.push({ text: e.text || "", bbox: { x0: e.frame.left * sx, y0: e.frame.top * sy, x1: e.frame.right * sx, y1: e.frame.bottom * sy } });
+    }
+    frags.push({ text: l.text.trim(), bbox, words, cy: (bbox.y0 + bbox.y1) / 2, h: Math.max(1, bbox.y1 - bbox.y0) });
+  }
+  frags.sort((a, b) => a.cy - b.cy || a.bbox.x0 - b.bbox.x0);
+  const rows = [];
+  for (const fr of frags) {
+    const row = rows.length ? rows[rows.length - 1] : null;
+    if (row && Math.abs(fr.cy - row.cy) <= Math.max(fr.h, row.h) * 0.6) {
+      row.frags.push(fr);
+      row.cy = (row.cy * row.n + fr.cy) / (row.n + 1);
+      row.n++;
+      row.h = Math.max(row.h, fr.h);
+    } else {
+      rows.push({ frags: [fr], cy: fr.cy, h: fr.h, n: 1 });
+    }
+  }
+  return rows.map(row => {
+    const ordered = row.frags.slice().sort((a, b) => a.bbox.x0 - b.bbox.x0);
+    const bbox = {
+      x0: Math.min(...ordered.map(f => f.bbox.x0)),
+      y0: Math.min(...ordered.map(f => f.bbox.y0)),
+      x1: Math.max(...ordered.map(f => f.bbox.x1)),
+      y1: Math.max(...ordered.map(f => f.bbox.y1))
+    };
+    const words = [];
+    for (const f of ordered) {
+      if (f.words.length) words.push(...f.words);
+      else words.push({ text: f.text, bbox: f.bbox });
+    }
+    return { text: ordered.map(f => f.text).join(" "), bbox, words };
+  });
+}
+
+/* Native scan path: ML Kit reads the photo on-device, we reshape its lines into
+   the parser's text/line shape, parse, then run the SAME digit-sniper rescue /
+   cross-validation the web path uses (Tesseract re-reads the crop for the
+   double-check — the digit-sniper runs on ML Kit output too, per the plan).
+   Returns a parsed result, or null to signal "fall back to Tesseract" (no
+   lines read, or the plugin/engine unavailable). Any throw propagates and
+   scanReceipt() catches it into the same Tesseract fallback. */
+async function scanReceiptNative(file, onProgress, sniperV2) {
+  if (sniperV2 === undefined) sniperV2 = await sniperV2Enabled();
+  const plugin = getMlkitPlugin();
+  if (!plugin) return null;
+  if (onProgress) onProgress("Reading text…");
+  const res = await plugin.recognize({ image: await fileToBase64(file) });
+  if (!res || !Array.isArray(res.lines) || !res.lines.length) return null;
+  /* Load the raw photo at the web path's scale so the sniper's crops (taken
+     from THIS canvas) line up with the ML Kit boxes we scale to match it. */
+  const raw = await loadCanvas(file);
+  const sw = res.width > 0 ? res.width : raw.width;
+  const sh = res.height > 0 ? res.height : raw.height;
+  const rows = mlkitRowsToLines(res.lines, raw.width / sw, raw.height / sh);
+  if (!rows.length) return null;
+  const text = rows.map(r => r.text).join("\n");
+  let parsed = await parseReceiptText(text, sniperV2);
+  if (parsed.total === null) {
+    if (onProgress) onProgress("Zooming into the total…");
+    try {
+      const worker = await getOcrWorker();
+      const t = await sniperTotal(worker, file, false, raw, rows, raw, sniperV2);
+      if (t) parsed.total = t;
+    } catch (e) { /* rescue is best-effort */ }
+  } else if (sniperV2 && parsed.totalConf <= 1) {
+    if (onProgress) onProgress("Double-checking the total…");
+    try {
+      const agree = await sniperCrossValidate(file, false, raw, rows, raw, parsed.total);
+      if (agree) parsed.totalConf = 2;
+    } catch (e) { /* corroboration is best-effort */ }
+  }
+  return parsed;
+}
+
 /* Full scan pipeline: OCR (with retry), parse, then the digit-zoom rescue
    pass if the total is still missing (or, sniperV2 only, a cross-validation
-   pass if a total was found but weak). */
+   pass if a total was found but weak). On the native app the ML Kit path runs
+   first (dark by default); it returns null / throws to fall back to Tesseract,
+   the web engine. */
 async function scanReceipt(file, onProgress) {
+  if (await nativeOcrEnabled()) {
+    try {
+      const nativeParsed = await scanReceiptNative(file, onProgress);
+      if (nativeParsed) return nativeParsed;
+    } catch (e) { /* any native/plugin failure → fall through to Tesseract */ }
+  }
   if (onProgress) onProgress("Reading text…");
   const worker = await getOcrWorker();
   const sniperV2 = await sniperV2Enabled();
@@ -1447,4 +1616,4 @@ function getPrep() {
   return { master: prepMasterOverride, config: { ...PREP_CONFIG } };
 }
 
-window.ReceiptOCR = { ocrImage, scanReceipt, parseReceiptText, guessCategory, amountFromLine, CATEGORIES, setPrep, getPrep, setSniper, getSniper };
+window.ReceiptOCR = { ocrImage, scanReceipt, parseReceiptText, guessCategory, amountFromLine, CATEGORIES, setPrep, getPrep, setSniper, getSniper, setNative, getNative };
