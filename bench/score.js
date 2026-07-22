@@ -275,7 +275,7 @@
       const truthYmd = parseTruthDate(truth.date);
       const truthTotal = parseTruthTotal(truth.total);
 
-      const parsed = parseReceiptText(rawText);
+      const parsed = await parseReceiptText(rawText);
       let merchantGuess = parsed.merchant || "";
       if (mode === "seeded") {
         applyLearnedTotalHint(parsed);
@@ -288,6 +288,18 @@
       const dOk = dateMatches(parsed.date, truthYmd);
       const mOk = fuzzyMerchantMatch(merchantGuess, truth.company);
       const live = (cached.liveTotals && cached.liveTotals[id]) || {};
+      /* Live = the actual scanReceipt() total/conf captured during startScan
+         (pixels and all) — the ONLY place a pixel-crop sniper rescue shows
+         up, since this row's cold/seeded totalGuess above comes from
+         re-parsing cached TEXT only and can never see it (OCR-ENGINE-PLAN.md
+         Phase 2). Truth-compared here (the raw liveTotal/liveTotalConf
+         columns alone were diagnostic-only, per the file-header note) so a
+         sniperV2 sweep has a real weak%/totalExact headline to gate against,
+         not just eyeballed CSV columns. */
+      const liveTotalVal = live.total === undefined ? null : live.total;
+      const liveConf = live.totalConf || 0;
+      const liveTb = totalBand(liveTotalVal, truthTotal);
+      const liveWeak = liveTotalVal === null || liveConf <= 1;
 
       return {
         id, mode,
@@ -296,7 +308,9 @@
         dateGuess: fmtLocalDate(parsed.date), dateTruth: fmtTruthYmd(truthYmd), dateMatch: dOk,
         merchantGuess, merchantTruth: truth.company, merchantMatch: mOk,
         weak, totalConf: parsed.totalConf || 0,
-        liveTotal: live.total === undefined ? null : live.total, liveTotalConf: live.totalConf || 0
+        liveTotal: liveTotalVal, liveTotalConf: liveConf,
+        liveTotalExact: liveTb.exact, liveTotalWithin5: liveTb.within5, liveTotalWithin10: liveTb.within10,
+        liveWeak
       };
     } catch (e) {
       return {
@@ -304,7 +318,8 @@
         totalGuess: null, totalTruth: NaN, totalExact: false, totalWithin5: false, totalWithin10: false,
         dateGuess: "", dateTruth: "", dateMatch: false,
         merchantGuess: "", merchantTruth: "", merchantMatch: false,
-        weak: true, totalConf: 0, liveTotal: null, liveTotalConf: 0
+        weak: true, totalConf: 0, liveTotal: null, liveTotalConf: 0,
+        liveTotalExact: false, liveTotalWithin5: false, liveTotalWithin10: false, liveWeak: true
       };
     }
   }
@@ -313,11 +328,14 @@
     const n = rows.length;
     const count = key => rows.filter(r => r[key]).length;
     const weakCount = count("weak");
+    const liveWeakCount = count("liveWeak");
     return {
       setKey, mode, n,
       totalExact: count("totalExact"), totalWithin5: count("totalWithin5"), totalWithin10: count("totalWithin10"),
       dateMatch: count("dateMatch"), merchantMatch: count("merchantMatch"),
       weakCount, weakPct: n ? Math.round((weakCount / n) * 1000) / 10 : null,
+      liveTotalExact: count("liveTotalExact"), liveTotalWithin5: count("liveTotalWithin5"), liveTotalWithin10: count("liveTotalWithin10"),
+      liveWeakCount, liveWeakPct: n ? Math.round((liveWeakCount / n) * 1000) / 10 : null,
       errorCount: rows.filter(r => r.error).length,
       rows
     };
@@ -376,7 +394,7 @@
       "totalGuessSeeded", "seededExact", "seededWithin5", "seededWithin10",
       "dateTruth", "dateGuess", "dateMatch",
       "merchantTruth", "merchantGuessCold", "coldMerchantMatch", "merchantGuessSeeded", "seededMerchantMatch",
-      "weakCold", "weakSeeded", "liveTotal", "liveTotalConf", "coldError", "seededError"];
+      "weakCold", "weakSeeded", "liveTotal", "liveTotalConf", "liveTotalExact", "liveWeak", "coldError", "seededError"];
     const byId = {};
     for (const r of coldResult.rows) byId[r.id] = { cold: r };
     for (const r of seededResult.rows) { byId[r.id] = byId[r.id] || {}; byId[r.id].seeded = r; }
@@ -388,7 +406,7 @@
         s.totalGuess, s.totalExact, s.totalWithin5, s.totalWithin10,
         c.dateTruth, c.dateGuess, c.dateMatch,
         c.merchantTruth, c.merchantGuess, c.merchantMatch, s.merchantGuess, s.merchantMatch,
-        c.weak, s.weak, c.liveTotal, c.liveTotalConf, c.error, s.error
+        c.weak, s.weak, c.liveTotal, c.liveTotalConf, c.liveTotalExact, c.liveWeak, c.error, s.error
       ].map(toCsvField).join(","));
     }
     return lines.join("\n");
@@ -406,10 +424,15 @@
     }
     return {
       setKey, n: cold.n,
-      totals: { exactSeeded: seeded.totalExact, within5Seeded: seeded.totalWithin5, within10Seeded: seeded.totalWithin10, exactCold: cold.totalExact },
+      /* live* is identical whether read off `cold` or `seeded` — the actual
+         scanReceipt() result doesn't depend on which text-reparse mode is
+         scoring it — reported once, off `cold`. */
+      totals: { exactSeeded: seeded.totalExact, within5Seeded: seeded.totalWithin5, within10Seeded: seeded.totalWithin10, exactCold: cold.totalExact,
+                exactLive: cold.liveTotalExact, within5Live: cold.liveTotalWithin5, within10Live: cold.liveTotalWithin10 },
       dates: { match: cold.dateMatch },
       merchants: { matchCold: cold.merchantMatch, matchSeeded: seeded.merchantMatch },
-      weak: { seededPct: seeded.weakPct, coldPct: cold.weakPct, seededCount: seeded.weakCount, coldCount: cold.weakCount }
+      weak: { seededPct: seeded.weakPct, coldPct: cold.weakPct, seededCount: seeded.weakCount, coldCount: cold.weakCount,
+              livePct: cold.liveWeakPct, liveCount: cold.liveWeakCount }
     };
   }
 

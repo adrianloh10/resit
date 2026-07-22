@@ -472,6 +472,83 @@ async function ocrBest(worker, file, onProgress) {
   return { ...r, canvas, prepGray };
 }
 
+/* ---------- Totals rescue v2 (sniperV2, OCR-ENGINE-PLAN.md Phase 2) ----------
+
+   Extends the v1 digit-crop sniper (below) with three additions, all gated
+   behind the `sniperV2` setting (default OFF — dark-shipped like prepV2):
+     - digit-mode second pass over up to 3 candidate total-line REGIONS
+       (v1 only ever tried the single best-scoring line) as a fallback
+       chain — try region 1, only fall through to region 2/3 if it yields
+       no usable digit read. Regions are never pooled together (a Subtotal
+       line and a Total line are DIFFERENT numbers; blending their crop
+       votes would corrupt the consensus).
+     - a confusion-table (O/o->0, B/S/s->8/5, l/I/i->1, Z/z->2) rescue for a
+       total-scored line whose amount regex found nothing — likely an
+       isolated OCR digit/letter swap. Accepted ONLY when a second signal
+       (subtotal+tax arithmetic, items-sum, or cash/change) corroborates it;
+       a lone confusion "fix" is worse than staying weak.
+     - cross-validation: when the text parser already found a total but at
+       low confidence, re-read the same candidate region(s) digit-only and,
+       ONLY on agreement, raise totalConf (never overwrite the value on the
+       crop-read's own say-so — the Teo Heng lesson from 07-20: an
+       unverified "fix" that looks confident is worse than an honest weak
+       read, since weak still offers the user a cloud re-read).
+   `parseSniperDigits`/`sniperTotal`'s crop-reading mechanics are unchanged;
+   sniperV2 only widens the region search when the master flag is on. */
+
+let sniperMasterOverride = null;
+/* DEFAULT OFF. Dark-shipped pending Phase 2's bench gate (my100 weak
+   improves >=2pts, sroie200 non-regressing, zero previously-correct totals
+   flipped) — see reports/ocr-weekly.md and OCR-ENGINE-PLAN.md. */
+async function sniperV2Enabled() {
+  if (sniperMasterOverride === true) return true;
+  if (sniperMasterOverride === false) return false;
+  try { return (await DB.getSetting("sniperV2", "no")) === "yes"; }
+  catch (e) { return false; }
+}
+function setSniper(o) {
+  o = o || {};
+  if ("master" in o) sniperMasterOverride = (o.master === "db" || o.master === null) ? null : !!o.master;
+  return getSniper();
+}
+function getSniper() { return { master: sniperMasterOverride }; }
+
+/* Confusable OCR digit/letter pairs seen on total lines when a whitelist-
+   free read drops a digit for its look-alike letter. Applied only to a
+   short decimal-shaped token so it can't misfire on ordinary words. */
+const CONFUSION_MAP = { O: "0", o: "0", B: "8", S: "5", s: "5", l: "1", I: "1", i: "1", Z: "2", z: "2" };
+const CONFUSABLE_AMOUNT_RE = /\b([0-9OoBbSslLIiZz]{1,4}[.,][0-9OoBbSslLIiZz]{2})\b/;
+function confusionCorrectedAmount(line) {
+  const m = line.match(CONFUSABLE_AMOUNT_RE);
+  if (!m || /^[\d.,]+$/.test(m[1])) return null; /* already clean digits — nothing to fix */
+  let fixed = "";
+  for (const ch of m[1]) fixed += (ch in CONFUSION_MAP ? CONFUSION_MAP[ch] : ch);
+  fixed = fixed.replace(",", ".");
+  if (!/^\d{1,4}\.\d{2}$/.test(fixed)) return null;
+  const amt = parseFloat(fixed);
+  return amt > 0 && amt < 100000 ? amt : null;
+}
+
+/* Cheap items-sum estimate for corroboration only (the full named item list
+   is extracted separately by extractItems()) — same line-shape rules,
+   without the name-cleaning cost. Used as a synthetic subtotal so a receipt
+   with no printed "Subtotal" line (common on simple/handwritten stalls)
+   can still be cross-validated. */
+function candidateItemsSum(lines) {
+  let sum = 0, n = 0;
+  for (const line of lines) {
+    if (totalLineScore(line) > 0) continue;
+    if (EXCLUDE_TOTAL_RE.test(line)) continue;
+    const matches = [...line.matchAll(AMOUNT_RE)];
+    if (!matches.length) continue;
+    const price = parseAmount(matches[matches.length - 1][1]);
+    if (!(price > 0 && price < 100000)) continue;
+    sum += price; n++;
+    if (n > 30) break;
+  }
+  return (n >= 1 && n <= 25) ? Math.round(sum * 100) / 100 : null;
+}
+
 /* Conservative read of a digits-only OCR result: a wrong amount is worse
    than an empty field. */
 function parseSniperDigits(text) {
@@ -489,33 +566,42 @@ function parseSniperDigits(text) {
   return amt !== null && amt > 0 && amt < 100000 ? amt : null;
 }
 
-/* When no amount was found in the full read, zoom into the region to the
-   right of the "TOTAL" label and re-read it digits-only. Tries tight and
-   tall crops (handwriting overflows the printed line), raw grayscale and
-   binarized (thin pen strokes can vanish when binarized), and two
-   segmentation modes — then votes among the readings. */
-async function sniperTotal(worker, file, boostFlag, canvas, lines, prepGray) {
+/* Rank OCR'd lines that look total-related by how likely each is to be the
+   FINAL total (strong keyword lines — amount due/payable/inclusive — before
+   plain "total"/"jumlah" lines), most-recent-first within each tier (the
+   grand total usually sits closest to the bottom of the receipt). With
+   max=1 this reproduces the v1 sniper's single-candidate pick exactly;
+   sniperV2 raises max to try up to 3 REGIONS as a fallback chain (never
+   pooled — a Subtotal line and a Total line are different numbers). */
+function rankTotalLineCandidates(lines, max) {
   const totalLines = lines.filter(l => /total|jumlah/i.test(l.text || "") && l.bbox);
-  if (!totalLines.length) return null;
-  const strong = totalLines.filter(l => /amount|amt|rm|payable|inclu/i.test(l.text));
-  const target = strong.length ? strong[strong.length - 1] : totalLines[totalLines.length - 1];
+  const strong = [], plain = [];
+  for (const l of totalLines) (/amount|amt|rm|payable|inclu/i.test(l.text) ? strong : plain).push(l);
+  const ordered = [...strong.slice().reverse(), ...plain.slice().reverse()];
+  return ordered.slice(0, max);
+}
+
+function cropXFor(target, canvasWidth) {
   let cropX = target.bbox.x0;
   for (const w of target.words) {
     if (w.bbox && /total|amount|amt|jumlah|rm|payable|[:]/i.test(w.text || "")) {
       cropX = Math.max(cropX, w.bbox.x1);
     }
   }
-  const lh = Math.max(8, target.bbox.y1 - target.bbox.y0);
-  const x0 = Math.min(cropX + 4, canvas.width - 20);
-  const cw = canvas.width - x0 - 2;
-  if (cw < 20) return null;
-  /* Crop from the v2 processed-grayscale canvas when present — it shares the
-     recognized canvas's exact geometry, so these bbox coords land dead-on,
-     with thin strokes preserved (un-binarized). Without it (v1/soft path),
-     reload the raw file exactly as before — its geometry matches `canvas`. */
-  const raw = prepGray || await loadCanvas(file, boostFlag);
+  return Math.min(cropX + 4, canvasWidth - 20);
+}
 
+/* Digit-mode second pass over ONE candidate region: tight and tall crops
+   (handwriting overflows the printed line), raw grayscale and binarized
+   (thin pen strokes can vanish when binarized), two paddings x two
+   binarization modes = up to 4 readings, returned as raw votes (not yet
+   reduced to a consensus — callers decide how to combine across regions). */
+async function digitVotesForLine(worker, raw, target, canvas) {
   const votes = [];
+  const lh = Math.max(8, target.bbox.y1 - target.bbox.y0);
+  const x0 = cropXFor(target, canvas.width);
+  const cw = canvas.width - x0 - 2;
+  if (cw < 20) return votes;
   for (const pad of [0.9, 1.6]) {
     const y0 = Math.max(0, target.bbox.y0 - lh * pad);
     const y1 = Math.min(canvas.height, target.bbox.y1 + lh * pad);
@@ -529,18 +615,20 @@ async function sniperTotal(worker, file, boostFlag, canvas, lines, prepGray) {
       crop.getContext("2d").drawImage(raw, x0, y0, cw, ch, 0, 0, crop.width, crop.height);
       if (useBin) adaptiveThreshold(crop);
       await worker.setParameters({ tessedit_char_whitelist: "0123456789.,|/- ", tessedit_pageseg_mode: "7" });
-      let amt = null;
       try {
-        amt = parseSniperDigits((await worker.recognize(crop)).data.text || "");
+        const amt = parseSniperDigits((await worker.recognize(crop)).data.text || "");
+        if (amt !== null) votes.push(amt);
       } catch (e) { /* keep trying other variants */ }
-      if (amt !== null) votes.push(amt);
     }
   }
-  await worker.setParameters({ tessedit_char_whitelist: "", tessedit_pageseg_mode: "3" });
+  return votes;
+}
+
+/* Magnitude consensus over one region's votes: a hallucinated extra digit
+   lands 10x off the other readings — keep only votes near the median, and
+   demand either agreement or a modest single value. */
+function consensusFromVotes(votes) {
   if (!votes.length) return null;
-  /* Magnitude consensus: a hallucinated extra digit lands 10x off the
-     other readings — keep only votes near the median, and demand either
-     agreement or a modest single value. */
   const sorted = [...votes].sort((a, b) => a - b);
   const median = sorted[Math.floor(sorted.length / 2)];
   const kept = votes.filter(v => v <= median * 2 && v >= median / 2);
@@ -555,13 +643,91 @@ async function sniperTotal(worker, file, boostFlag, canvas, lines, prepGray) {
   return best;
 }
 
+/* Dedicated persistent worker for sniperV2's digit-crop passes, isolated
+   from the main full-page-recognition worker (getOcrWorker()'s ocrWorker) —
+   found the hard way, on the my100 bench: sharing one worker between full-
+   page recognition and many whitelist+PSM7 digit-crop reads measurably
+   degrades LATER receipts' full-page OCR within the SAME scan session
+   (confirmed: a fresh worker reading a previously-corrupted receipt in
+   isolation got it right; the same receipt, reached after ~25 other
+   receipts' worth of sniperV2 cross-validation crops on the SHARED worker,
+   came out wrong — Tesseract's engine evidently carries some state across
+   recognize() calls that a run of digit-only micro-crops visibly disturbs).
+   v1's occasional (total-missing-only) rescue crop is rare enough that this
+   was never a practical problem; sniperV2's cross-validation runs on every
+   weak-but-present receipt too, frequent enough to compound across a scan.
+   One worker, created once, reused for every sniperV2 digit-crop call. */
+let sniperWorkerPromise = null;
+async function getSniperWorker() {
+  await loadTesseract();
+  if (!sniperWorkerPromise) sniperWorkerPromise = Tesseract.createWorker("eng", 1, TESSERACT_PATHS);
+  return sniperWorkerPromise;
+}
+
+/* When no amount was found in the full read, zoom into the region to the
+   right of the "TOTAL" label and re-read it digits-only. sniperV2 tries up
+   to 3 candidate regions as a fallback chain (region 1 first; only moves to
+   region 2/3 if it yields no usable digit read at all) — v1 (sniperV2
+   false/undefined) tries exactly the one region it always has, on the SAME
+   shared worker as before this refactor (byte-for-byte the same crop/vote/
+   consensus math AND the same worker instance — v1's behavior is untouched;
+   only sniperV2 moves to the isolated worker above). */
+async function sniperTotal(worker, file, boostFlag, canvas, lines, prepGray, sniperV2) {
+  const candidates = rankTotalLineCandidates(lines, sniperV2 ? 3 : 1);
+  if (!candidates.length) return null;
+  const raw = prepGray || await loadCanvas(file, boostFlag);
+  const w = sniperV2 ? await getSniperWorker() : worker;
+  let result = null;
+  for (const target of candidates) {
+    const v = consensusFromVotes(await digitVotesForLine(w, raw, target, canvas));
+    if (v !== null) { result = v; break; }
+  }
+  await w.setParameters({ tessedit_char_whitelist: "", tessedit_pageseg_mode: "3" });
+  return result;
+}
+
+/* sniperV2 only: the text parser already found a total but at low
+   confidence — re-read up to 3 candidate regions digit-only and report
+   whether ANY of them agrees (to the sen). Never returns a value: agreement
+   only raises the caller's confidence, it never overwrites what the text
+   parser found (see the Teo Heng lesson in the section comment above).
+   Always the isolated sniper worker — this path only ever runs when
+   sniperV2 is on. */
+async function sniperCrossValidate(file, boostFlag, canvas, lines, prepGray, candidateTotal) {
+  const candidates = rankTotalLineCandidates(lines, 3);
+  if (!candidates.length) return false;
+  const raw = prepGray || await loadCanvas(file, boostFlag);
+  const w = await getSniperWorker();
+  let agreed = false;
+  for (const target of candidates) {
+    const v = consensusFromVotes(await digitVotesForLine(w, raw, target, canvas));
+    if (v !== null && Math.abs(v - candidateTotal) <= 0.02) { agreed = true; break; }
+  }
+  await w.setParameters({ tessedit_char_whitelist: "", tessedit_pageseg_mode: "3" });
+  return agreed;
+}
+
 /* Full scan pipeline: OCR (with retry), parse, then the digit-zoom rescue
-   pass if the total is still missing. */
+   pass if the total is still missing (or, sniperV2 only, a cross-validation
+   pass if a total was found but weak). */
 async function scanReceipt(file, onProgress) {
   if (onProgress) onProgress("Reading text…");
   const worker = await getOcrWorker();
+  const sniperV2 = await sniperV2Enabled();
   let r = await ocrBest(worker, file, onProgress);
-  let parsed = parseReceiptText(r.text);
+  /* IMPORTANT: the retry-or-not decision below, and which of the two OCR
+     passes wins, is always made on the sniperV2=false parse — never the
+     sniperV2-corroborated one. sniperV2's items-sum/confusion-table can
+     raise totalConf on a coincidentally-corroborated but WRONG first-pass
+     read; if that boosted conf fed the retry trigger, it could silently
+     suppress the exact magnified-retry safety net v1 relies on to self-
+     correct a noisy first read (found the hard way: several my100 receipts
+     that were correct via the boost retry came out wrong once sniperV2's
+     early confidence bump skipped it). sniperV2 is applied ONLY at the end,
+     as a final re-parse of whichever text already won on v1-identical
+     terms — so it can only add confidence/rescue a still-missing total,
+     never quietly steer which OCR pass gets trusted. */
+  let parsed = await parseReceiptText(r.text, false);
   let rBoost = false;
   /* Retry magnified when the total is missing, weakly evidenced, or the
      photo is low-res (where the normal pass misreads small digits). */
@@ -572,7 +738,7 @@ async function scanReceipt(file, onProgress) {
     try {
       const bigPrep = await preprocess(await loadCanvas(file, true));
       const r2 = await recognizeWithBoxes(worker, bigPrep.binary);
-      const p2 = parseReceiptText(r2.text);
+      const p2 = await parseReceiptText(r2.text, false);
       boosted = { r: { ...r2, canvas: bigPrep.binary, prepGray: bigPrep.gray }, p: p2 };
       if (p2.total !== null && (parsed.total === null || p2.totalConf > parsed.totalConf || (small && p2.totalConf >= parsed.totalConf))) {
         r = boosted.r;
@@ -581,15 +747,25 @@ async function scanReceipt(file, onProgress) {
       }
     } catch (e) { /* magnified retry is best-effort */ }
   }
+  if (sniperV2) parsed = await parseReceiptText(r.text, true);
   if (parsed.total === null) {
     if (onProgress) onProgress("Zooming into the total…");
     /* Prefer the magnified pass's geometry for the zoom — finer detail. */
     const src = (boosted && boosted.r.lines.length) ? { rr: boosted.r, flag: true } : (r.lines.length ? { rr: r, flag: rBoost } : null);
     if (src) {
       try {
-        const t = await sniperTotal(worker, file, src.flag, src.rr.canvas, src.rr.lines, src.rr.prepGray);
+        const t = await sniperTotal(worker, file, src.flag, src.rr.canvas, src.rr.lines, src.rr.prepGray, sniperV2);
         if (t) parsed.total = t;
       } catch (e) { /* rescue pass is best-effort */ }
+    }
+  } else if (sniperV2 && parsed.totalConf <= 1) {
+    if (onProgress) onProgress("Double-checking the total…");
+    const src = (boosted && boosted.r.lines.length) ? { rr: boosted.r, flag: true } : (r.lines.length ? { rr: r, flag: rBoost } : null);
+    if (src) {
+      try {
+        const agree = await sniperCrossValidate(file, src.flag, src.rr.canvas, src.rr.lines, src.rr.prepGray, parsed.total);
+        if (agree) parsed.totalConf = 2;
+      } catch (e) { /* corroboration pass is best-effort */ }
     }
   }
   return parsed;
@@ -748,7 +924,218 @@ function lineQuality(line) {
   return letters >= 6 && longestWord >= 4;
 }
 
-function guessMerchant(lines) {
+/* sniperV2 only — real Malaysian company names mined from the SROIE truth
+   set (OCR-ENGINE-PLAN.md Phase 2), used to validate a candidate header
+   line even when it carries none of COMPANY_HINT_RE's keywords (many small
+   shops print no "SDN BHD"/"enterprise" at all — "ASIA MART", "YAM FRESH",
+   "THREE STOOGES"). Static, parser-intrinsic data (no device/user state),
+   so it applies identically whether scoring runs cold or seeded.
+   Deliberately mined EXCLUDING ids 100-299 — that range is `sroie200`, the
+   fixed-forever held-out generalization sample, and must stay uncontaminated
+   by anything the parser was tuned against. Source: 426 of the 626
+   `bench-sroie/raw/key/*.json` truth files (ids 000-099 + 300-625), deduped;
+   see OCR-ENGINE-PLAN.md Phase 2. */
+const MERCHANT_LEXICON = [
+  "10 GRAM GOURMET SBN BHD",
+  "32 PUB & BISTRO OWN BY CNU TRADING",
+  "99 SPEED MART S/B",
+  "ABC HO TRADING",
+  "ADVANCO COMPANY",
+  "AEON CO. (M) BHD",
+  "AEON CO. (M) BHD.",
+  "AEON CO. (M) SDN BHD",
+  "AIK HUAT HARDWARE ENTERPRISE (SETIA ALAM) SDN BHD",
+  "AMTECH ELECTRICAL SUPPLIES",
+  "ANEKA INTERTRADE MARKETING SDN BHD",
+  "ANN GIAP TRADING SDN BHD",
+  "ASIA MART",
+  "BANH MI CAFE SDN BHD",
+  "BECON STATIONER BECON ENTERPRISE SDN BHD",
+  "BENS INDEPENDENT GROCER SDN. BHD",
+  "BERRY'S CAKE HOUSE",
+  "BEST DENKI MALAYSIA",
+  "BOOK TA .K (TAMAN DAYA) SDN BHD",
+  "C W KHOO HARDWARE SDN BHD",
+  "CARREFOUR RESTAURANT",
+  "CHECKERS HYPERMARKET SDN BHD (JALAN KLANG LAMA)",
+  "CHEF LEE SDN BHD",
+  "COSWAY (M) SDN BHD",
+  "DE LUXE CIRCLE FRESH MART SDN BHD",
+  "DE MAXIMUM THAI EXPRESS SDN BHD",
+  "DIGI TELECOMMUNICATIONS SDN BHD",
+  "DIMILIKI OLEH : DOVE HOLDINGS SDN BHD",
+  "DIMILIKI OLEH T PLUS F&B SDN. BHD.",
+  "DION REALTIES SDN BHD",
+  "DOMINO'S PIZZA",
+  "DOMINO'S PIZZA TAMAN UNIVERSITI",
+  "ECO-SHOP MARKETING SDN BHD",
+  "ECOSWAY.COM SDN BHD",
+  "EDEN IMPRESSION SDN BHD",
+  "EIGHT OUNCE COFFEE CO.",
+  "ENW HARDWARE CENTRE (M) SDN. BHD.",
+  "ESJAY FUEL ENTERPRISE",
+  "FAMILYMART",
+  "FARMASI LIGAMAS",
+  "FILL IN ENTERPRISE",
+  "FOUR QUARTERS SDN BHD",
+  "FTOF NOODLE HOUSE",
+  "FUYI MINI MARKET",
+  "FY EAGLE ENTERPRISE",
+  "GARDENIA BAKERIES (KI ) SDN BHD",
+  "GARDENIA BAKERIES (KL) SDN BHD",
+  "GERBANG ALAF RESTAURANTS SDN BHD",
+  "GH DISTRIBUTOR & MARKETING SDN BHD",
+  "GHEE HIANG GH DISTRIBUTOR & MARKETING SDN BHD",
+  "GL HANDICRAFT & TAIL ORING",
+  "GOLDEN ARCHES RESTAURANTS SDN BHD",
+  "GRANDMA HOMES RESTAURANT",
+  "GREEN LANE PHARMACY SDN BHD",
+  "GUARDIAN HEALTH AND BEAUTY SDN BHD",
+  "HAI-O RAYA BHD",
+  "HAXINCONE RESOURCES SDN BHD",
+  "HOME MASTER HARDWARE & ELECTRICAL",
+  "HON HWA HARDWARE TRADING",
+  "IDEAL MENU GROUP SDN BHD",
+  "IKANO HANDEL SDN BHD",
+  "INDAH GIFT & HOME DECO",
+  "K STATIONERY & OFFICE SUPPLIES",
+  "KEDAI PAPAN YEW CHUAN",
+  "KEDAI RUNCIT ZBH",
+  "KEDAI UHAT DAN RUNCIT CHONG HWA",
+  "KFA SUPPLY",
+  "KHIAM AIK CHAN SDN BHD",
+  "KT WONG TRADING",
+  "LAVENDER CONFECTIONERY & BAKERY S/B",
+  "LEMON TREE RESTAURANT JTJ FOODS SDN BHD",
+  "LEONG HENG SHELL SERVICE STATION",
+  "LIAN CHI PU TIAN VEGETARIAN RESTAURANT SDN BHD",
+  "LIAN HING STATIONERY SDN BHD",
+  "LIGHTROOM GALLERY SDN BHD",
+  "MAKASSAR FRESH MARKET S/B",
+  "MEGAH RETAIL SDN BHD",
+  "MENTAI INITIAL SDN BHD",
+  "MIZU MENTAI SDN. BHD.",
+  "MOONLIGHT CAKE HOUSE SDN BHD",
+  "MPH BOOKSTORES SDN BHD",
+  "MR D.I.Y. (JOHOR) SDN BHD",
+  "MR D.I.Y. (M) SDN BHD",
+  "MR. D.I.Y. (KUCHAI) SDN BHD",
+  "MR. D.I.Y. (M) SDN BHD",
+  "MR. D.I.Y. SDN BHD",
+  "MR.D.I.Y(M)SDN BHD",
+  "MYNEWS RETAIL SB",
+  "NADEJE PLATINUM SDN BHD",
+  "NANDO'S CHICKENLAND MALAYSIA SDN BHD",
+  "OCEAN LC PACKAGING ENTERPRISE",
+  "OGN GROUP SDN BHD",
+  "OLD TOWN KOPITIAM SDN BHD",
+  "ONE ONE THREE SEAFOOD RESTAURANT SDN BHD",
+  "OWNER BY CASTLE BLUE S/B",
+  "PAGOH REST AND SERVICE AREA",
+  "PANDAH INDAH PULAU KETAM RESTAURANT",
+  "PAPPARICH BMC",
+  "PASAR MINI JIN SENG",
+  "PASAR RAYA MEGA MAJU (SEMENYIH) SDN BHD",
+  "PASARAYA BORONG PINTAR SDN BHD",
+  "PASARAYA CINWA SDN BHD",
+  "PASARAYA JALAL SDN BHD",
+  "PASIR EMAS HARDWARE SDN BHD",
+  "PERNIAGAAN ZHENG HUI",
+  "PETRODELI ENTERPRISE",
+  "PINGHWAI TRADING SDN BHD",
+  "POPULAR BOOK CO. (M) SDN BHD",
+  "PROSPER NIAGA",
+  "R&C VENTURE SDN BHD",
+  "RAPID RAIL SDN BHD",
+  "RESTAURANT JIAWEI JIAWEI HOUSE",
+  "RESTAURANT SIN DU",
+  "RESTORAN DE COFFEE O",
+  "RESTORAN HASSANBISTRO",
+  "RESTORAN WAN SHENG",
+  "S&Y STATIONERY",
+  "S.H.H. MOTOR (SUNGAI RENGIT) SDN. BHD.",
+  "SAM SAM TRADING CO",
+  "SANG KEE CHERAS RESTAURANT",
+  "SANJUNG REALITI SDN. BHD.",
+  "SANYU STATIONERY SHOP",
+  "SHELL ISNI PETRO TRADING",
+  "SIN THYE & COMPANY",
+  "SKCA HARDWARE & TIMBER SDN. BHD.",
+  "SOON HUAT MACHINERY ENTERPRISE",
+  "SUBANG HEALTHCARE SDN BHD",
+  "SUN WONG KUT SDN BHD",
+  "SWC ENTERPRISE SDN BHD",
+  "SYARIKAT PERNIAGAAN GIN KEE",
+  "SYL ROASTED DELIGHTS SDN. BHD.",
+  "TASTE OF THE WORLD SDN BHD",
+  "TED HENG STATIONERY & BOOKS",
+  "TEO HENG STATIONERY & BOOKS",
+  "TF VALUE-MART SDN BHD",
+  "THAI DELICIOUS RESTAURANT",
+  "THE MARCO POLO KITCH BUKIT INDAH",
+  "THE ROTI MAN BAKERY",
+  "THE TOAST F&B SDN BHD",
+  "THREE STOOGES",
+  "TIMELESS KITCHENETTE SDN BHD",
+  "TRI SHAAS SDN BHD",
+  "TRIPLE SIX POINT ENTERPRISE 666",
+  "UNIHAKKA INTERNATIONAL SDN BHD",
+  "UROKO JAPANESE CUISINE SDN BHD",
+  "VERBENA CONFECTIONERY SDN BHD",
+  "VIVOPAC MARKETING SDN BHD",
+  "WAHIN HARDWARE SDN BHD",
+  "WARAKUYA PERMAS CITY SDN BHD",
+  "WESTERN EASTERN ST TIONERY SDN. BHD",
+  "WESTERN EASTERN STATIONERY SDN. BHD",
+  "YAM FRESH",
+  "YHM AEON TEBRAU CITY",
+  "YONG TAT HARDWARE TRADING",
+  "YONGFATT ENTERPRISE"
+];
+
+const MERCHANT_LEGAL_SUFFIX_RE = /\b(sdn\.?\s*bhd\.?|s\/b|berhad|bhd|enterprise|trading|holdings?|corporation|corp|company|co\.?|ltd\.?|inc\.?)\b/gi;
+function normForFuzzy(s) {
+  return String(s || "").toLowerCase().replace(MERCHANT_LEGAL_SUFFIX_RE, " ").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+/* "Token-set ratio": strongest of (a) one normalized name containing the
+   other outright, (b) sharing a distinctive (>=4-char) token — the same
+   style already proven by bench/score.js's fuzzyMerchantMatch (not shared
+   directly: score.js isn't loaded in production), reused here so
+   guessMerchant can validate a candidate line against a known-name lexicon. */
+function tokenSetMatch(a, b) {
+  const g = normForFuzzy(a), t = normForFuzzy(b);
+  if (!g || !t) return 0;
+  if (g === t) return 1;
+  if (g.length >= 4 && t.includes(g)) return 0.9;
+  if (t.length >= 4 && g.includes(t)) return 0.9;
+  const gTokens = new Set(g.split(" ").filter(w => w.length >= 4));
+  const tTokens = t.split(" ").filter(w => w.length >= 4);
+  return tTokens.some(w => gTokens.has(w)) ? 0.75 : 0;
+}
+
+/* Best lexicon-validated header line, or null. A high bar (containment or a
+   shared distinctive token) keeps false positives rare — this is a
+   fallback/booster ahead of the keyword heuristic below, not a replacement
+   for it. */
+function lexiconMerchantMatch(lines) {
+  const head = lines.slice(0, 10);
+  let best = null, bestScore = 0;
+  for (const line of head) {
+    if (NOISE_LINE_RE.test(line) || ADDRESS_RE.test(line)) continue;
+    if (!lineQuality(line)) continue;
+    for (const name of MERCHANT_LEXICON) {
+      const score = tokenSetMatch(line, name);
+      if (score > bestScore) { bestScore = score; best = line; }
+    }
+  }
+  return bestScore >= 0.75 ? cleanMerchantLine(best) : null;
+}
+
+function guessMerchant(lines, sniperV2) {
+  if (sniperV2) {
+    const lex = lexiconMerchantMatch(lines);
+    if (lex) return lex;
+  }
   const head = lines.slice(0, 10);
   for (let i = 0; i < head.length; i++) {
     const line = head[i];
@@ -872,8 +1259,8 @@ function totalLineAmounts(line, score) {
 
 /* Collect every money fact the receipt offers, then arbitrate between the
    printed total, subtotal+tax+service arithmetic, and cash-change. */
-function extractTotal(lines, ccInfo) {
-  const c = { boosted: null, boostedIsRound: false, plain: null, sub: null, tax: null, svc: null, rounding: 0, fallbackMax: null };
+function extractTotal(lines, ccInfo, sniperV2) {
+  const c = { boosted: null, boostedIsRound: false, plain: null, sub: null, tax: null, svc: null, rounding: 0, fallbackMax: null, confusion: null };
   for (const line of lines) {
     const score = totalLineScore(line);
     if (/round/i.test(line) && score < 10) {
@@ -895,7 +1282,16 @@ function extractTotal(lines, ccInfo) {
     }
     if (EXCLUDE_TOTAL_RE.test(line) && score < 10) continue;
     const amounts = totalLineAmounts(line, score);
-    if (!amounts.length) continue;
+    if (!amounts.length) {
+      /* sniperV2: a total-scored line with NO parseable amount is often an
+         isolated OCR digit/letter confusion rather than truly blank text —
+         keep a candidate, arbitrated (with corroboration required) below. */
+      if (sniperV2 && score >= 10) {
+        const cx = confusionCorrectedAmount(line);
+        if (cx !== null && (c.confusion === null || cx > c.confusion.amt)) c.confusion = { amt: cx };
+      }
+      continue;
+    }
     const amt = Math.max(...amounts);
     if (score === 4) { if (c.sub === null || amt > c.sub) c.sub = amt; }
     else if (score === 12) { if (c.boosted === null || amt > c.boosted) { c.boosted = amt; c.boostedIsRound = /round/i.test(line); } }
@@ -916,11 +1312,18 @@ function extractTotal(lines, ccInfo) {
   const roundConfirmed = c.boosted !== null && c.plain !== null && !c.boostedIsRound
     && Math.abs(r2(c.boosted + c.rounding) - c.plain) <= 0.015;
 
+  /* sniperV2: items-sum as a synthetic subtotal — corroborates a candidate
+     total even when the receipt prints no labeled "Subtotal" line (common
+     on simple/handwritten stalls). Never computed (or trusted) off. */
+  const itemsSum = sniperV2 ? candidateItemsSum(lines) : null;
+  const itemsAgree = v => itemsSum !== null && v !== null && close(r2(itemsSum + (c.tax || 0) + (c.svc || 0) + c.rounding), v, 0.05);
+
   /* conf: 3 = arithmetic-confirmed by two independent sources,
      2 = strong single source, 1 = lone printed line, 0 = guesswork. */
   if (close(cc, kt, 0.06)) return { value: kt, conf: 3 };
   if (roundConfirmed) return { value: c.plain, conf: 3 };
   if (close(st, kt, 0.02) && kt !== null) return { value: kt, conf: 3 };
+  if (sniperV2 && itemsAgree(kt)) return { value: kt, conf: 3 };
   /* The "total" line the parser found is just the subtotal echoed (GST
      summary rows do this) — the real total is subtotal + tax. */
   if (st !== null && kt !== null && c.sub !== null && Math.abs(kt - c.sub) < 0.01) return { value: st, conf: 2 };
@@ -928,6 +1331,14 @@ function extractTotal(lines, ccInfo) {
      that might itself be misread. */
   if (c.boosted !== null && c.plain !== null && Math.abs(c.boosted - c.plain) <= 0.015) return { value: kt, conf: 2 };
   if (close(st, cc, 0.06)) return { value: cc, conf: 2 };
+  /* sniperV2: a confusion-table candidate is only ever trusted here — it
+     needs a second signal (subtotal+tax, items-sum, or cash/change) to be
+     accepted at all (see the section comment: a lone "fix" is worse than
+     staying weak). */
+  if (sniperV2 && c.confusion !== null &&
+      (close(st, c.confusion.amt, 0.02) || itemsAgree(c.confusion.amt) || close(cc, c.confusion.amt, 0.06))) {
+    return { value: c.confusion.amt, conf: 2 };
+  }
   if (cc !== null && !ccWeak) return { value: cc, conf: 2 };
   if (st !== null && kt === null) return { value: st, conf: 2 };
   if (ccWeak && cc !== null && kt !== null && c.tax !== null && close(cc, r2(kt + c.tax), 0.06)) return { value: cc, conf: 2 };
@@ -990,15 +1401,20 @@ function extractItems(lines, total) {
   return items;
 }
 
-function parseReceiptText(text) {
+/* Async only for sniperV2's DB-setting lookup when the caller doesn't pass
+   it explicitly (scanReceipt resolves it once and passes it through) — the
+   text-eating contract itself (string in, parsed fields out) is unchanged;
+   see the sniperV2 param, invariant #3. */
+async function parseReceiptText(text, sniperV2) {
+  if (sniperV2 === undefined) sniperV2 = await sniperV2Enabled();
   const lines = text.split(/\n/).map(l => l.trim()).filter(l => l.length > 1);
   const joined = lines.join("\n");
-  const tt = extractTotal(lines, cashChangeTotal(lines));
+  const tt = extractTotal(lines, cashChangeTotal(lines), sniperV2);
   let total = tt.value;
   let totalConf = total !== null ? tt.conf : 0;
   const date = extractDate(lines, joined);
   const time = extractTime(joined);
-  const merchant = guessMerchant(lines);
+  const merchant = guessMerchant(lines, sniperV2);
   const category = guessCategory(joined, merchant);
   const items = extractItems(lines, total);
   /* Last resort: a receipt with readable item prices but no readable
@@ -1031,4 +1447,4 @@ function getPrep() {
   return { master: prepMasterOverride, config: { ...PREP_CONFIG } };
 }
 
-window.ReceiptOCR = { ocrImage, scanReceipt, parseReceiptText, guessCategory, amountFromLine, CATEGORIES, setPrep, getPrep };
+window.ReceiptOCR = { ocrImage, scanReceipt, parseReceiptText, guessCategory, amountFromLine, CATEGORIES, setPrep, getPrep, setSniper, getSniper };
