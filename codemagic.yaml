@@ -28,11 +28,28 @@ workflows:
           cp eula.html privacy.html www/
           cp -r icons www/icons
           cp -r vendor www/vendor   # self-hosted tesseract.js engine (no CDN)
+      - name: Enable LAN networking (debug-only)
+        script: |
+          # OCR-ENGINE-PLAN.md Phase 3b device bench + general local-dev use.
+          # Mutates THIS CI checkout's capacitor.config.json only — never
+          # committed back, never touches the android-release workflow below.
+          node -e "
+            const fs = require('fs');
+            const c = JSON.parse(fs.readFileSync('capacitor.config.json', 'utf8'));
+            c.android = Object.assign({}, c.android, { allowMixedContent: true });
+            fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2));
+          "
       - name: Install Capacitor and add Android
         script: |
           npm install
           npx cap add android
           npx cap sync android
+          # Debug-only cleartext exception (see step above) — Android 9+
+          # blocks plain HTTP by default; the bench's LAN photo/scorer server
+          # needs it. android/ is regenerated every build, so this never
+          # sticks around as hand-edited source; android-release never runs
+          # this sed.
+          sed -i '' 's/android:supportsRtl="true"/android:supportsRtl="true" android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
       - name: Generate app icons (best-effort)
         script: |
           npx @capacitor/assets generate --android || echo "skipped icon generation"
