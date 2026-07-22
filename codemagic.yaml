@@ -27,6 +27,7 @@ workflows:
           cp index.html app.js db.js ocr.js styles.css version.js manifest.webmanifest www/
           cp eula.html privacy.html www/
           cp -r icons www/icons
+          cp -r vendor www/vendor   # self-hosted tesseract.js engine (no CDN)
       - name: Install Capacitor and add Android
         script: |
           npm install
@@ -59,6 +60,7 @@ workflows:
           cp index.html app.js db.js ocr.js styles.css version.js manifest.webmanifest www/
           cp eula.html privacy.html www/
           cp -r icons www/icons
+          cp -r vendor www/vendor   # self-hosted tesseract.js engine (no CDN)
       - name: Install Capacitor and add Android
         script: |
           npm install

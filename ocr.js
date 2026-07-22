@@ -1,6 +1,25 @@
 /* On-device receipt reading: Tesseract.js OCR + Malaysian-receipt parsing heuristics. */
 
-const TESSERACT_CDN = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+/* Self-hosted tesseract.js 5.1.1 — vendored under ./vendor/, NO CDN (was a
+   jsDelivr load, which contradicted the self-host-assets policy). tesseract.js
+   resolves workerPath/corePath/langPath to absolute URLs against
+   window.location.href before handing them to its worker, so the same
+   relative "vendor/..." works from the GitHub Pages /resit/ path and the local
+   dev-server root alike. The core glue (embedded-wasm) + eng.traineddata are
+   large (~28MB together); they are runtime-cached by the service worker on the
+   first scan (invariant #1: lazy-fetched once, cached, never per-scan) rather
+   than force-precached at install — keeping install light and all-or-nothing
+   addAll from ever bricking on a big binary over a flaky connection.
+
+   Paths must be ABSOLUTE: tesseract.js spins its worker up as a blob (base
+   URL blob:…), and the worker importScripts()/fetches corePath+langPath from
+   its own context, so a relative "vendor/…" resolves against the wrong base
+   and 404s. Resolve against document.baseURI once — correct from both the
+   GitHub Pages /resit/ path and the dev-server root. No trailing slash: the
+   worker joins these with "/tesseract-core-…"/"/eng.traineddata.gz". */
+const TESSERACT_LIB = "vendor/tesseract.min.js";
+const VENDOR_BASE = new URL("vendor", document.baseURI).href;
+const TESSERACT_PATHS = { workerPath: VENDOR_BASE + "/worker.min.js", corePath: VENDOR_BASE, langPath: VENDOR_BASE };
 
 let tesseractLoading = null;
 function loadTesseract() {
@@ -8,7 +27,7 @@ function loadTesseract() {
   if (!tesseractLoading) {
     tesseractLoading = new Promise((resolve, reject) => {
       const s = document.createElement("script");
-      s.src = TESSERACT_CDN;
+      s.src = TESSERACT_LIB;
       s.onload = () => resolve();
       s.onerror = () => { tesseractLoading = null; reject(new Error("Could not load OCR engine. Check your connection (only needed the first time).")); };
       document.head.appendChild(s);
@@ -114,11 +133,295 @@ function contrastStretch(canvas) {
   return canvas;
 }
 
+/* ---------- Preprocessing v2 (prepV2, OCR-ENGINE-PLAN.md Phase 1) ----------
+
+   A pure canvas/typed-array pipeline run before OCR, in this order:
+     a. grayscale + shadow/background flattening (divide out illumination)
+     b. deskew (projection-profile variance; applied as a vertical shear)
+     c. Sauvola adaptive binarization (integral-image; contrast-stretch
+        fallback when the image is already clean/bimodal)
+     d. DPI floor + 10px white border (Tesseract guidance)
+   No dependencies. Each sub-step is individually toggleable (PREP_CONFIG) so
+   the bench can sweep combos; the whole tier is gated by the `prepV2` setting
+   (default on; "no" restores the v1 adaptiveThreshold path). Invariants #1/#2/
+   #4: on-device, no build step, feature-flagged. */
+
+const PREP_DEFAULTS = { flatten: true, deskew: true, sauvola: true, border: true };
+let PREP_CONFIG = { ...PREP_DEFAULTS };
+/* master: null -> read the `prepV2` DB setting; true/false -> forced (bench). */
+let prepMasterOverride = null;
+/* DEFAULT OFF. The Phase 1 bench sweep (2026-07-22, my100) showed prepV2 FAILED
+   its gate: every sub-step combo RAISED the weak rate (best combo +1pt vs the
+   −3pt-or-better requirement) even though it improved raw totals/date accuracy
+   — the clean scanned SROIE bench is the wrong instrument for a phone-photo
+   pipeline, and the cleaner binary shifts the parser's totalConf gating. So the
+   pipeline ships DORMANT behind an explicit-opt-in flag (set `prepV2`="yes" to
+   enable) pending Phase 2 confidence recalibration / a real phone-photo bench.
+   See reports/ocr-weekly.md (2026-07-22 Phase-1 row). */
+async function prepV2Enabled() {
+  if (prepMasterOverride === true) return true;
+  if (prepMasterOverride === false) return false;
+  try { return (await DB.getSetting("prepV2", "no")) === "yes"; }
+  catch (e) { return false; }
+}
+
+/* Box-blur a gray plane via an integral image — O(N) regardless of radius. */
+function boxBlurGray(gray, w, h, radius) {
+  const integ = new Float64Array((w + 1) * (h + 1));
+  for (let y = 0; y < h; y++) {
+    let rowSum = 0;
+    for (let x = 0; x < w; x++) {
+      rowSum += gray[y * w + x];
+      integ[(y + 1) * (w + 1) + (x + 1)] = integ[y * (w + 1) + (x + 1)] + rowSum;
+    }
+  }
+  const out = new Float64Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const y1 = Math.max(0, y - radius), y2 = Math.min(h - 1, y + radius);
+    for (let x = 0; x < w; x++) {
+      const x1 = Math.max(0, x - radius), x2 = Math.min(w - 1, x + radius);
+      const count = (x2 - x1 + 1) * (y2 - y1 + 1);
+      const sum = integ[(y2 + 1) * (w + 1) + (x2 + 1)] - integ[y1 * (w + 1) + (x2 + 1)]
+                - integ[(y2 + 1) * (w + 1) + x1] + integ[y1 * (w + 1) + x1];
+      out[y * w + x] = sum / count;
+    }
+  }
+  return out;
+}
+
+/* Estimate illumination with a very large box blur, then divide it out and
+   re-normalize to the mean — flattens phone-photo shadows and page gradients
+   while leaving already-even scans essentially unchanged. */
+function flattenShadow(gray, w, h) {
+  const radius = Math.max(15, Math.round(Math.max(w, h) / 8));
+  const illum = boxBlurGray(gray, w, h, radius);
+  let mean = 0;
+  for (let i = 0; i < illum.length; i++) mean += illum[i];
+  mean /= illum.length;
+  const out = new Float64Array(gray.length);
+  for (let i = 0; i < gray.length; i++) {
+    const denom = illum[i] < 1 ? 1 : illum[i];
+    const v = gray[i] / denom * mean;
+    out[i] = v > 255 ? 255 : (v < 0 ? 0 : v);
+  }
+  return out;
+}
+
+function grayArrayToCanvas(gray, w, h) {
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const ctx = c.getContext("2d");
+  const out = ctx.createImageData(w, h);
+  const p = out.data;
+  for (let i = 0, j = 0; i < gray.length; i++, j += 4) {
+    const v = gray[i] < 0 ? 0 : (gray[i] > 255 ? 255 : gray[i]);
+    p[j] = p[j + 1] = p[j + 2] = v; p[j + 3] = 255;
+  }
+  ctx.putImageData(out, 0, 0);
+  return c;
+}
+
+/* Dominant text-skew angle (degrees) by projection-profile variance: shear
+   the ink map by a candidate angle and measure the variance of the per-row
+   ink counts — it peaks when text lines snap onto rows. Coarse ±10° at 1°,
+   then fine ±1° at 0.25°. Returns 0 when the peak barely beats 0° (receipts
+   are near-vertical crops — don't rotate on noise). Runs on a downscaled copy
+   for speed. */
+function estimateSkewAngle(gray, w, h) {
+  const scale = Math.min(1, 500 / Math.max(w, h));
+  const sw = Math.max(8, Math.round(w * scale)), sh = Math.max(8, Math.round(h * scale));
+  const small = new Float64Array(sw * sh);
+  for (let y = 0; y < sh; y++) {
+    const sy = Math.min(h - 1, Math.floor(y / scale));
+    for (let x = 0; x < sw; x++) {
+      small[y * sw + x] = gray[sy * w + Math.min(w - 1, Math.floor(x / scale))];
+    }
+  }
+  let m = 0;
+  for (let i = 0; i < small.length; i++) m += small[i];
+  m /= small.length;
+  const ink = new Uint8Array(sw * sh);
+  for (let i = 0; i < small.length; i++) ink[i] = small[i] < m - 10 ? 1 : 0;
+  const cx = sw / 2;
+  function variance(angleDeg) {
+    const k = Math.tan(angleDeg * Math.PI / 180);
+    const rows = new Float64Array(sh);
+    for (let x = 0; x < sw; x++) {
+      const shift = Math.round((x - cx) * k);
+      for (let y = 0; y < sh; y++) {
+        if (!ink[y * sw + x]) continue;
+        const ry = y + shift;
+        if (ry >= 0 && ry < sh) rows[ry] += 1;
+      }
+    }
+    let mean = 0;
+    for (let y = 0; y < sh; y++) mean += rows[y];
+    mean /= sh;
+    let v = 0;
+    for (let y = 0; y < sh; y++) { const d = rows[y] - mean; v += d * d; }
+    return v / sh;
+  }
+  const v0 = variance(0);
+  let best = 0, bestV = v0;
+  for (let a = -10; a <= 10; a += 1) {
+    if (a === 0) continue;
+    const v = variance(a);
+    if (v > bestV) { bestV = v; best = a; }
+  }
+  for (let a = best - 1; a <= best + 1; a += 0.25) {
+    const v = variance(a);
+    if (v > bestV) { bestV = v; best = a; }
+  }
+  /* Confidence gate: demand a clear variance gain and a non-trivial angle. */
+  if (Math.abs(best) < 0.5 || bestV < v0 * 1.08) return 0;
+  return best;
+}
+
+/* Apply a vertical shear of `angleDeg` (the projection-profile deskew), growing
+   the canvas so nothing clips and filling the new area white. */
+function shearCanvasY(canvas, angleDeg) {
+  const k = Math.tan(angleDeg * Math.PI / 180);
+  const w = canvas.width, h = canvas.height, cx = w / 2;
+  const extra = Math.ceil(Math.abs(k) * w / 2) + 1;
+  const out = document.createElement("canvas");
+  out.width = w; out.height = h + 2 * extra;
+  const ctx = out.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, out.width, out.height);
+  /* y' = k*x + y + (extra - k*cx) → setTransform(1, k, 0, 1, 0, extra - k*cx). */
+  ctx.setTransform(1, k, 0, 1, 0, extra - k * cx);
+  ctx.drawImage(canvas, 0, 0);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  out.srcMinDim = canvas.srcMinDim;
+  return out;
+}
+
+/* DPI floor (gently upscale small crops so median char height clears ~20px)
+   plus a 10px white quiet-zone border — both help Tesseract's line finder. */
+function ensureDpiAndBorder(canvas) {
+  let c = canvas;
+  const minDim = Math.min(c.width, c.height);
+  if (minDim < 1000) {
+    const s = Math.min(2.5, 1000 / minDim);
+    const nc = document.createElement("canvas");
+    nc.width = Math.round(c.width * s); nc.height = Math.round(c.height * s);
+    const nctx = nc.getContext("2d");
+    nctx.imageSmoothingEnabled = true; nctx.imageSmoothingQuality = "high";
+    nctx.drawImage(c, 0, 0, nc.width, nc.height);
+    nc.srcMinDim = c.srcMinDim;
+    c = nc;
+  }
+  const pad = 10;
+  const out = document.createElement("canvas");
+  out.width = c.width + 2 * pad; out.height = c.height + 2 * pad;
+  const ctx = out.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(c, pad, pad);
+  out.srcMinDim = c.srcMinDim;
+  return out;
+}
+
+/* Is the (flattened) image already clean — a near-bimodal white-bg/black-ink
+   histogram with few midtones? Then a gentle global contrast stretch reads
+   better than Sauvola, which can gnaw clean strokes. */
+function isBimodalClean(canvas) {
+  const ctx = canvas.getContext("2d");
+  const { width: w, height: h } = canvas;
+  const px = ctx.getImageData(0, 0, w, h).data;
+  let mid = 0, n = 0;
+  /* Sample every 4th pixel — plenty for a histogram decision, 16× cheaper. */
+  for (let i = 0; i < px.length; i += 16) {
+    const g = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+    if (g > 70 && g < 190) mid++;
+    n++;
+  }
+  return n > 0 && (mid / n) < 0.14;
+}
+
+/* Sauvola local threshold: t = mean * (1 + k*(std/R - 1)), integral images for
+   both sum and sum-of-squares so it stays O(N) at any window size. */
+function sauvolaBinarize(canvas) {
+  const ctx = canvas.getContext("2d");
+  const { width: w, height: h } = canvas;
+  const data = ctx.getImageData(0, 0, w, h);
+  const px = data.data;
+  const gray = grayscale(px);
+  const stride = w + 1;
+  const I = new Float64Array(stride * (h + 1));
+  const I2 = new Float64Array(stride * (h + 1));
+  for (let y = 0; y < h; y++) {
+    let rs = 0, rs2 = 0;
+    for (let x = 0; x < w; x++) {
+      const g = gray[y * w + x];
+      rs += g; rs2 += g * g;
+      const idx = (y + 1) * stride + (x + 1);
+      I[idx] = I[y * stride + (x + 1)] + rs;
+      I2[idx] = I2[y * stride + (x + 1)] + rs2;
+    }
+  }
+  const half = (Math.max(15, Math.round(Math.min(w, h) / 30)) | 1) >> 1;
+  const k = 0.34, R = 128;
+  for (let y = 0; y < h; y++) {
+    const y1 = Math.max(0, y - half), y2 = Math.min(h - 1, y + half);
+    for (let x = 0; x < w; x++) {
+      const x1 = Math.max(0, x - half), x2 = Math.min(w - 1, x + half);
+      const count = (x2 - x1 + 1) * (y2 - y1 + 1);
+      const s = I[(y2 + 1) * stride + (x2 + 1)] - I[y1 * stride + (x2 + 1)]
+              - I[(y2 + 1) * stride + x1] + I[y1 * stride + x1];
+      const s2 = I2[(y2 + 1) * stride + (x2 + 1)] - I2[y1 * stride + (x2 + 1)]
+               - I2[(y2 + 1) * stride + x1] + I2[y1 * stride + x1];
+      const mean = s / count;
+      const variance = Math.max(0, s2 / count - mean * mean);
+      const t = mean * (1 + k * (Math.sqrt(variance) / R - 1));
+      const v = gray[y * w + x] <= t ? 0 : 255;
+      const i = (y * w + x) * 4;
+      px[i] = px[i + 1] = px[i + 2] = v;
+    }
+  }
+  ctx.putImageData(data, 0, 0);
+  return canvas;
+}
+
+/* Run the full v2 pipeline on a loaded (color) canvas. Returns BOTH a
+   binarized canvas (fed to Tesseract) and a grayscale canvas in the SAME
+   geometry (flattened/deskewed/bordered but not binarized) — the totals-sniper
+   crops from the gray one so its bbox coordinates, which come from recognizing
+   the binary, line up exactly (thin strokes survive un-binarized). */
+async function preprocessV2(base) {
+  const w = base.width, h = base.height;
+  const cfg = PREP_CONFIG;
+  let gray = grayscale(base.getContext("2d").getImageData(0, 0, w, h).data);
+  if (cfg.flatten) gray = flattenShadow(gray, w, h);
+  let grayCanvas = grayArrayToCanvas(gray, w, h);
+  grayCanvas.srcMinDim = base.srcMinDim;
+  if (cfg.deskew) {
+    const ang = estimateSkewAngle(gray, w, h);
+    if (ang !== 0) grayCanvas = shearCanvasY(grayCanvas, ang);
+  }
+  if (cfg.border) grayCanvas = ensureDpiAndBorder(grayCanvas);
+  const binary = document.createElement("canvas");
+  binary.width = grayCanvas.width; binary.height = grayCanvas.height;
+  binary.getContext("2d").drawImage(grayCanvas, 0, 0);
+  binary.srcMinDim = base.srcMinDim;
+  if (cfg.sauvola) {
+    isBimodalClean(binary) ? contrastStretch(binary) : sauvolaBinarize(binary);
+  } else {
+    adaptiveThreshold(binary); /* sub-step off → the v1 mean threshold, so the sweep isolates Sauvola's delta */
+  }
+  return { binary, gray: grayCanvas };
+}
+
+/* Preprocess a loaded canvas for OCR: the v2 pipeline when enabled, else the
+   v1 adaptiveThreshold path (bit-for-bit today's behavior). */
+async function preprocess(base) {
+  if (!(await prepV2Enabled())) return { binary: adaptiveThreshold(base), gray: null };
+  return preprocessV2(base);
+}
+
 let ocrWorker = null;
 async function getOcrWorker() {
   await loadTesseract();
   if (!ocrWorker) {
-    ocrWorker = await Tesseract.createWorker("eng");
+    ocrWorker = await Tesseract.createWorker("eng", 1, TESSERACT_PATHS);
   }
   return ocrWorker;
 }
@@ -152,18 +455,21 @@ async function ocrImage(file, onProgress) {
 }
 
 async function ocrBest(worker, file, onProgress) {
-  const sharpCanvas = adaptiveThreshold(await loadCanvas(file));
-  let r = await recognizeWithBoxes(worker, sharpCanvas);
-  let canvas = sharpCanvas;
+  const prep = await preprocess(await loadCanvas(file));
+  let r = await recognizeWithBoxes(worker, prep.binary);
+  let canvas = prep.binary, prepGray = prep.gray;
   if (!textUsable(r.text)) {
     if (onProgress) onProgress("Trying harder…");
     const softCanvas = contrastStretch(await loadCanvas(file));
     const r2 = await recognizeWithBoxes(worker, softCanvas);
     if (textUsable(r2.text) || r2.text.trim().length > r.text.trim().length) {
-      r = r2; canvas = softCanvas;
+      /* Soft path re-loads the raw file with no v2 geometry, so its lines are
+         in the file's own space — drop prepGray and let the sniper reload the
+         file (bboxes then match loadCanvas, exactly as in the v1 flow). */
+      r = r2; canvas = softCanvas; prepGray = null;
     }
   }
-  return { ...r, canvas };
+  return { ...r, canvas, prepGray };
 }
 
 /* Conservative read of a digits-only OCR result: a wrong amount is worse
@@ -188,7 +494,7 @@ function parseSniperDigits(text) {
    tall crops (handwriting overflows the printed line), raw grayscale and
    binarized (thin pen strokes can vanish when binarized), and two
    segmentation modes — then votes among the readings. */
-async function sniperTotal(worker, file, boostFlag, canvas, lines) {
+async function sniperTotal(worker, file, boostFlag, canvas, lines, prepGray) {
   const totalLines = lines.filter(l => /total|jumlah/i.test(l.text || "") && l.bbox);
   if (!totalLines.length) return null;
   const strong = totalLines.filter(l => /amount|amt|rm|payable|inclu/i.test(l.text));
@@ -203,7 +509,11 @@ async function sniperTotal(worker, file, boostFlag, canvas, lines) {
   const x0 = Math.min(cropX + 4, canvas.width - 20);
   const cw = canvas.width - x0 - 2;
   if (cw < 20) return null;
-  const raw = await loadCanvas(file, boostFlag);
+  /* Crop from the v2 processed-grayscale canvas when present — it shares the
+     recognized canvas's exact geometry, so these bbox coords land dead-on,
+     with thin strokes preserved (un-binarized). Without it (v1/soft path),
+     reload the raw file exactly as before — its geometry matches `canvas`. */
+  const raw = prepGray || await loadCanvas(file, boostFlag);
 
   const votes = [];
   for (const pad of [0.9, 1.6]) {
@@ -260,10 +570,10 @@ async function scanReceipt(file, onProgress) {
   if (parsed.total === null || parsed.totalConf <= 1 || (small && parsed.totalConf < 3)) {
     if (onProgress) onProgress("Looking closer…");
     try {
-      const big = adaptiveThreshold(await loadCanvas(file, true));
-      const r2 = await recognizeWithBoxes(worker, big);
+      const bigPrep = await preprocess(await loadCanvas(file, true));
+      const r2 = await recognizeWithBoxes(worker, bigPrep.binary);
       const p2 = parseReceiptText(r2.text);
-      boosted = { r: { ...r2, canvas: big }, p: p2 };
+      boosted = { r: { ...r2, canvas: bigPrep.binary, prepGray: bigPrep.gray }, p: p2 };
       if (p2.total !== null && (parsed.total === null || p2.totalConf > parsed.totalConf || (small && p2.totalConf >= parsed.totalConf))) {
         r = boosted.r;
         parsed = p2;
@@ -277,7 +587,7 @@ async function scanReceipt(file, onProgress) {
     const src = (boosted && boosted.r.lines.length) ? { rr: boosted.r, flag: true } : (r.lines.length ? { rr: r, flag: rBoost } : null);
     if (src) {
       try {
-        const t = await sniperTotal(worker, file, src.flag, src.rr.canvas, src.rr.lines);
+        const t = await sniperTotal(worker, file, src.flag, src.rr.canvas, src.rr.lines, src.rr.prepGray);
         if (t) parsed.total = t;
       } catch (e) { /* rescue pass is best-effort */ }
     }
@@ -705,4 +1015,20 @@ function amountFromLine(line) {
   return a.length ? Math.max(...a) : null;
 }
 
-window.ReceiptOCR = { ocrImage, scanReceipt, parseReceiptText, guessCategory, amountFromLine, CATEGORIES };
+/* Bench-sweep hooks (harmless in prod): force the prepV2 master on/off and
+   toggle individual sub-steps without touching the DB flag, so score.js can
+   sweep combos in one session. `master`: true/false forces, "db"/null reverts
+   to the `prepV2` setting. */
+function setPrep(o) {
+  o = o || {};
+  if ("master" in o) prepMasterOverride = (o.master === "db" || o.master === null) ? null : !!o.master;
+  for (const key of ["flatten", "deskew", "sauvola", "border"]) {
+    if (key in o) PREP_CONFIG[key] = !!o[key];
+  }
+  return getPrep();
+}
+function getPrep() {
+  return { master: prepMasterOverride, config: { ...PREP_CONFIG } };
+}
+
+window.ReceiptOCR = { ocrImage, scanReceipt, parseReceiptText, guessCategory, amountFromLine, CATEGORIES, setPrep, getPrep };

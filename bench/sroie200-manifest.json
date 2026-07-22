@@ -1,0 +1,1211 @@
+{
+  "source": "bench-sroie/raw (ICDAR-2019-SROIE mirror), receipts 100-299",
+  "note": "Fixed-forever 200-receipt generalization sample (OCR-ENGINE-PLAN.md Phase 0/1R). sha1 is of the .jpg bytes under resit/test-receipts/sroie200/ (gitignored, local-only) -- this file records the sample's identity + truth totals durably even though the images themselves are never committed. truthTotal is parsed the same way score.js's parseTruthTotal() does (strip everything but digits/dot/minus, then parseFloat) so it's directly comparable to bench runs.",
+  "range": [
+    "100",
+    "299"
+  ],
+  "count": 200,
+  "entries": [
+    {
+      "id": "100",
+      "sha1": "323e1bb68ee4f98f3f96956ed7a9089ed5a1e3d8",
+      "truthTotal": 7.42,
+      "truthTotalRaw": "7.42"
+    },
+    {
+      "id": "101",
+      "sha1": "d3049704d2272fc7302a29153a190fea42bab8da",
+      "truthTotal": 29.68,
+      "truthTotalRaw": "29.68"
+    },
+    {
+      "id": "102",
+      "sha1": "8291242a0b910812406551d7ccd2faf3c6bed06e",
+      "truthTotal": 73.3,
+      "truthTotalRaw": "73.30"
+    },
+    {
+      "id": "103",
+      "sha1": "f684b87c79d3b55479f8e71ea0b9560cf327446f",
+      "truthTotal": 148.4,
+      "truthTotalRaw": "148.40"
+    },
+    {
+      "id": "104",
+      "sha1": "95a5074963e7643b1b0d28e7b32b127b19839441",
+      "truthTotal": 102.4,
+      "truthTotalRaw": "102.40"
+    },
+    {
+      "id": "105",
+      "sha1": "2a5e638895d75559787799708329558ec53c79d3",
+      "truthTotal": 30.3,
+      "truthTotalRaw": "30.30"
+    },
+    {
+      "id": "106",
+      "sha1": "4f1df123bbb75375e6652c678cf8a92d7daab390",
+      "truthTotal": 599.45,
+      "truthTotalRaw": "599.45"
+    },
+    {
+      "id": "107",
+      "sha1": "837e689623b7abfafd34b002717ccbe27996d008",
+      "truthTotal": 48.15,
+      "truthTotalRaw": "48.15"
+    },
+    {
+      "id": "108",
+      "sha1": "bde22294879d933d0e5ceab9aca9238666a198b0",
+      "truthTotal": 7.0,
+      "truthTotalRaw": "7.00"
+    },
+    {
+      "id": "109",
+      "sha1": "e92179d6f001be433b9541e3fc5ce99219cf2dd6",
+      "truthTotal": 7.0,
+      "truthTotalRaw": "7.00"
+    },
+    {
+      "id": "110",
+      "sha1": "1f2cccaceb0972b0f259004087c018cf3fca7cb1",
+      "truthTotal": 6.0,
+      "truthTotalRaw": "6.00"
+    },
+    {
+      "id": "111",
+      "sha1": "3218154184ddbab155fbd71801f3c935c28dd344",
+      "truthTotal": 465.34,
+      "truthTotalRaw": "465.34"
+    },
+    {
+      "id": "112",
+      "sha1": "d6db7558239ae0a98fec01f2db11060fe8ee16d8",
+      "truthTotal": 4.0,
+      "truthTotalRaw": "RM4.00"
+    },
+    {
+      "id": "113",
+      "sha1": "ffc98a956a8e9c96883a6f2dad9ca6620307c2a7",
+      "truthTotal": 93.07,
+      "truthTotalRaw": "93.07"
+    },
+    {
+      "id": "114",
+      "sha1": "a7a5ec2722b656f037c70aea7b4f72b14eb5a6fc",
+      "truthTotal": 44.73,
+      "truthTotalRaw": "44.73"
+    },
+    {
+      "id": "115",
+      "sha1": "9ca0c8d3cbc54934642b79664109997198ec1cb2",
+      "truthTotal": 23.32,
+      "truthTotalRaw": "23.32"
+    },
+    {
+      "id": "116",
+      "sha1": "3d245af63606ed0499629234dad589d02215300d",
+      "truthTotal": 116.28,
+      "truthTotalRaw": "116.28"
+    },
+    {
+      "id": "117",
+      "sha1": "aaefbf5c2d83649ea56c0219e21994dec46aada6",
+      "truthTotal": 94.87,
+      "truthTotalRaw": "94.87"
+    },
+    {
+      "id": "118",
+      "sha1": "10aa7786bf42a8f6a849dec8285a96bde2940735",
+      "truthTotal": 13.25,
+      "truthTotalRaw": "13.25"
+    },
+    {
+      "id": "119",
+      "sha1": "d3d1202ef261f9fee9bf36fb84a02d9175e40b7d",
+      "truthTotal": 2.12,
+      "truthTotalRaw": "2.12"
+    },
+    {
+      "id": "120",
+      "sha1": "9f0f80593eeaa9a28eeded91bbd253c81e1067d6",
+      "truthTotal": 6.36,
+      "truthTotalRaw": "6.36"
+    },
+    {
+      "id": "121",
+      "sha1": "2519edc66c49cf5afa53464113196cb11a7644dc",
+      "truthTotal": 21.2,
+      "truthTotalRaw": "21.20"
+    },
+    {
+      "id": "122",
+      "sha1": "25564b830f4989a07bf0439259ebae209a6adea5",
+      "truthTotal": 12.72,
+      "truthTotalRaw": "12.72"
+    },
+    {
+      "id": "123",
+      "sha1": "8d05c779052ba0909d75d956502e3bb644be7870",
+      "truthTotal": 39.75,
+      "truthTotalRaw": "39.75"
+    },
+    {
+      "id": "124",
+      "sha1": "967457c04bff18612cb4babd8878571122dfa51e",
+      "truthTotal": 5.3,
+      "truthTotalRaw": "5.30"
+    },
+    {
+      "id": "125",
+      "sha1": "54087c2c2e05ceb40a5ff25e16e0cfe970aceb66",
+      "truthTotal": 270.3,
+      "truthTotalRaw": "270.30"
+    },
+    {
+      "id": "126",
+      "sha1": "33e8dcdb0a9757d27689a4e8edc5d4e4259a317a",
+      "truthTotal": 60.95,
+      "truthTotalRaw": "60.95"
+    },
+    {
+      "id": "127",
+      "sha1": "4636f9ee4a172ab788c4d572aa0a366c88aeb94c",
+      "truthTotal": 7.95,
+      "truthTotalRaw": "7.95"
+    },
+    {
+      "id": "128",
+      "sha1": "0ed07ebe48bb0e53fd48a7dbc4c788002a36a514",
+      "truthTotal": 82.68,
+      "truthTotalRaw": "82.68"
+    },
+    {
+      "id": "129",
+      "sha1": "25e3411f8b540362466b6bfb5310b6432c082986",
+      "truthTotal": 74.2,
+      "truthTotalRaw": "74.20"
+    },
+    {
+      "id": "130",
+      "sha1": "4a50044bff05b9c21b3db8e14f9dc2e1b37ca888",
+      "truthTotal": 63.6,
+      "truthTotalRaw": "63.60"
+    },
+    {
+      "id": "131",
+      "sha1": "20d4aaa218b364651654168e54cc06ad01c0b3db",
+      "truthTotal": 5.3,
+      "truthTotalRaw": "5.30"
+    },
+    {
+      "id": "132",
+      "sha1": "f5264cfd81c2664fef2ba692a71317fc15da82ea",
+      "truthTotal": 79.35,
+      "truthTotalRaw": "79.35"
+    },
+    {
+      "id": "133",
+      "sha1": "1af4f7d5f2afbcb427e5c95435664f6d07bf3c3d",
+      "truthTotal": 248.05,
+      "truthTotalRaw": "248.05"
+    },
+    {
+      "id": "134",
+      "sha1": "00075e2d5b86bac57e36f36e15d7bcb7513d9e89",
+      "truthTotal": 21.4,
+      "truthTotalRaw": "21.40"
+    },
+    {
+      "id": "135",
+      "sha1": "a5fa3166d233c7a00d634bbb312881f2cbccc87d",
+      "truthTotal": 99.0,
+      "truthTotalRaw": "99.00"
+    },
+    {
+      "id": "136",
+      "sha1": "d049e0fc212070f99b93014670fd6ae59826d336",
+      "truthTotal": 6.0,
+      "truthTotalRaw": "6.00"
+    },
+    {
+      "id": "137",
+      "sha1": "f204d8b447e1eeaea0f57e3829bf916f0f682f28",
+      "truthTotal": 9.1,
+      "truthTotalRaw": "9.10"
+    },
+    {
+      "id": "138",
+      "sha1": "95be73e4485982738cac68f1dbdf48566e0f2f19",
+      "truthTotal": 4.8,
+      "truthTotalRaw": "4.80"
+    },
+    {
+      "id": "139",
+      "sha1": "40e89858c1f49129b72f2978dbac76ac38cef0ec",
+      "truthTotal": 6.7,
+      "truthTotalRaw": "6.70"
+    },
+    {
+      "id": "140",
+      "sha1": "9c21ef9472eb610379765478a7b1ee01d0aa344a",
+      "truthTotal": 9.6,
+      "truthTotalRaw": "9.60"
+    },
+    {
+      "id": "141",
+      "sha1": "0a5df0dc98cc9a7aee8f52f34c29260c8f10d7dc",
+      "truthTotal": 7.0,
+      "truthTotalRaw": "7.00"
+    },
+    {
+      "id": "142",
+      "sha1": "7a28d81a12737b995251294270bc07c2926e041c",
+      "truthTotal": 2.3,
+      "truthTotalRaw": "2.30"
+    },
+    {
+      "id": "143",
+      "sha1": "71b3a3d27f29545c82c58f3dd6027fd85b071765",
+      "truthTotal": 6.0,
+      "truthTotalRaw": "6.00"
+    },
+    {
+      "id": "144",
+      "sha1": "6f99aba3e922c44e2101a468c296f23c9761f44f",
+      "truthTotal": 25.4,
+      "truthTotalRaw": "25.40"
+    },
+    {
+      "id": "145",
+      "sha1": "ee5bb8090a2e9744fd33fd7928e051def8e1aaa6",
+      "truthTotal": 8.5,
+      "truthTotalRaw": "8.50"
+    },
+    {
+      "id": "146",
+      "sha1": "f617083ba09e8218e71c6e6231cee9fd895dfb70",
+      "truthTotal": 72.93,
+      "truthTotalRaw": "72.93"
+    },
+    {
+      "id": "147",
+      "sha1": "df3f76ffcc99a06e123491b189f51225c3699b04",
+      "truthTotal": 65.55,
+      "truthTotalRaw": "65.55"
+    },
+    {
+      "id": "148",
+      "sha1": "88ae9bc23c40bca9113edc0d3b41cbe772af0678",
+      "truthTotal": 13.1,
+      "truthTotalRaw": "13.10"
+    },
+    {
+      "id": "149",
+      "sha1": "e40df8df1d1fb0a76071ca18837715ee6b9dc7ad",
+      "truthTotal": 26.82,
+      "truthTotalRaw": "26.82"
+    },
+    {
+      "id": "150",
+      "sha1": "e63f0f5af5060abfe88ab22bf5f3a34ef55a595a",
+      "truthTotal": 30.0,
+      "truthTotalRaw": "30.00"
+    },
+    {
+      "id": "151",
+      "sha1": "3084bd81a026ef5cf60a49a38fa327c194983f31",
+      "truthTotal": 9.0,
+      "truthTotalRaw": "9.00"
+    },
+    {
+      "id": "152",
+      "sha1": "6f6a1d6d7f56cabc08de8b65ae8efe7d605fc819",
+      "truthTotal": 41.45,
+      "truthTotalRaw": "RM41.45"
+    },
+    {
+      "id": "153",
+      "sha1": "aaeb41d4e7a399587f2b57a2591a74ae1cf5a25c",
+      "truthTotal": 14.65,
+      "truthTotalRaw": "14.65"
+    },
+    {
+      "id": "154",
+      "sha1": "672a7ac564240d7d77733afc979c72b43b031380",
+      "truthTotal": 101.75,
+      "truthTotalRaw": "101.75"
+    },
+    {
+      "id": "155",
+      "sha1": "dc26cdb83b38d51f371120e2aea6db7e9d04104e",
+      "truthTotal": 28.5,
+      "truthTotalRaw": "28.50"
+    },
+    {
+      "id": "156",
+      "sha1": "1ea982b861e93a16461399ec44cc97e72ec28d67",
+      "truthTotal": 29.7,
+      "truthTotalRaw": "RM 29.70"
+    },
+    {
+      "id": "157",
+      "sha1": "4d5498dffcfaa8152e6a23e558d30867325b7b2a",
+      "truthTotal": 21.5,
+      "truthTotalRaw": "21.50"
+    },
+    {
+      "id": "158",
+      "sha1": "e6d80332a977b9d49551b5e05a6ba18765cdfe47",
+      "truthTotal": 3.7,
+      "truthTotalRaw": "3.70"
+    },
+    {
+      "id": "159",
+      "sha1": "a541b0be4695de07f0836190d760fed108220fb6",
+      "truthTotal": 29.8,
+      "truthTotalRaw": "29.80"
+    },
+    {
+      "id": "160",
+      "sha1": "859151662ebeac8d00c519175b24400af86989d6",
+      "truthTotal": 8.6,
+      "truthTotalRaw": "RM8.60"
+    },
+    {
+      "id": "161",
+      "sha1": "f8dfee50cef539b5747708a48b8c7e62e9e2da6d",
+      "truthTotal": 39.0,
+      "truthTotalRaw": "RM39.00"
+    },
+    {
+      "id": "162",
+      "sha1": "acbe83c1d2bc813574aae8a8fc6ee92f05ff6382",
+      "truthTotal": 213.0,
+      "truthTotalRaw": "213.00"
+    },
+    {
+      "id": "163",
+      "sha1": "ee4a4258c0a67ab49bed519a12b3faef15b19c29",
+      "truthTotal": 108.5,
+      "truthTotalRaw": "108.50"
+    },
+    {
+      "id": "164",
+      "sha1": "0d664782356cf3ae9ce704a8a84b0779c2e639a6",
+      "truthTotal": 28.7,
+      "truthTotalRaw": "28.70"
+    },
+    {
+      "id": "165",
+      "sha1": "e9aa0a7a715fd7f3b650d7211d0040e08804eb0e",
+      "truthTotal": 71.0,
+      "truthTotalRaw": "71.00"
+    },
+    {
+      "id": "166",
+      "sha1": "13d19553e19aaecd749f9f05f5c1cd5db7df54da",
+      "truthTotal": 35.8,
+      "truthTotalRaw": "35.80"
+    },
+    {
+      "id": "167",
+      "sha1": "eb4298d52a7716681746f7a2405025d5c755a20a",
+      "truthTotal": 53.6,
+      "truthTotalRaw": "RM53.60"
+    },
+    {
+      "id": "168",
+      "sha1": "0f953801623b0804482907eca2275c70444de151",
+      "truthTotal": 25.15,
+      "truthTotalRaw": "25.15"
+    },
+    {
+      "id": "169",
+      "sha1": "1985077e6ee226ceefd9f2fea9b5a39adb51955d",
+      "truthTotal": 29.3,
+      "truthTotalRaw": "RM29.30"
+    },
+    {
+      "id": "170",
+      "sha1": "5a26bbcafdad813cfca738e06f9c6ae61ac2f90c",
+      "truthTotal": 105.0,
+      "truthTotalRaw": "105.00"
+    },
+    {
+      "id": "171",
+      "sha1": "9ad1eb63db1b0ec2eddeed7aeddbf4aa2b658291",
+      "truthTotal": 12.0,
+      "truthTotalRaw": "12.00"
+    },
+    {
+      "id": "172",
+      "sha1": "0d4a146b6d0bb374d9c05904788585c9a6cb26b4",
+      "truthTotal": 53.3,
+      "truthTotalRaw": "53.30"
+    },
+    {
+      "id": "173",
+      "sha1": "b4e037749ad2be6d90324ae361eb43080ae4c835",
+      "truthTotal": 60.6,
+      "truthTotalRaw": "60.60"
+    },
+    {
+      "id": "174",
+      "sha1": "f17c3cdf18fdcb9501cce0b8c46739af2e3a0069",
+      "truthTotal": 20.5,
+      "truthTotalRaw": "20.50"
+    },
+    {
+      "id": "175",
+      "sha1": "2ad3fc661e5a842e442b304e0eae7f1db5c0cfe3",
+      "truthTotal": 11.8,
+      "truthTotalRaw": "11.80"
+    },
+    {
+      "id": "176",
+      "sha1": "1a2f653798d3931c699ee6d17e78fe62cc82d39e",
+      "truthTotal": 101.76,
+      "truthTotalRaw": "101.76"
+    },
+    {
+      "id": "177",
+      "sha1": "a5c2329951ea0cc961418504c545b34cf432859b",
+      "truthTotal": 127.2,
+      "truthTotalRaw": "127.20"
+    },
+    {
+      "id": "178",
+      "sha1": "7344a042bfc28661723056f90758bdcb1673bebd",
+      "truthTotal": 174.9,
+      "truthTotalRaw": "174.90"
+    },
+    {
+      "id": "179",
+      "sha1": "7210e1bbe11703da09e5dd634b4e93302860e896",
+      "truthTotal": 174.9,
+      "truthTotalRaw": "174.90"
+    },
+    {
+      "id": "180",
+      "sha1": "901237a0e32f082d698a26389b91e41b12f1c909",
+      "truthTotal": 41.95,
+      "truthTotalRaw": "41.95"
+    },
+    {
+      "id": "181",
+      "sha1": "3d82310ef15f670fdafd76c2b07e0e047f1b2160",
+      "truthTotal": 6.0,
+      "truthTotalRaw": "6.00"
+    },
+    {
+      "id": "182",
+      "sha1": "b5128ab63c2dab40fede66d1321bbead1cf7c4ea",
+      "truthTotal": 63.8,
+      "truthTotalRaw": "63.80"
+    },
+    {
+      "id": "183",
+      "sha1": "b3c699c01dd0ecaff36f826cd07ad411c9b7a197",
+      "truthTotal": 21.2,
+      "truthTotalRaw": "21.20"
+    },
+    {
+      "id": "184",
+      "sha1": "c7a528f1973921889c91f8d9c4e5403821a71c87",
+      "truthTotal": 48.0,
+      "truthTotalRaw": "48.00"
+    },
+    {
+      "id": "185",
+      "sha1": "3bec41036b1ad7adb42a4df431fdf5f30252925a",
+      "truthTotal": 367.1,
+      "truthTotalRaw": "RM367.10"
+    },
+    {
+      "id": "186",
+      "sha1": "8d0c7eb690b367eebed856680ad86c691600788f",
+      "truthTotal": 45.35,
+      "truthTotalRaw": "45.35"
+    },
+    {
+      "id": "187",
+      "sha1": "de9b514353c5887fda4c4510a4825be7699cb73b",
+      "truthTotal": 22.65,
+      "truthTotalRaw": "RM22.65"
+    },
+    {
+      "id": "188",
+      "sha1": "faea65dfa068c482bb6e17c736026f9690093bbb",
+      "truthTotal": 31.0,
+      "truthTotalRaw": "31.00"
+    },
+    {
+      "id": "189",
+      "sha1": "b4c313996ec91e4f5f596815ab9db77ab2325380",
+      "truthTotal": 63.35,
+      "truthTotalRaw": "63.35"
+    },
+    {
+      "id": "190",
+      "sha1": "2fe25b515dcf902a5603015604a406396040e771",
+      "truthTotal": 71.9,
+      "truthTotalRaw": "71.90"
+    },
+    {
+      "id": "191",
+      "sha1": "ef597679c64b099767c709d65f5c744347f02282",
+      "truthTotal": 34.0,
+      "truthTotalRaw": "34.00"
+    },
+    {
+      "id": "192",
+      "sha1": "877ecd9cc90eb88ad20c3a68258c7bdf095ba3a6",
+      "truthTotal": 38.8,
+      "truthTotalRaw": "38.80"
+    },
+    {
+      "id": "193",
+      "sha1": "9220ae251b00a019a3087c8b670a9401e54a3c74",
+      "truthTotal": 4.0,
+      "truthTotalRaw": "4.00"
+    },
+    {
+      "id": "194",
+      "sha1": "98ae1b429003619a9dd57fe360efba4066b95be0",
+      "truthTotal": 88.95,
+      "truthTotalRaw": "88.95"
+    },
+    {
+      "id": "195",
+      "sha1": "9be92ca8cf1e8b1447570d9d57910d9d9cc29565",
+      "truthTotal": 31.0,
+      "truthTotalRaw": "31.00"
+    },
+    {
+      "id": "196",
+      "sha1": "a2903564c07484d6cbfa1b058a82bbd29a3dc700",
+      "truthTotal": 5.75,
+      "truthTotalRaw": "5.75"
+    },
+    {
+      "id": "197",
+      "sha1": "fd5126ce0e1d1865e2c422378e3f6c719af98f26",
+      "truthTotal": 42.5,
+      "truthTotalRaw": "42.50"
+    },
+    {
+      "id": "198",
+      "sha1": "64d0338207714c826cf2264ca889dc81a4ddefcd",
+      "truthTotal": 45.0,
+      "truthTotalRaw": "45.00"
+    },
+    {
+      "id": "199",
+      "sha1": "01b89aaeb083273e0a2a54a92a7fa15ac0a53200",
+      "truthTotal": 8.0,
+      "truthTotalRaw": "8.00"
+    },
+    {
+      "id": "200",
+      "sha1": "e64d3aa516886b183c67ead8d83cd9b8e7b56bd8",
+      "truthTotal": 42.9,
+      "truthTotalRaw": "42.90"
+    },
+    {
+      "id": "201",
+      "sha1": "e42d7a967f41a4591c1804b6cc9bdc7302e1abc2",
+      "truthTotal": 10.6,
+      "truthTotalRaw": "10.60"
+    },
+    {
+      "id": "202",
+      "sha1": "fdf1e19f5255d3dfac5b6b038d413a1081d292db",
+      "truthTotal": 35.4,
+      "truthTotalRaw": "35.40"
+    },
+    {
+      "id": "203",
+      "sha1": "7acecf5db974f77d8557ee4c503a09afdb76428a",
+      "truthTotal": 28.0,
+      "truthTotalRaw": "28.00"
+    },
+    {
+      "id": "204",
+      "sha1": "91936405555fbb1a2a741812cb8f02a9a0626bbe",
+      "truthTotal": 50.8,
+      "truthTotalRaw": "50.80"
+    },
+    {
+      "id": "205",
+      "sha1": "421b3371e74aed7a142a477e03400cad6a6a74af",
+      "truthTotal": 26.1,
+      "truthTotalRaw": "26.10"
+    },
+    {
+      "id": "206",
+      "sha1": "69090e1bace0db179f37651b1672b974010ef4a1",
+      "truthTotal": 21.0,
+      "truthTotalRaw": "21.00"
+    },
+    {
+      "id": "207",
+      "sha1": "c975105fee369983bc61aec27e9e3f45ec694b6e",
+      "truthTotal": 14.9,
+      "truthTotalRaw": "14.90"
+    },
+    {
+      "id": "208",
+      "sha1": "410ebe8ec4a83f2cbb20e58d4d40f99fcc592f02",
+      "truthTotal": 12.3,
+      "truthTotalRaw": "12.30"
+    },
+    {
+      "id": "209",
+      "sha1": "43b9fc691c1d68eb8c200f705765d9a37fe77d3b",
+      "truthTotal": 60.0,
+      "truthTotalRaw": "60.00"
+    },
+    {
+      "id": "210",
+      "sha1": "0471abfbc761147dbd6f99368117afe3137a1fda",
+      "truthTotal": 7838.8,
+      "truthTotalRaw": "7838.80"
+    },
+    {
+      "id": "211",
+      "sha1": "f88cdc3cf17125ff2de6b8ebaf5fff2765af9f83",
+      "truthTotal": 374.2,
+      "truthTotalRaw": "374.20"
+    },
+    {
+      "id": "212",
+      "sha1": "76b02e5b119ad60ecc7c285767111213342f3271",
+      "truthTotal": 29.0,
+      "truthTotalRaw": "29.00"
+    },
+    {
+      "id": "213",
+      "sha1": "23256cbde832f1e3a053fd16da5462703e4941c4",
+      "truthTotal": 10.45,
+      "truthTotalRaw": "10.45"
+    },
+    {
+      "id": "214",
+      "sha1": "c8fa1657e665375e0f6f23a0107fa88d581768e4",
+      "truthTotal": 13.5,
+      "truthTotalRaw": "13.50"
+    },
+    {
+      "id": "215",
+      "sha1": "818e12af9f9ca6e4e1c406b857fb7cc566631396",
+      "truthTotal": 109.7,
+      "truthTotalRaw": "109.70"
+    },
+    {
+      "id": "216",
+      "sha1": "c8369ea574217dd830bdfecdf7860b54160a901c",
+      "truthTotal": 7.0,
+      "truthTotalRaw": "7.00"
+    },
+    {
+      "id": "217",
+      "sha1": "770532aa33205d0806b17f126a9de4a03004b036",
+      "truthTotal": 22.0,
+      "truthTotalRaw": "22.00"
+    },
+    {
+      "id": "218",
+      "sha1": "5c260bb7845b98a560a69bb9dc76d705870c5b46",
+      "truthTotal": 329.1,
+      "truthTotalRaw": "329.10"
+    },
+    {
+      "id": "219",
+      "sha1": "647c53cccde4f5a8c56c29d1e8350ea0fb679338",
+      "truthTotal": 100.0,
+      "truthTotalRaw": "100.00"
+    },
+    {
+      "id": "220",
+      "sha1": "345b15bb9bb62db0daa4f8f487c59a70977eda27",
+      "truthTotal": 4.25,
+      "truthTotalRaw": "4.25"
+    },
+    {
+      "id": "221",
+      "sha1": "48fdf1f10b9ee0fa1e3d7dd591fb2e9118a18ca3",
+      "truthTotal": 30.1,
+      "truthTotalRaw": "30.10"
+    },
+    {
+      "id": "222",
+      "sha1": "40898e7f236711bf7e40e6712ea2082c2b45eee8",
+      "truthTotal": 41.0,
+      "truthTotalRaw": "41.00"
+    },
+    {
+      "id": "223",
+      "sha1": "78c0990baa29fafdefe78d0484e21290302747e6",
+      "truthTotal": 9.9,
+      "truthTotalRaw": "9.90"
+    },
+    {
+      "id": "224",
+      "sha1": "1cbffda0e4feca8500d7d891c9b3a1a4cccc5935",
+      "truthTotal": 31.8,
+      "truthTotalRaw": "31.80"
+    },
+    {
+      "id": "225",
+      "sha1": "656f5c0d2179140f96dfac58f739971b66dbb871",
+      "truthTotal": 56.0,
+      "truthTotalRaw": "56.00"
+    },
+    {
+      "id": "226",
+      "sha1": "3eeaf9c27481fdb1ea95098c11a6ac3e0907539a",
+      "truthTotal": 100.6,
+      "truthTotalRaw": "100.60"
+    },
+    {
+      "id": "227",
+      "sha1": "4fc181e6760dd9cf098595f456eb9c9ff48d8abf",
+      "truthTotal": 39.9,
+      "truthTotalRaw": "39.90"
+    },
+    {
+      "id": "228",
+      "sha1": "f55df7a350a3e4bc5dc2ea039a637d6a637271e0",
+      "truthTotal": 48.95,
+      "truthTotalRaw": "48.95"
+    },
+    {
+      "id": "229",
+      "sha1": "f49d00d3e2880ce66d0e637c92ccdfc067c51b12",
+      "truthTotal": 7.4,
+      "truthTotalRaw": "7.40"
+    },
+    {
+      "id": "230",
+      "sha1": "6424caeffc40da8abce69c32e09e4e685a3e7a65",
+      "truthTotal": 8.5,
+      "truthTotalRaw": "8.50"
+    },
+    {
+      "id": "231",
+      "sha1": "a40d7bfb13016ced65fc643c600645fa6d274380",
+      "truthTotal": 119.7,
+      "truthTotalRaw": "119.70"
+    },
+    {
+      "id": "232",
+      "sha1": "f8426a694755836cd8a9ca08a1ed2ac2b636b844",
+      "truthTotal": 25.45,
+      "truthTotalRaw": "25.45"
+    },
+    {
+      "id": "233",
+      "sha1": "73abd9ac522f51c30aa915e9d78d605d844f5a18",
+      "truthTotal": 362.5,
+      "truthTotalRaw": "362.50"
+    },
+    {
+      "id": "234",
+      "sha1": "9632d312f2e5fb9877cb290fb7585db4203d4404",
+      "truthTotal": 165.0,
+      "truthTotalRaw": "165.00"
+    },
+    {
+      "id": "235",
+      "sha1": "6883e9ef0be04be82fbbe777c014b55ce0f49165",
+      "truthTotal": 7.4,
+      "truthTotalRaw": "7.40"
+    },
+    {
+      "id": "236",
+      "sha1": "d1e407a5e057d748f5ec1f3f17151068696723d2",
+      "truthTotal": 14.85,
+      "truthTotalRaw": "14.85"
+    },
+    {
+      "id": "237",
+      "sha1": "79992b1658cf362533bb12fd6c9e74e319526fdd",
+      "truthTotal": 7.4,
+      "truthTotalRaw": "7.40"
+    },
+    {
+      "id": "238",
+      "sha1": "3928b81b72f788a676c6c8f12ba688afd49c019a",
+      "truthTotal": 12.15,
+      "truthTotalRaw": "12.15"
+    },
+    {
+      "id": "239",
+      "sha1": "1b0af00b60157929ee5f3b391d86628381271aa7",
+      "truthTotal": 50.45,
+      "truthTotalRaw": "50.45"
+    },
+    {
+      "id": "240",
+      "sha1": "e282d3995bfc5f3e82acfccc4c8a9c82b4d2eb9f",
+      "truthTotal": 62.0,
+      "truthTotalRaw": "62.00"
+    },
+    {
+      "id": "241",
+      "sha1": "7f9951f897ef4f1ea007166a6b3358db8a981749",
+      "truthTotal": 217.0,
+      "truthTotalRaw": "217.00"
+    },
+    {
+      "id": "242",
+      "sha1": "a6033115d192b89efff15ce6db2315588a602f0f",
+      "truthTotal": 12.6,
+      "truthTotalRaw": "12.60"
+    },
+    {
+      "id": "243",
+      "sha1": "17b9b93e52814be10daca1486ca15247e207674c",
+      "truthTotal": 20.05,
+      "truthTotalRaw": "20.05"
+    },
+    {
+      "id": "244",
+      "sha1": "e10176803c40b93228831f3a78603a158c0a35a2",
+      "truthTotal": 29.3,
+      "truthTotalRaw": "29.30"
+    },
+    {
+      "id": "245",
+      "sha1": "d7cf59caa5d6b3e98b0db933dbcfa981714b7405",
+      "truthTotal": 67.85,
+      "truthTotalRaw": "67.85"
+    },
+    {
+      "id": "246",
+      "sha1": "c21b9b9c4979f3f632eb1afe3cde10758a10bddf",
+      "truthTotal": 7.5,
+      "truthTotalRaw": "7.50"
+    },
+    {
+      "id": "247",
+      "sha1": "9285dad44b34853b0580ebd506646d3448f81139",
+      "truthTotal": 758.7,
+      "truthTotalRaw": "758.70"
+    },
+    {
+      "id": "248",
+      "sha1": "bfa0e91bc08226b9b3b91cfa91503dfd4d419181",
+      "truthTotal": 7.0,
+      "truthTotalRaw": "RM7.00"
+    },
+    {
+      "id": "249",
+      "sha1": "fe6cb133eda8e5058c7ccea8d45de3b2986152f5",
+      "truthTotal": 130.0,
+      "truthTotalRaw": "130.00"
+    },
+    {
+      "id": "250",
+      "sha1": "efe2e8e35f798ff9b277f32c3a6d6c77823dac17",
+      "truthTotal": 104.0,
+      "truthTotalRaw": "104.00"
+    },
+    {
+      "id": "251",
+      "sha1": "d3b6824a16efff3c014077c197fdc166144545ad",
+      "truthTotal": 15.4,
+      "truthTotalRaw": "15.40"
+    },
+    {
+      "id": "252",
+      "sha1": "e03e4fa2d2aa04686936f680c5c9827051253810",
+      "truthTotal": 12.37,
+      "truthTotalRaw": "12.37"
+    },
+    {
+      "id": "253",
+      "sha1": "549856dc1d0f0378e1f4a471a229fe3430c063da",
+      "truthTotal": 113.8,
+      "truthTotalRaw": "113.80"
+    },
+    {
+      "id": "254",
+      "sha1": "14e85d5f0eadb455f184951d71828ef66ddbbf48",
+      "truthTotal": 635.0,
+      "truthTotalRaw": "635.00"
+    },
+    {
+      "id": "255",
+      "sha1": "ba521abc78dd4756f64aaf11f7952637ca0aceff",
+      "truthTotal": 94.0,
+      "truthTotalRaw": "94.00"
+    },
+    {
+      "id": "256",
+      "sha1": "32b8439ef8dbeafbd8926756b9435db5e56ee352",
+      "truthTotal": 12.0,
+      "truthTotalRaw": "12.00"
+    },
+    {
+      "id": "257",
+      "sha1": "d0be891557464fe90591b2728bd63874386c3ecb",
+      "truthTotal": 3.0,
+      "truthTotalRaw": "RM3.00"
+    },
+    {
+      "id": "258",
+      "sha1": "b24885a8ba55bb05961033d8a0d6831a8035f30f",
+      "truthTotal": 1.0,
+      "truthTotalRaw": "RM1.00"
+    },
+    {
+      "id": "259",
+      "sha1": "9509bc989e4d296fdbf12efa5b39a4738e2d13b4",
+      "truthTotal": 42.35,
+      "truthTotalRaw": "42.35"
+    },
+    {
+      "id": "260",
+      "sha1": "d108e716cf9e456804d2b86de81a7593ac13e872",
+      "truthTotal": 22.6,
+      "truthTotalRaw": "22.60"
+    },
+    {
+      "id": "261",
+      "sha1": "849a423bd6eeada8a5cfefd8df0e79e4c68042fa",
+      "truthTotal": 191.2,
+      "truthTotalRaw": "191.20"
+    },
+    {
+      "id": "262",
+      "sha1": "f92b9501b98b7b0ddde837bf24698181fbef49dd",
+      "truthTotal": 20.8,
+      "truthTotalRaw": "20.80"
+    },
+    {
+      "id": "263",
+      "sha1": "71eacc87dbf729a6bb9000eb2b953933240e8b9d",
+      "truthTotal": 41.5,
+      "truthTotalRaw": "41.50"
+    },
+    {
+      "id": "264",
+      "sha1": "0174c56899c8daa5707f61cfbbfdbb4affe3f37c",
+      "truthTotal": 118.35,
+      "truthTotalRaw": "118.35"
+    },
+    {
+      "id": "265",
+      "sha1": "45a19cff23e88a7ea2523d6ecbc82540042d4f62",
+      "truthTotal": 4.7,
+      "truthTotalRaw": "4.70"
+    },
+    {
+      "id": "266",
+      "sha1": "8df3a95a136fa23145f75419870b41cf3ec02c31",
+      "truthTotal": 62.8,
+      "truthTotalRaw": "62.80"
+    },
+    {
+      "id": "267",
+      "sha1": "fabd485bbd2efd1a8e28aef740813cb2c23feaef",
+      "truthTotal": 182.0,
+      "truthTotalRaw": "182.00"
+    },
+    {
+      "id": "268",
+      "sha1": "9290f1f6b50c232c2b23767aa8c0a80b08776e9c",
+      "truthTotal": 52.1,
+      "truthTotalRaw": "52.10"
+    },
+    {
+      "id": "269",
+      "sha1": "99a93a8790667251010068bab8fe27d5dd594229",
+      "truthTotal": 250.0,
+      "truthTotalRaw": "250.00"
+    },
+    {
+      "id": "270",
+      "sha1": "63a4405ad320951a068460d1b3c3cc231475423a",
+      "truthTotal": 250.0,
+      "truthTotalRaw": "250.00"
+    },
+    {
+      "id": "271",
+      "sha1": "fcbf28c5017e65a90e9fe70700c737a4f787c99c",
+      "truthTotal": 45.0,
+      "truthTotalRaw": "45.00"
+    },
+    {
+      "id": "272",
+      "sha1": "f4eaea7c312d54085e4bc98afd20c4debd406a21",
+      "truthTotal": 18.0,
+      "truthTotalRaw": "18.00"
+    },
+    {
+      "id": "273",
+      "sha1": "732545b898b7189b457e8c5cfa1b843fd89da28e",
+      "truthTotal": 165.0,
+      "truthTotalRaw": "165.00"
+    },
+    {
+      "id": "274",
+      "sha1": "ea00215f57c22019aad642b5d2f3b1c5c98df3ac",
+      "truthTotal": 28.05,
+      "truthTotalRaw": "RM28.05"
+    },
+    {
+      "id": "275",
+      "sha1": "f8a91831a1afde3b0c16c21b860f1ddb2ceb466b",
+      "truthTotal": 11.5,
+      "truthTotalRaw": "11.50"
+    },
+    {
+      "id": "276",
+      "sha1": "943263bd57e936cbe9efe6c66a2078216c46c925",
+      "truthTotal": 72.75,
+      "truthTotalRaw": "72.75"
+    },
+    {
+      "id": "277",
+      "sha1": "b28115bc38324907c489bfd2b9d5c3549c6045b6",
+      "truthTotal": 72.0,
+      "truthTotalRaw": "72.00"
+    },
+    {
+      "id": "278",
+      "sha1": "f3d7b79f332bf053586bd3aa18004780225566ea",
+      "truthTotal": 19.8,
+      "truthTotalRaw": "19.80"
+    },
+    {
+      "id": "279",
+      "sha1": "703d07759c3301e522138ba106c3ff0707206196",
+      "truthTotal": 19.2,
+      "truthTotalRaw": "19.20"
+    },
+    {
+      "id": "280",
+      "sha1": "6d1d4de788ea8aeccd02eebac926791883afafa4",
+      "truthTotal": 22.25,
+      "truthTotalRaw": "22.25"
+    },
+    {
+      "id": "281",
+      "sha1": "6ef2fd560a585c01cc992f7714c3456a911218d6",
+      "truthTotal": 35.0,
+      "truthTotalRaw": "35.00"
+    },
+    {
+      "id": "282",
+      "sha1": "134a62c0de71af23d306ba10dec036938172add1",
+      "truthTotal": 275.9,
+      "truthTotalRaw": "275.90"
+    },
+    {
+      "id": "283",
+      "sha1": "9c3a44208aafa1e25413c2ad0996ea38bafde661",
+      "truthTotal": 8.2,
+      "truthTotalRaw": "$8.20"
+    },
+    {
+      "id": "284",
+      "sha1": "115000cc7e206ba1799214ba9154eefdef523904",
+      "truthTotal": 7.1,
+      "truthTotalRaw": "$7.10"
+    },
+    {
+      "id": "285",
+      "sha1": "a8050eb6f304f639ffb0218f206d188c7aa7c287",
+      "truthTotal": 8.2,
+      "truthTotalRaw": "$8.20"
+    },
+    {
+      "id": "286",
+      "sha1": "b220c5ee2add99562f6f42f6af642e122cc613c7",
+      "truthTotal": 7.6,
+      "truthTotalRaw": "$7.60"
+    },
+    {
+      "id": "287",
+      "sha1": "15876e29203abe2d9458704514822476a8f3c48f",
+      "truthTotal": 8.2,
+      "truthTotalRaw": "$8.20"
+    },
+    {
+      "id": "288",
+      "sha1": "505cb38f98e04c9ed9b0a9f0a793affd485d6812",
+      "truthTotal": 50.0,
+      "truthTotalRaw": "50.00"
+    },
+    {
+      "id": "289",
+      "sha1": "744633e2ae2b8d6edfa2be076ee523fefc1de33b",
+      "truthTotal": 50.0,
+      "truthTotalRaw": "50.00"
+    },
+    {
+      "id": "290",
+      "sha1": "ab90be892341bb291cc8112e35fdefabd240003f",
+      "truthTotal": 12.3,
+      "truthTotalRaw": "12.30"
+    },
+    {
+      "id": "291",
+      "sha1": "f35c63ff3f1979c3b4f38df4647f402458c37e4e",
+      "truthTotal": 7.0,
+      "truthTotalRaw": "$7.00"
+    },
+    {
+      "id": "292",
+      "sha1": "f69379e059322a1f861999b1afc9a8fd98c82bf2",
+      "truthTotal": 8.2,
+      "truthTotalRaw": "$8.20"
+    },
+    {
+      "id": "293",
+      "sha1": "7421587e0372b97b9307846af55931274229e259",
+      "truthTotal": 270.0,
+      "truthTotalRaw": "270.00"
+    },
+    {
+      "id": "294",
+      "sha1": "72662a95eaf99f88be1a80b036f0c96b0c40905b",
+      "truthTotal": 44.9,
+      "truthTotalRaw": "44.90"
+    },
+    {
+      "id": "295",
+      "sha1": "d0badae067f7679c7b5dc34da8d3ef626f849a6f",
+      "truthTotal": 9.9,
+      "truthTotalRaw": "$9.90"
+    },
+    {
+      "id": "296",
+      "sha1": "12e940a9fe349325e1da629f40d7210fae580d23",
+      "truthTotal": 25.6,
+      "truthTotalRaw": "25.60"
+    },
+    {
+      "id": "297",
+      "sha1": "53ce0f78d812241bbb24964e59a87d370df9a2bd",
+      "truthTotal": 21.6,
+      "truthTotalRaw": "21.60"
+    },
+    {
+      "id": "298",
+      "sha1": "6680e01f9344e17c9722209acc995818960bc0e9",
+      "truthTotal": 12.0,
+      "truthTotalRaw": "12.00"
+    },
+    {
+      "id": "299",
+      "sha1": "bdd43472286bd9d31813dba21abf9854b013aff4",
+      "truthTotal": 21.8,
+      "truthTotalRaw": "21.80"
+    }
+  ]
+}
