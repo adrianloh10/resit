@@ -21,6 +21,18 @@ const TESSERACT_LIB = "vendor/tesseract.min.js";
 const VENDOR_BASE = new URL("vendor", document.baseURI).href;
 const TESSERACT_PATHS = { workerPath: VENDOR_BASE + "/worker.min.js", corePath: VENDOR_BASE, langPath: VENDOR_BASE };
 
+/* Android's build tooling auto-decompresses any bundled asset ending in
+   .gz and strips the extension when packaging the APK (OCR-ENGINE-PLAN.md
+   Phase 3b device-bench finding) — vendor/eng.traineddata.gz (10.9MB)
+   becomes assets/public/vendor/eng.traineddata (23.4MB, already
+   decompressed) inside the native shell, so tesseract.js's default
+   gzip:true fetch for "eng.traineddata.gz" 404s there. The web path is
+   untouched (GitHub Pages / any plain static server serves the committed
+   .gz file as-is), so the flag must be keyed on ocrIsNative(), not global. */
+function tesseractWorkerPaths() {
+  return Object.assign({}, TESSERACT_PATHS, { gzip: !ocrIsNative() });
+}
+
 let tesseractLoading = null;
 function loadTesseract() {
   if (window.Tesseract) return Promise.resolve();
@@ -421,7 +433,7 @@ let ocrWorker = null;
 async function getOcrWorker() {
   await loadTesseract();
   if (!ocrWorker) {
-    ocrWorker = await Tesseract.createWorker("eng", 1, TESSERACT_PATHS);
+    ocrWorker = await Tesseract.createWorker("eng", 1, tesseractWorkerPaths());
   }
   return ocrWorker;
 }
@@ -660,7 +672,7 @@ function consensusFromVotes(votes) {
 let sniperWorkerPromise = null;
 async function getSniperWorker() {
   await loadTesseract();
-  if (!sniperWorkerPromise) sniperWorkerPromise = Tesseract.createWorker("eng", 1, TESSERACT_PATHS);
+  if (!sniperWorkerPromise) sniperWorkerPromise = Tesseract.createWorker("eng", 1, tesseractWorkerPaths());
   return sniperWorkerPromise;
 }
 
