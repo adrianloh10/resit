@@ -56,4 +56,9 @@ if __name__ == "__main__":
     else:
         print("  Could not auto-detect a LAN IP — run `ipconfig`, use the IPv4")
         print("  address under your Wi-Fi adapter.")
-    http.server.test(HandlerClass=CorsHandler, port=PORT)
+    print(f"  adb reverse base: http://localhost:{PORT}/ (after `adb reverse tcp:{PORT} tcp:{PORT}`)")
+    # Bind explicitly to the IPv4 wildcard. The default (bind=None) listens on
+    # the IPv6 wildcard "::" — on Windows that doesn't reliably accept plain
+    # IPv4 loopback connections, which is exactly what `adb reverse` relays
+    # through (net::ERR_EMPTY_RESPONSE on the phone side otherwise).
+    http.server.test(HandlerClass=CorsHandler, port=PORT, bind="0.0.0.0")
