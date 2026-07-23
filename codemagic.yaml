@@ -33,10 +33,17 @@ workflows:
           # OCR-ENGINE-PLAN.md Phase 3b device bench + general local-dev use.
           # Mutates THIS CI checkout's capacitor.config.json only — never
           # committed back, never touches the android-release workflow below.
+          # androidScheme:"http" makes the app's own page load as
+          # http://localhost instead of https://localhost, so fetching the
+          # LAN bench server (also http://) is same-scheme, not mixed
+          # content — sidesteps the WebView mixed-content policy entirely
+          # instead of relying on allowMixedContent, which recent WebView/
+          # Chromium versions don't reliably honor for fetch()/XHR.
           node -e "
             const fs = require('fs');
             const c = JSON.parse(fs.readFileSync('capacitor.config.json', 'utf8'));
             c.android = Object.assign({}, c.android, { allowMixedContent: true });
+            c.server = Object.assign({}, c.server, { androidScheme: 'http', cleartext: true });
             fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2));
           "
       - name: Install Capacitor and add Android
