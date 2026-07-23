@@ -737,15 +737,22 @@ function ocrIsNative() {
   return !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform());
 }
 
-/* The ML Kit plugin proxy, registered against the Capacitor native bridge.
-   registerPlugin only exists in the native runtime, so this is null on the web
-   — the root reason the native path can never fire in a browser. Memoised. */
+/* The ML Kit plugin proxy. window.Capacitor.registerPlugin() (what the
+   plugin's own README describes) is a WRAPPER exported by the @capacitor/core
+   NPM package's JS bundle — never loaded here since this is a no-build-step
+   vanilla app (confirmed live via chrome://inspect during the Phase 3b device
+   bench: window.Capacitor.registerPlugin is not a function on a real device,
+   even though the plugin registers fine natively). The native bridge itself
+   auto-populates window.Capacitor.Plugins[name] for every properly-registered
+   plugin regardless of how the JS side reaches it — app.js's captureNative()
+   already relies on exactly this for Capacitor.Plugins.Camera, so mirror that
+   working pattern instead of registerPlugin. window.Capacitor is undefined on
+   the web, so this stays null there — the root reason the native path can
+   never fire in a browser. Memoised. */
 let mlkitPlugin;
 function getMlkitPlugin() {
   if (mlkitPlugin !== undefined) return mlkitPlugin;
-  mlkitPlugin = (window.Capacitor && typeof window.Capacitor.registerPlugin === "function")
-    ? window.Capacitor.registerPlugin("RecapMlkitOcr")
-    : null;
+  mlkitPlugin = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.RecapMlkitOcr) || null;
   return mlkitPlugin;
 }
 
