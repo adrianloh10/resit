@@ -72,7 +72,7 @@ let state = {
   selectMode: false, /* multi-select for bulk delete/edit (long-press to enter) */
   selected: null,    /* Set of selected expense ids while selectMode is on */
   batchMode: false,  /* scanning a stack of receipts one after another (Pro) */
-  batchFiles: [], batchIndex: 0, batchTotal: 0, batchSaved: 0,
+  batchFiles: [], batchDrafts: [], batchIndex: 0, batchTotal: 0, batchSaved: 0,
   customScopes: [],  /* user-added expense types beyond Personal/Shared/Company */
   country: "MY",    /* profile: drives date/number locale */
   language: "en",   /* profile: UI language (English only for now) */
@@ -2084,61 +2084,74 @@ async function handleImage(file) {
   }
 }
 
-/* ---- Batch scan (Pro): read a stack of receipts one after another, confirming
-   the TYPE (Personal/Company/Family) on each before it saves. ---- */
+/* ---- Batch scan (Pro): read every receipt in the stack up front (one
+   continuous progress indicator, no per-receipt wait), THEN let the user
+   confirm each one — Save & Next / Skip just advance through the already-
+   read drafts instantly, confirming the TYPE (Personal/Company/Family) on
+   each before it saves. ---- */
 async function startBatch(fileList) {
   const files = Array.from(fileList || []).filter(f => f && f.type && f.type.indexOf("image/") === 0);
   if (!files.length) return;
   const MAX = 20;
   if (files.length > MAX) toast("Up to " + MAX + " at once — reading the first " + MAX);
   state.batchFiles = files.slice(0, MAX);
+  state.batchDrafts = [];
   state.batchIndex = 0;
   state.batchSaved = 0;
   state.batchTotal = state.batchFiles.length;
   state.batchMode = true;
   switchView("home");
+  await scanAllInBatch();
   processNextInBatch();
 }
 
-async function processNextInBatch() {
-  if (!state.batchMode) return;
-  if (state.batchIndex >= state.batchTotal) { finishBatch(); return; }
-  const file = state.batchFiles[state.batchIndex];
+/* Reads every queued file into a draft, in order, before any confirm sheet
+   opens. Cancellable the same way a single scan is (tap the scan pill). */
+async function scanAllInBatch() {
   state.ocrCancelled = false;
-  const pos = (state.batchIndex + 1) + " of " + state.batchTotal;
-  showScanPill("Reading receipt " + pos + "…");
-  try {
-    const parsed = await window.ReceiptOCR.scanReceipt(file, msg => showScanPill(msg + " (" + pos + ")"));
-    if (state.ocrCancelled || !state.batchMode) { finishBatch(); return; }
-    applyLearnedTotalHint(parsed);
-    const weak = parsed.total === null || (parsed.totalConf || 0) <= 1;
-    if (cloudEndpoint() && weak && state.cloudConsent !== "no") {
-      showScanPill("Reading with cloud… (" + pos + ")");
-      try {
-        const ai = await cloudRead(file);
-        if (state.ocrCancelled || !state.batchMode) { finishBatch(); return; }
-        learnFromAI(parsed.rawText, ai, parsed.total, parsed.merchant);
-        mergeAIResult(parsed, ai);
-      } catch (err) { /* keep the on-device result and carry on */ }
+  for (let i = 0; i < state.batchFiles.length; i++) {
+    if (!state.batchMode || state.ocrCancelled) break;
+    const file = state.batchFiles[i];
+    const pos = (i + 1) + " of " + state.batchTotal;
+    showScanPill("Reading receipt " + pos + "…");
+    try {
+      const parsed = await window.ReceiptOCR.scanReceipt(file, msg => showScanPill(msg + " (" + pos + ")"));
+      if (state.ocrCancelled || !state.batchMode) break;
+      applyLearnedTotalHint(parsed);
+      const weak = parsed.total === null || (parsed.totalConf || 0) <= 1;
+      if (cloudEndpoint() && weak && state.cloudConsent !== "no") {
+        showScanPill("Reading with cloud… (" + pos + ")");
+        try {
+          const ai = await cloudRead(file);
+          if (state.ocrCancelled || !state.batchMode) break;
+          learnFromAI(parsed.rawText, ai, parsed.total, parsed.merchant);
+          mergeAIResult(parsed, ai);
+        } catch (err) { /* keep the on-device result and carry on */ }
+      }
+      const draft = parsedToDraft(parsed);
+      draft._file = file;
+      state.batchDrafts.push(draft);
+    } catch (err) {
+      /* Unreadable one — still queue it so the user can type it in and keep going. */
+      state.batchDrafts.push({
+        amount: null, merchant: "", category: "Other", scope: "Personal",
+        date: new Date().toISOString(), items: [], note: "", fromReceipt: true, _file: file
+      });
     }
-    hideScanPill();
-    const draft = parsedToDraft(parsed);
-    draft._file = file;
-    openConfirmSheet(draft);
-  } catch (err) {
-    hideScanPill();
-    /* Unreadable one — still queue it so the user can type it in and keep going. */
-    openConfirmSheet({
-      amount: null, merchant: "", category: "Other", scope: "Personal",
-      date: new Date().toISOString(), items: [], note: "", fromReceipt: true, _file: file
-    });
   }
+  hideScanPill();
+}
+
+function processNextInBatch() {
+  if (!state.batchMode) return;
+  if (state.batchIndex >= state.batchDrafts.length) { finishBatch(); return; }
+  openConfirmSheet(state.batchDrafts[state.batchIndex]);
 }
 
 function finishBatch() {
   const saved = state.batchSaved, total = state.batchTotal;
   state.batchMode = false;
-  state.batchFiles = []; state.batchIndex = 0; state.batchTotal = 0; state.batchSaved = 0;
+  state.batchFiles = []; state.batchDrafts = []; state.batchIndex = 0; state.batchTotal = 0; state.batchSaved = 0;
   hideScanPill();
   switchView("home");
   renderHome();

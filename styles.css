@@ -341,11 +341,15 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
   border-radius: 24px 24px 0 0;
   width: 100%; max-width: 520px;
   padding: 10px 22px calc(20px + env(safe-area-inset-bottom));
-  max-height: 92vh; overflow-y: auto;
+  max-height: 92vh; overflow-y: auto; overflow-x: hidden;
 }
 .sheet-header { display: flex; align-items: center; margin-bottom: 4px; }
-.sheet-title { flex: 1; text-align: center; font-size: 13px; color: var(--muted); }
-.spacer { width: 40px; }
+.sheet-title { flex: 1; min-width: 0; text-align: center; font-size: 13px; color: var(--muted); }
+/* min-width (not a hard width): balances confirm-back's ~40px on the other
+   side by default, but the batch-badge it can hold ("Receipt 20 of 20")
+   needs more — flex-shrink:0 keeps it from being crushed by sheet-title,
+   and overflow-x:hidden above is the hard backstop against ever scrolling. */
+.spacer { min-width: 40px; flex-shrink: 0; text-align: right; }
 
 .confirm-amount-wrap { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin-top: 10px; }
 .rm-prefix { font-size: 16px; color: var(--muted); font-family: var(--mono); }
