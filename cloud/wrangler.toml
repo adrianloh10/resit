@@ -27,8 +27,13 @@ GEMINI_MODEL = "gemini-3.5-flash-lite"
 # OPTIONAL failover reader: any OpenAI-compatible provider serving an open
 # vision model. Set the FALLBACK_API_KEY secret (dashboard -> Settings ->
 # Variables and Secrets) to activate — until then these vars are inert.
+# Qwen2.5-VL-7B-Instruct (the original pick) is gone from DeepInfra's
+# catalog entirely (checked live, 2026-07-24, api.deepinfra.com/v1/openai/
+# models) -- Qwen3-VL-30B-A3B-Instruct is its current successor, ~RM0.0015-
+# 0.002/scan (input $0.15/M, output $0.60/M tokens). Confirm still listed
+# before ever relying on this in an outage: same catalog URL, no auth needed.
 FALLBACK_URL = "https://api.deepinfra.com/v1/openai/chat/completions"
-FALLBACK_MODEL = "Qwen/Qwen2.5-VL-7B-Instruct"
+FALLBACK_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct"
 
 # Secrets are NOT stored here. Set them in the dashboard (Worker -> Settings ->
 # Variables and Secrets) or with wrangler:
