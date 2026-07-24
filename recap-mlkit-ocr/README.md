@@ -25,9 +25,13 @@ artifact (~4 MB in the APK).
    Capacitor discovers this package (it has a `capacitor` field), includes the
    `android/` library as a Gradle subproject, and auto-registers the
    `@CapacitorPlugin(name = "RecapMlkitOcr")` class in `capacitor.plugins.json`.
-3. At runtime the app gets the proxy with
-   `window.Capacitor.registerPlugin("RecapMlkitOcr")` (see `resit/ocr.js`) — no
-   bundler, matching the no-build PWA.
+3. At runtime the app reads the native bridge's own auto-populated
+   `window.Capacitor.Plugins.RecapMlkitOcr` directly (see `getMlkitPlugin()` in
+   `resit/ocr.js`) — no bundler, matching the no-build PWA.
+   `window.Capacitor.registerPlugin(...)` (a `@capacitor/core` JS-bundle
+   wrapper) is NOT used here — this app never loads that bundle (confirmed
+   live during the Phase 3b device bench: it isn't a function on a real
+   device even though the plugin registers fine natively).
 
 The plugin is **native-only**: on the web `window.Capacitor` is undefined, so
 the whole native path in `ocr.js` is inert and the PWA runs Tesseract exactly

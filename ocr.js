@@ -155,7 +155,8 @@ function contrastStretch(canvas) {
      d. DPI floor + 10px white border (Tesseract guidance)
    No dependencies. Each sub-step is individually toggleable (PREP_CONFIG) so
    the bench can sweep combos; the whole tier is gated by the `prepV2` setting
-   (default on; "no" restores the v1 adaptiveThreshold path). Invariants #1/#2/
+   (DEFAULT OFF — the Phase 1 gate failed, see below; "yes" opts into this
+   path, unset/"no" keeps the v1 adaptiveThreshold path). Invariants #1/#2/
    #4: on-device, no build step, feature-flagged. */
 
 const PREP_DEFAULTS = { flatten: true, deskew: true, sauvola: true, border: true };
@@ -509,14 +510,17 @@ async function ocrBest(worker, file, onProgress) {
    sniperV2 only widens the region search when the master flag is on. */
 
 let sniperMasterOverride = null;
-/* DEFAULT OFF. Dark-shipped pending Phase 2's bench gate (my100 weak
-   improves >=2pts, sroie200 non-regressing, zero previously-correct totals
-   flipped) — see reports/ocr-weekly.md and OCR-ENGINE-PLAN.md. */
+/* DEFAULT ON since Phase 4 (OCR-ENGINE-PLAN.md) — Phase 2's bench gate PASSED
+   (my100 liveWeak 25%->22%, sroie200 38%->32%, zero previously-correct totals
+   flipped) and the consolidated-release code review found + fixed one real
+   corroboration bug (itemsAgree double-counting a printed Service Charge
+   line) before this flip — see reports/ocr-weekly.md and OCR-ENGINE-PLAN.md.
+   set `sniperV2`="no" to opt back out. */
 async function sniperV2Enabled() {
   if (sniperMasterOverride === true) return true;
   if (sniperMasterOverride === false) return false;
-  try { return (await DB.getSetting("sniperV2", "no")) === "yes"; }
-  catch (e) { return false; }
+  try { return (await DB.getSetting("sniperV2", "yes")) === "yes"; }
+  catch (e) { return true; }
 }
 function setSniper(o) {
   o = o || {};
@@ -529,7 +533,11 @@ function getSniper() { return { master: sniperMasterOverride }; }
    free read drops a digit for its look-alike letter. Applied only to a
    short decimal-shaped token so it can't misfire on ordinary words. */
 const CONFUSION_MAP = { O: "0", o: "0", B: "8", S: "5", s: "5", l: "1", I: "1", i: "1", Z: "2", z: "2" };
-const CONFUSABLE_AMOUNT_RE = /\b([0-9OoBbSslLIiZz]{1,4}[.,][0-9OoBbSslLIiZz]{2})\b/;
+/* Character class deliberately mirrors CONFUSION_MAP's exact keys (no
+   lowercase b, no uppercase L — those aren't confusions this table fixes) —
+   a wider class here would admit tokens confusionCorrectedAmount() can never
+   actually resolve, silently no-oping instead of rescuing (Phase 4 review). */
+const CONFUSABLE_AMOUNT_RE = /\b([0-9OoBSslIiZz]{1,4}[.,][0-9OoBSslIiZz]{2})\b/;
 function confusionCorrectedAmount(line) {
   const m = line.match(CONFUSABLE_AMOUNT_RE);
   if (!m || /^[\d.,]+$/.test(m[1])) return null; /* already clean digits — nothing to fix */
@@ -1007,7 +1015,13 @@ const RM_INT_RE = /\brm\b\s*:?\s*(\d{1,5})(?!\s*[.,]?\d)/i;
    OCRs as "2269 00" (sometimes with a stray | or l between). */
 const COLUMN_AMOUNT_RE = /\b(\d{1,5})\s*[|/lI!]?\s+(\d{2})\b(?!\s*[.,]?\d)/;
 
-const EXCLUDE_TOTAL_RE = /\b(change|chg|baki|tunai|cash|credit|visa|master|debit|tendered|payment|bayaran|balance|point|rounding|item count|qty|gst|sst|tax|cukai|saving|diskaun|discount)\b/i;
+/* "service"/"charge" belong here too (not just extractTotal's dedicated c.svc
+   capture ~line 1476): candidateItemsSum() and extractItems() both filter
+   candidate item lines through this same regex, and without these tokens a
+   printed "Service Charge" line was being folded into BOTH c.svc (correctly)
+   AND the items-sum (as if it were a purchased item) — double-counting it in
+   itemsAgree()'s corroboration arithmetic (OCR-ENGINE-PLAN.md Phase 4 review). */
+const EXCLUDE_TOTAL_RE = /\b(change|chg|baki|tunai|cash|credit|visa|master|debit|tendered|payment|bayaran|balance|point|rounding|item count|qty|gst|sst|tax|cukai|saving|diskaun|discount|service|charge)\b/i;
 const NOISE_LINE_RE = /\b(tax\s*invoice|invoice|resit|receipt|cashier|juruwang|terminal|trans|ref\s*no|reg\s*no|gst\s*(id|no)|co\.?\s*no|tel[:\s]|fax[:\s]|www\.|http|welcome|thank|terima kasih|sila|please|open daily|operating|licensee|franchis)\b/i;
 
 /* Lines that identify the business — including OCR manglings of "SDN BHD". */
