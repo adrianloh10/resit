@@ -357,6 +357,49 @@ async function diagModels(request, env, cors) {
   }
 }
 
+/* 1x1 white JPEG -- smallest possible real image, used only to fire a
+   real (tiny, capped) generateContent call per candidate model. */
+const PROBE_IMAGE = "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=";
+
+/* GET /diag/probe?code=<PRO_UNLOCK> -- owner-only. models.list says a model
+   is "in the catalog" but says nothing about whether THIS key/project can
+   actually call it (2026-07-24 incident: gemini-2.5-flash-lite was listed
+   but 404'd on generateContent). This fires one real, capped call per
+   candidate and reports the true per-model status. */
+async function diagProbe(request, env, cors) {
+  const url = new URL(request.url);
+  const code = (url.searchParams.get("code") || "").trim();
+  if (!env.PRO_UNLOCK || !safeEqual(code, env.PRO_UNLOCK)) return json({ error: "Invalid code" }, 403, cors);
+  if (!env.GEMINI_API_KEY) return json({ error: "No Gemini key configured" }, 500, cors);
+  const candidates = [
+    "gemini-2.5-flash-lite", "gemini-flash-lite-latest", "gemini-flash-latest",
+    "gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"
+  ];
+  const results = {};
+  for (const m of candidates) {
+    try {
+      const r = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models/" + m + ":generateContent?key=" + env.GEMINI_API_KEY,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ inline_data: { mime_type: "image/jpeg", data: PROBE_IMAGE } }, { text: "What color is this image? One word." }] }],
+            generationConfig: { maxOutputTokens: 20 }
+          })
+        }
+      );
+      const body = await r.json().catch(() => ({}));
+      results[m] = r.ok
+        ? { status: r.status, ok: true }
+        : { status: r.status, ok: false, detail: String((body && body.error && body.error.message) || "").slice(0, 150) };
+    } catch (e) {
+      results[m] = { status: 0, ok: false, detail: String((e && e.message) || e).slice(0, 150) };
+    }
+  }
+  return json({ ok: true, results }, 200, cors);
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
@@ -371,6 +414,7 @@ export default {
       const gpath = new URL(request.url).pathname.replace(/\/+$/, "");
       if (gpath.endsWith("/rules/export")) return rulesExport(request, env, cors);
       if (gpath.endsWith("/diag/models")) return diagModels(request, env, cors);
+      if (gpath.endsWith("/diag/probe")) return diagProbe(request, env, cors);
       return json({ ok: true, service: "resit-relay" }, 200, cors);
     }
     if (request.method !== "POST") return json({ error: "POST only" }, 405, cors);
