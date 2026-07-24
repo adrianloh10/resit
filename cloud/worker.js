@@ -329,6 +329,34 @@ async function rulesExport(request, env, cors) {
   }
 }
 
+/* GET /diag/models?code=<PRO_UNLOCK> -- owner-only. Asks Google directly
+   which models GEMINI_API_KEY can actually see (key validity + access, not
+   guessed from docs). Same gate as /rules/export; never returns the key
+   itself. Diagnostic tool born from the 2026-07-24 502 incident. */
+async function diagModels(request, env, cors) {
+  const url = new URL(request.url);
+  const code = (url.searchParams.get("code") || "").trim();
+  if (!env.PRO_UNLOCK || !safeEqual(code, env.PRO_UNLOCK)) return json({ error: "Invalid code" }, 403, cors);
+  if (!env.GEMINI_API_KEY) return json({ error: "No Gemini key configured" }, 500, cors);
+  try {
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + env.GEMINI_API_KEY);
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      return json({ ok: false, keyValid: false, status: r.status, detail: data && data.error ? data.error.message : "" }, 200, cors);
+    }
+    const names = Array.isArray(data.models) ? data.models.map(m => m.name).filter(Boolean) : [];
+    return json({
+      ok: true,
+      keyValid: true,
+      configuredModel: env.GEMINI_MODEL || null,
+      configuredModelListed: names.includes("models/" + (env.GEMINI_MODEL || "")),
+      flashModels: names.filter(n => /flash/i.test(n))
+    }, 200, cors);
+  } catch (e) {
+    return json({ ok: false, error: String((e && e.message) || e) }, 200, cors);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
@@ -342,6 +370,7 @@ export default {
          query param, no Origin); every other GET is the health probe. */
       const gpath = new URL(request.url).pathname.replace(/\/+$/, "");
       if (gpath.endsWith("/rules/export")) return rulesExport(request, env, cors);
+      if (gpath.endsWith("/diag/models")) return diagModels(request, env, cors);
       return json({ ok: true, service: "resit-relay" }, 200, cors);
     }
     if (request.method !== "POST") return json({ error: "POST only" }, 405, cors);
