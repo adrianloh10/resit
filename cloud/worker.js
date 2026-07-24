@@ -87,7 +87,7 @@ function normalizeResult(o) {
 
 /* Primary reader: Google Gemini. Returns {ok, result} or {ok:false, msg}. */
 async function readWithGemini(env, image, mediaType) {
-  const model = env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+  const model = env.GEMINI_MODEL || "gemini-3.5-flash-lite";
   try {
     const r = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + env.GEMINI_API_KEY,
@@ -105,13 +105,17 @@ async function readWithGemini(env, image, mediaType) {
           generationConfig: {
             responseMimeType: "application/json",
             responseSchema: RESPONSE_SCHEMA,
-            temperature: 0,
-            /* Hard per-receipt cost caps: bound the output length and switch
-               OFF the model's "thinking" tokens, so no single scan can run up
-               a large bill. ~640 tokens covers a receipt with up to ~20 line
-               items (fields + JSON syntax). */
+            /* Hard per-receipt cost caps: bound the output length and keep
+               the Gemini 3.x model's "thinking" at its cheapest tier, so no
+               single scan can run up a large bill. ~640 tokens covers a
+               receipt with up to ~20 line items (fields + JSON syntax).
+               `temperature`/`thinkingBudget` were the pre-3.x fields for
+               this (Gemini's July 2026 migration guide marks them
+               deprecated on 3.x models) -- thinkingLevel:"minimal" is the
+               3.x replacement, and is also Google's own recommendation for
+               high-volume extraction/classification tasks like this one. */
             maxOutputTokens: 640,
-            thinkingConfig: { thinkingBudget: 0 }
+            thinkingConfig: { thinkingLevel: "minimal" }
           }
         })
       }

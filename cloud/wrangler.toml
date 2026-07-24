@@ -15,11 +15,15 @@ database_id = "cc890234-c8a9-4a5d-ace5-1d097c7015ed"
 ALLOW_ORIGINS = "https://adrianloh10.github.io,http://localhost:8902,https://localhost,http://localhost,capacitor://localhost,ionic://localhost"
 # Max receipts one device may read per day via the cloud (protects the free quota).
 DAILY_CAP = "20"
-# Gemini model. flash-lite = cheapest; swap to "gemini-2.5-flash" for higher
-# accuracy. Pinned to a dated-stable id, NOT a "-latest" alias (those rotate
-# and can silently break — see incident 2026-07-24, ocr-weekly.md). Shutdown
-# per Google's deprecation page: 2026-10-16 — revisit before then.
-GEMINI_MODEL = "gemini-2.5-flash-lite"
+# Gemini model. flash-lite = cheapest tier. Google's whole 2.5 generation
+# (flash + flash-lite) returns 404 "no longer available to new users" for
+# this project regardless of the model's own docs-listed shutdown date --
+# that date only honors already-grandfathered keys, not ours (created Jun
+# 2026). 3.5-flash-lite is Google's current recommended replacement for
+# extraction/classification tasks and was verified live working (2026-07-24
+# incident, GET /diag/probe). If this ever needs re-diagnosing, use that
+# endpoint before guessing a model string again.
+GEMINI_MODEL = "gemini-3.5-flash-lite"
 # OPTIONAL failover reader: any OpenAI-compatible provider serving an open
 # vision model. Set the FALLBACK_API_KEY secret (dashboard -> Settings ->
 # Variables and Secrets) to activate — until then these vars are inert.
