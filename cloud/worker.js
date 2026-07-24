@@ -87,7 +87,7 @@ function normalizeResult(o) {
 
 /* Primary reader: Google Gemini. Returns {ok, result} or {ok:false, msg}. */
 async function readWithGemini(env, image, mediaType) {
-  const model = env.GEMINI_MODEL || "gemini-flash-lite-latest";
+  const model = env.GEMINI_MODEL || "gemini-2.5-flash-lite";
   try {
     const r = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + env.GEMINI_API_KEY,
@@ -119,10 +119,17 @@ async function readWithGemini(env, image, mediaType) {
     if (!r.ok) {
       const errBody = await r.json().catch(() => ({}));
       const detail = errBody && errBody.error ? String(errBody.error.message || "") : "";
-      const msg = r.status === 401 || r.status === 403 ? "Reader key invalid"
+      /* Google returns an invalid/revoked key as 400 INVALID_ARGUMENT ("API
+         key not valid..."), not 401/403 — check the message too, or a dead
+         key silently falls into the generic message below. A 404 means the
+         model id itself is gone (retired/renamed), a different fix than a
+         bad key. */
+      const msg = r.status === 401 || r.status === 403 || /api key not valid|api_key_invalid/i.test(detail) ? "Reader key invalid"
+        : r.status === 404 ? "Reader model unavailable"
         : r.status === 429 ? "Reader is busy — try again in a minute"
         : /quota|billing/i.test(detail) ? "Reader quota exhausted for today"
         : "Couldn't read the receipt";
+      console.error("gemini_fail", model, r.status, detail.slice(0, 200));
       return { ok: false, msg };
     }
     const data = await r.json();
@@ -133,6 +140,7 @@ async function readWithGemini(env, image, mediaType) {
     if (!result) return { ok: false, msg: "No readable result" };
     return { ok: true, result };
   } catch (err) {
+    console.error("gemini_exception", model, String((err && err.message) || err).slice(0, 200));
     return { ok: false, msg: "Couldn't read the receipt" };
   }
 }
@@ -174,7 +182,12 @@ async function readWithFallback(env, image, mediaType) {
         ]
       })
     });
-    if (!r.ok) return { ok: false, msg: "Couldn't read the receipt" };
+    if (!r.ok) {
+      const errBody = await r.json().catch(() => ({}));
+      const detail = errBody && errBody.error ? String(errBody.error.message || errBody.error) : "";
+      console.error("fallback_fail", env.FALLBACK_MODEL, r.status, detail.slice(0, 200));
+      return { ok: false, msg: "Couldn't read the receipt" };
+    }
     const data = await r.json();
     let text = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
     if (typeof text !== "string" || !text.trim()) return { ok: false, msg: "No readable result" };
@@ -187,6 +200,7 @@ async function readWithFallback(env, image, mediaType) {
     if (!result) return { ok: false, msg: "No readable result" };
     return { ok: true, result };
   } catch (err) {
+    console.error("fallback_exception", env.FALLBACK_MODEL, String((err && err.message) || err).slice(0, 200));
     return { ok: false, msg: "Couldn't read the receipt" };
   }
 }

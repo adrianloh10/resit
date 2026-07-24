@@ -15,15 +15,16 @@ database_id = "cc890234-c8a9-4a5d-ace5-1d097c7015ed"
 ALLOW_ORIGINS = "https://adrianloh10.github.io,http://localhost:8902,https://localhost,http://localhost,capacitor://localhost,ionic://localhost"
 # Max receipts one device may read per day via the cloud (protects the free quota).
 DAILY_CAP = "20"
-# Gemini model. flash-lite = cheapest; swap to "gemini-flash-latest" for higher accuracy.
-GEMINI_MODEL = "gemini-flash-lite-latest"
+# Gemini model. flash-lite = cheapest; swap to "gemini-2.5-flash" for higher
+# accuracy. Pinned to a dated-stable id, NOT a "-latest" alias (those rotate
+# and can silently break — see incident 2026-07-24, ocr-weekly.md). Shutdown
+# per Google's deprecation page: 2026-10-16 — revisit before then.
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 # OPTIONAL failover reader: any OpenAI-compatible provider serving an open
-# vision model. Fill BOTH and set the FALLBACK_API_KEY secret to activate,
-# e.g. DeepInfra + Qwen:
-#   FALLBACK_URL   = "https://api.deepinfra.com/v1/openai/chat/completions"
-#   FALLBACK_MODEL = "Qwen/Qwen2.5-VL-7B-Instruct"
-FALLBACK_URL = ""
-FALLBACK_MODEL = ""
+# vision model. Set the FALLBACK_API_KEY secret (dashboard -> Settings ->
+# Variables and Secrets) to activate — until then these vars are inert.
+FALLBACK_URL = "https://api.deepinfra.com/v1/openai/chat/completions"
+FALLBACK_MODEL = "Qwen/Qwen2.5-VL-7B-Instruct"
 
 # Secrets are NOT stored here. Set them in the dashboard (Worker -> Settings ->
 # Variables and Secrets) or with wrangler:
