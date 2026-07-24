@@ -422,17 +422,39 @@ export default {
       return json({ ok: true, service: "resit-relay" }, 200, cors);
     }
     if (request.method !== "POST") return json({ error: "POST only" }, 405, cors);
+
+    const path = new URL(request.url).pathname.replace(/\/+$/, "");
+
+    /* /mint and /revoke are owner-only admin actions authenticated by the
+       PRO_UNLOCK secret in the body (checked below) -- called from curl/
+       PowerShell per LICENSE-KEYS.md, which sends no Origin header at all
+       (only browsers set that automatically). Must run BEFORE the origin
+       gate below, or the documented admin workflow 403s with "Origin not
+       allowed" before ever reaching the real auth check (found live,
+       2026-07-24, minting a key via the documented PowerShell snippet). */
+    if (path.endsWith("/mint") || path.endsWith("/revoke")) {
+      let u;
+      try { u = await request.json(); } catch (e) { return json({ error: "Bad request" }, 400, cors); }
+      if (!env.PRO_UNLOCK || !u || !safeEqual(u.secret, env.PRO_UNLOCK)) return json({ error: "Not allowed" }, 403, cors);
+      if (!env.DB) return json({ error: "No database bound" }, 500, cors);
+      await ensureLicenseTable(env.DB);
+      if (path.endsWith("/mint")) {
+        const key = mintKey();
+        await env.DB.prepare("INSERT INTO license_keys(key, label, created_at) VALUES(?1, ?2, ?3)")
+          .bind(key, String((u.label || "")).slice(0, 80), new Date().toISOString()).run();
+        return json({ ok: true, key }, 200, cors);
+      }
+      const res2 = await env.DB.prepare("UPDATE license_keys SET revoked=1 WHERE key=?1").bind(String(u.code || "").trim()).run();
+      return json({ ok: true, revoked: res2.meta.changes > 0 }, 200, cors);
+    }
+
     if (!cors["Access-Control-Allow-Origin"]) return json({ error: "Origin not allowed" }, 403, cors);
 
-    /* ---- Pro licensing ----
+    /* ---- Pro licensing (continued) ----
        /unlock  {code, deviceId}      app redeems or re-verifies a key
-       /mint    {secret, label}       owner creates a key (PRO_UNLOCK gates it)
-       /revoke  {secret, code}        owner disables a key
        Keys live in the same D1 database; the table is created lazily so no
        manual migration is ever needed. The PRO_UNLOCK secret itself also still
        works as the owner's master code. */
-    const path = new URL(request.url).pathname.replace(/\/+$/, "");
-
     if (path.endsWith("/unlock")) {
       let u;
       try { u = await request.json(); } catch (e) { return json({ error: "Bad request" }, 400, cors); }
@@ -454,22 +476,6 @@ export default {
         return json({ error: "Temporarily unavailable" }, 503, cors);
       }
       return json({ error: "Invalid code" }, 403, cors);
-    }
-
-    if (path.endsWith("/mint") || path.endsWith("/revoke")) {
-      let u;
-      try { u = await request.json(); } catch (e) { return json({ error: "Bad request" }, 400, cors); }
-      if (!env.PRO_UNLOCK || !u || !safeEqual(u.secret, env.PRO_UNLOCK)) return json({ error: "Not allowed" }, 403, cors);
-      if (!env.DB) return json({ error: "No database bound" }, 500, cors);
-      await ensureLicenseTable(env.DB);
-      if (path.endsWith("/mint")) {
-        const key = mintKey();
-        await env.DB.prepare("INSERT INTO license_keys(key, label, created_at) VALUES(?1, ?2, ?3)")
-          .bind(key, String((u.label || "")).slice(0, 80), new Date().toISOString()).run();
-        return json({ ok: true, key }, 200, cors);
-      }
-      const res2 = await env.DB.prepare("UPDATE license_keys SET revoked=1 WHERE key=?1").bind(String(u.code || "").trim()).run();
-      return json({ ok: true, revoked: res2.meta.changes > 0 }, 200, cors);
     }
 
     /* ---- Shared learning pool ----
