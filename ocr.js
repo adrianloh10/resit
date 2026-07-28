@@ -430,13 +430,21 @@ async function preprocess(base) {
   return preprocessV2(base);
 }
 
-let ocrWorker = null;
+let ocrWorkerPromise = null;
 async function getOcrWorker() {
   await loadTesseract();
-  if (!ocrWorker) {
-    ocrWorker = await Tesseract.createWorker("eng", 1, tesseractWorkerPaths());
+  /* Cache the PROMISE, not the resolved worker. Phase 5's warm-up (fired
+     fire-and-forget on chooser-open) and the first scan can call this
+     concurrently; a resolved-value guard (`if (!ocrWorker)`) isn't atomic
+     across the createWorker await, so both callers would boot a worker and
+     orphan one (double traineddata download, leaked thread). Mirrors
+     getSniperWorker's promise guard. Clear the cache on failure so a boot
+     error isn't stuck forever. */
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = Tesseract.createWorker("eng", 1, tesseractWorkerPaths())
+      .catch(e => { ocrWorkerPromise = null; throw e; });
   }
-  return ocrWorker;
+  return ocrWorkerPromise;
 }
 
 /* Warm-up (Phase 5 speed pass): called when the Add chooser opens, before the
@@ -700,7 +708,7 @@ function consensusFromVotes(votes) {
 }
 
 /* Dedicated persistent worker for sniperV2's digit-crop passes, isolated
-   from the main full-page-recognition worker (getOcrWorker()'s ocrWorker) —
+   from the main full-page-recognition worker (getOcrWorker()'s worker) —
    found the hard way, on the my100 bench: sharing one worker between full-
    page recognition and many whitelist+PSM7 digit-crop reads measurably
    degrades LATER receipts' full-page OCR within the SAME scan session

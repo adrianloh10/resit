@@ -1752,7 +1752,7 @@ function fileToThumb(file, maxDim) {
 /* Cloud reading: send the photo to the relay (Cloudflare Worker, or an old
    Vercel relay if an access code is set). Returns the same shape the on-device
    parser uses, so mergeAIResult() handles both. Nothing is stored server-side. */
-async function cloudRead(file) {
+async function cloudRead(file, signal) {
   const url = cloudEndpoint();
   if (!url) return null;
   /* Token budget: 1280px @ q0.8 keeps thermal-print text readable while
@@ -1762,7 +1762,8 @@ async function cloudRead(file) {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    signal   /* Phase 5: lets cloudReadTimed abort a stalled request so a hung socket can't strand the scan pill or a batch limiter slot */
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -1780,6 +1781,7 @@ async function cloudRead(file) {
    consent OFF, or no endpoint → the classic local-first path is untouched (it
    stays the resilience floor). Default ON — see cloudFirstEnabled(). */
 const CLOUD_TIMEOUT_MS = 6000;          /* if local isn't usable, wait at most this long for cloud to lead the first paint; a later cloud result still merges before save */
+const CLOUD_HARD_CAP_MS = 20000;        /* absolute cap on a single raced cloud read: a stalled socket is aborted here so the scan pill can't breathe "Reading with cloud…" forever (still generous enough that a genuinely slow-but-successful read merges) */
 const BATCH_CLOUD_CONCURRENCY = 3;      /* scan-all-then-confirm pipelines this many cloud uploads at once (network-bound) while local reads run one at a time (CPU-bound) */
 
 async function cloudFirstEnabled() {
@@ -1795,10 +1797,16 @@ async function cloudFirstActive() {
 const delay = ms => new Promise(r => setTimeout(r, ms));
 
 /* A cloud read that resolves to null (never rejects) on error OR after `ms`, so
-   one slow/stuck upload can't hang a batch. On timeout the underlying request
-   is left running (its result is simply ignored). */
+   one slow/stuck upload can't hang a batch or strand the scan pill. On timeout
+   the underlying request is ABORTED (not just ignored) — so a freed batch-limiter
+   slot corresponds to a truly-terminated request and a dead socket stops
+   uploading. */
 function cloudReadTimed(file, ms) {
-  return Promise.race([ cloudRead(file).catch(() => null), delay(ms).then(() => null) ]);
+  const ac = new AbortController();
+  return Promise.race([
+    cloudRead(file, ac.signal).catch(() => null),
+    delay(ms).then(() => { ac.abort(); return null; })
+  ]);
 }
 
 /* Tiny concurrency limiter: at most `max` of the queued thunks run at once. */
@@ -1857,6 +1865,10 @@ function applyCloudToOpenSheet(scanId, cloudDraft, painted) {
   if (!e || e._scanId !== scanId || !painted) return;
   const ov = $("confirm-overlay");
   if (!ov || ov.hidden) return;
+  /* Never mutate the sheet mid-save: saveExpense reads amount/date, then awaits
+     fileToThumb, then reads merchant/category/items — a merge firing during that
+     await would persist a record that mixes pre- and post-merge fields. */
+  if (state._saving) return;
   /* Only re-baseline the unsaved-changes guard if the user hadn't already
      edited something — so an auto-merge never masks a real pending edit. */
   const hadEdits = state._sheetSnapshot !== undefined && sheetFingerprint() !== state._sheetSnapshot;
@@ -2270,7 +2282,7 @@ async function handleImageRaced(file) {
 
   let parsed = null, cloudAi = null, painted = null;
   let localDone = false, cloudDone = false;
-  let learned = false, sheetOpened = false, mergedIntoSheet = false, counted = false, painting = false, pillPending = false;
+  let learned = false, sheetOpened = false, mergedIntoSheet = false, counted = false, painting = false, pillPending = false, paintedWithoutLocal = false;
 
   /* Is this still the scan on screen? (not cancelled, not superseded by a newer
      scan). UI-mutating steps require it; learnFromAI does not — it's
@@ -2326,6 +2338,19 @@ async function handleImageRaced(file) {
     } catch (e) {}
     countIfUsable();
   };
+  /* When the cloud read painted the sheet before the local read finished, the
+     draft was built from emptyParsed() — so it carries no rawText and any field
+     the cloud left null (e.g. a faded date) defaulted to "today". Once the real
+     local read lands, fold it in: restore its rawText (so a later user total
+     correction can still be learned) and let it fill cloud-null fields —
+     WITHOUT clobbering cloud's values or the user's edits (applyCloudToOpenSheet's
+     painted-baseline checks handle both). */
+  const reconcileLocalIntoCloudSheet = () => {
+    if (!paintedWithoutLocal || !parsed || !painted || !stillCurrent()) return;
+    if (!state.editing || state.editing._scanId !== myId) return;
+    if (!state.editing._rawText) state.editing._rawText = parsed.rawText || "";
+    try { applyCloudToOpenSheet(myId, parsedToDraft(mergeAIResult(Object.assign({}, parsed), cloudAi)), painted); } catch (e) {}
+  };
   /* Paint from the first usable read. Prefer cloud (more accurate); else local;
      `force` (both readers done, or the 6s cap elapsed with local in) paints
      whatever we have so the user is never stuck. A cloud-painted sheet needs no
@@ -2335,6 +2360,7 @@ async function handleImageRaced(file) {
     if (painting || sheetOpened || !stillCurrent()) return;
     if (cloudDone && cloudUsable(cloudAi)) {
       painting = true;
+      paintedWithoutLocal = !parsed;   /* cloud won the race before local finished — reconcile local's rawText + cloud-null fields when it lands */
       learnFromCloud();
       openSheet(mergeAIResult(Object.assign({}, parsed || emptyParsed()), cloudAi), "cloud");
       mergedIntoSheet = true;
@@ -2354,8 +2380,10 @@ async function handleImageRaced(file) {
     settlePill();
   };
 
-  /* Cloud read — fired concurrently with local below. */
-  cloudRead(file).then(a => a, () => null).then(a => {
+  /* Cloud read — fired concurrently with local below. Bounded by a generous
+     hard cap (aborts a stalled socket) so the scan pill can never breathe
+     forever; cloudReadTimed resolves null (never rejects) on error/timeout. */
+  cloudReadTimed(file, CLOUD_HARD_CAP_MS).then(a => {
     cloudAi = a; cloudDone = true;
     try {
       learnFromCloud();
@@ -2376,6 +2404,7 @@ async function handleImageRaced(file) {
       if (p) { DB.setSetting("lastScan", p.rawText || ""); applyLearnedTotalHint(p); p._source = "local"; }
       parsed = p;
       learnFromCloud();
+      reconcileLocalIntoCloudSheet();   /* if cloud already painted from empty, fold the real local read in */
       tryPaint(false);
       if (cloudDone) tryPaint(true);
     } catch (e) {}
