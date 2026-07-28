@@ -616,12 +616,24 @@ function cropXFor(target, canvasWidth) {
    (thin pen strokes can vanish when binarized), two paddings x two
    binarization modes = up to 4 readings, returned as raw votes (not yet
    reduced to a consensus — callers decide how to combine across regions). */
-async function digitVotesForLine(worker, raw, target, canvas) {
+/* `workers`: a single worker (v1 / sniperTotal — UNCHANGED sequential path,
+   byte-identical to before pooling existed) or an array (sniperCrossValidate's
+   pool, OCR-ENGINE-PLAN.md Phase 4 latency fix) — crops are built up front,
+   then recognized concurrently across the pool. Promise.all preserves
+   result order by input index regardless of which crop's recognize()
+   settles first, so `votes` reconstructs in the exact same order the
+   sequential loop would have produced it in; only wall-clock time changes,
+   consensusFromVotes sees the same set either way. Pool members are
+   pre-configured (see getSniperWorkerPool) — no per-job setParameters,
+   since concurrent setParameters calls on a worker mid-dispatch would race. */
+async function digitVotesForLine(workers, raw, target, canvas) {
+  const pool = Array.isArray(workers) ? workers : [workers];
   const votes = [];
   const lh = Math.max(8, target.bbox.y1 - target.bbox.y0);
   const x0 = cropXFor(target, canvas.width);
   const cw = canvas.width - x0 - 2;
   if (cw < 20) return votes;
+  const crops = [];
   for (const pad of [0.9, 1.6]) {
     const y0 = Math.max(0, target.bbox.y0 - lh * pad);
     const y1 = Math.min(canvas.height, target.bbox.y1 + lh * pad);
@@ -634,13 +646,26 @@ async function digitVotesForLine(worker, raw, target, canvas) {
       crop.height = Math.round(ch * scale);
       crop.getContext("2d").drawImage(raw, x0, y0, cw, ch, 0, 0, crop.width, crop.height);
       if (useBin) adaptiveThreshold(crop);
-      await worker.setParameters({ tessedit_char_whitelist: "0123456789.,|/- ", tessedit_pageseg_mode: "7" });
+      crops.push(crop);
+    }
+  }
+  if (pool.length === 1) {
+    for (const crop of crops) {
+      await pool[0].setParameters({ tessedit_char_whitelist: "0123456789.,|/- ", tessedit_pageseg_mode: "7" });
       try {
-        const amt = parseSniperDigits((await worker.recognize(crop)).data.text || "");
+        const amt = parseSniperDigits((await pool[0].recognize(crop)).data.text || "");
         if (amt !== null) votes.push(amt);
       } catch (e) { /* keep trying other variants */ }
     }
+    return votes;
   }
+  const results = await Promise.all(crops.map((crop, i) =>
+    pool[i % pool.length].recognize(crop).then(
+      r => parseSniperDigits(r.data.text || ""),
+      () => null
+    )
+  ));
+  for (const amt of results) if (amt !== null) votes.push(amt);
   return votes;
 }
 
@@ -684,6 +709,33 @@ async function getSniperWorker() {
   return sniperWorkerPromise;
 }
 
+/* OCR-ENGINE-PLAN.md Phase 4 latency fix: sniperCrossValidate measured
+   50-140s on a real device (2 real scans, Samsung S25 Ultra debug APK) —
+   up to 3 candidate regions x up to 4 sequential recognize() calls each,
+   often finding no agreement and falling back to cloud anyway (the on-
+   device work bought nothing). A dedicated 2-worker pool, SEPARATE from
+   getSniperWorker() above (sniperTotal — the "total is missing entirely"
+   path that writes parsed.total directly with no fallback — is deliberately
+   left untouched; only sniperCrossValidate, which can only ever raise
+   totalConf and never write a wrong total, gets the pool). Parameters are
+   set ONCE here, not per-call (digitVotesForLine's pool branch never calls
+   setParameters) — both members stay in digit-whitelist/PSM7 mode
+   permanently, since that's the pool's only purpose. */
+const SNIPER_POOL_SIZE = 2;
+let sniperPoolPromise = null;
+async function getSniperWorkerPool() {
+  await loadTesseract();
+  if (!sniperPoolPromise) {
+    sniperPoolPromise = Promise.all(
+      Array.from({ length: SNIPER_POOL_SIZE }, () => Tesseract.createWorker("eng", 1, tesseractWorkerPaths()))
+    ).then(async workers => {
+      for (const w of workers) await w.setParameters({ tessedit_char_whitelist: "0123456789.,|/- ", tessedit_pageseg_mode: "7" });
+      return workers;
+    });
+  }
+  return sniperPoolPromise;
+}
+
 /* When no amount was found in the full read, zoom into the region to the
    right of the "TOTAL" label and re-read it digits-only. sniperV2 tries up
    to 3 candidate regions as a fallback chain (region 1 first; only moves to
@@ -707,23 +759,24 @@ async function sniperTotal(worker, file, boostFlag, canvas, lines, prepGray, sni
 }
 
 /* sniperV2 only: the text parser already found a total but at low
-   confidence — re-read up to 3 candidate regions digit-only and report
-   whether ANY of them agrees (to the sen). Never returns a value: agreement
-   only raises the caller's confidence, it never overwrites what the text
-   parser found (see the Teo Heng lesson in the section comment above).
-   Always the isolated sniper worker — this path only ever runs when
-   sniperV2 is on. */
+   confidence — re-read up to 1 candidate region digit-only (Phase 4 latency
+   fix: was up to 3 — see getSniperWorkerPool's comment; the region-3 fallback
+   rarely paid for its own cost, per the measured 50-140s scans) and report
+   whether it agrees (to the sen). Never returns a value: agreement only
+   raises the caller's confidence, it never overwrites what the text parser
+   found (see the Teo Heng lesson in the section comment above). Uses the
+   pooled sniper workers (parallel digit-crop reads), never the singular one
+   sniperTotal uses — this path only ever runs when sniperV2 is on. */
 async function sniperCrossValidate(file, boostFlag, canvas, lines, prepGray, candidateTotal) {
-  const candidates = rankTotalLineCandidates(lines, 3);
+  const candidates = rankTotalLineCandidates(lines, 1);
   if (!candidates.length) return false;
   const raw = prepGray || await loadCanvas(file, boostFlag);
-  const w = await getSniperWorker();
+  const pool = await getSniperWorkerPool();
   let agreed = false;
   for (const target of candidates) {
-    const v = consensusFromVotes(await digitVotesForLine(w, raw, target, canvas));
+    const v = consensusFromVotes(await digitVotesForLine(pool, raw, target, canvas));
     if (v !== null && Math.abs(v - candidateTotal) <= 0.02) { agreed = true; break; }
   }
-  await w.setParameters({ tessedit_char_whitelist: "", tessedit_pageseg_mode: "3" });
   return agreed;
 }
 
@@ -1004,11 +1057,26 @@ const CATEGORY_KEYWORDS = {
   Entertainment: ["gsc", "tgv", "mbo", "lfs", "dadi cinema", "cinema", "karaoke", "ktv", "netflix", "spotify", "steam", "playstation", "genting", "zoo", "aquaria", "theme park", "sunway lagoon", "escape room", "arcade", "bowling", "bowl", "snooker", "concert", "disney", "hbo", "youtube premium", "viu", "iqiyi"]
 };
 
-const AMOUNT_RE = /(\d{1,3}(?:[,\s]\d{3})*\.\d{2})(?!\d)/g;
+/* (?<!\d) on both: without it, a comma-less 4+-digit amount ("3859.00")
+   silently matches its own LAST 3-4 digits instead of failing to match —
+   the engine can't take \d{1,3}/\d{1,4} across the whole run, so on the
+   first anchor position it backtracks to failure and just retries one
+   character later, which happens to succeed on the truncated suffix
+   ("3859.00" -> "859.00"). The lookbehind forces a match to start at the
+   actual beginning of a digit run, so a too-long run correctly matches
+   nothing here and falls through to LOOSE_AMOUNT_RE / RM_INT_RE instead of
+   silently returning a wrong, smaller value (found live: a real RM3859.00
+   invoice read as RM859 with no error, discovered testing the learned-hint
+   path, where a hint-confirmed total skips the cloud safety net entirely). */
+const AMOUNT_RE = /(?<!\d)(\d{1,3}(?:[,\s]\d{3})*\.\d{2})(?!\d)/g;
 /* OCR often reads a decimal point as a comma or adds stray spaces
    ("100,20", "43 . 50"). Only trusted on lines that already talk about
-   totals/cash/change. */
-const LOOSE_AMOUNT_RE = /(\d{1,4})\s*[.,]\s*(\d{2})(?!\d)/;
+   totals/cash/change. Same (?<!\d) reasoning as AMOUNT_RE — otherwise a
+   5+-digit amount ("12345.67") truncates to its last 4-6 digits instead of
+   falling through to RM_INT_RE/COLUMN_AMOUNT_RE (both already anchored on
+   \b, which a mid-digit-run position can never satisfy — they were never
+   vulnerable to this). */
+const LOOSE_AMOUNT_RE = /(?<!\d)(\d{1,4})\s*[.,]\s*(\d{2})(?!\d)/;
 /* Mamak and stall receipts often print whole ringgit: "TOTAL RM 43". */
 const RM_INT_RE = /\brm\b\s*:?\s*(\d{1,5})(?!\s*[.,]?\d)/i;
 /* Invoice books write ringgit and sen in separate columns: "2269 | 00"

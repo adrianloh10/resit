@@ -2550,7 +2550,9 @@ async function exportCSV(filter) {
   const rows = [exportHeaders()];
   for (const r of recs) rows.push([r.date, r.time, r.merchant, r.category, r.type, r.claim, r.amount.toFixed(2), r.note, r.items]);
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
-  downloadBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), "recap-expenses.csv");
+  try {
+    await downloadBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), "recap-expenses.csv");
+  } catch (e) { toast(e.message || "Couldn't save the file"); return 0; }
   return recs.length;
 }
 
@@ -2590,7 +2592,9 @@ async function exportXLS(filter, baseName) {
       <td style="mso-number-format:'0.00';text-align:right">${total.toFixed(2)}</td><td></td><td></td></tr>
     </tbody>
   </table></body></html>`;
-  downloadBlob(new Blob(["﻿" + html], { type: "application/vnd.ms-excel;charset=utf-8" }), (baseName || "recap-expenses") + ".xls");
+  try {
+    await downloadBlob(new Blob(["﻿" + html], { type: "application/vnd.ms-excel;charset=utf-8" }), (baseName || "recap-expenses") + ".xls");
+  } catch (e) { toast(e.message || "Couldn't save the file"); return 0; }
   return recs.length;
 }
 
@@ -2606,7 +2610,9 @@ async function exportBackup() {
   const expenses = state.expenses.map(({ photo, ...rest }) => rest);
   const backup = { app: "recap", type: "backup", version: 1, exportedAt: new Date().toISOString(), expenses, settings };
   const stamp = new Date().toISOString().slice(0, 10);
-  downloadBlob(new Blob([JSON.stringify(backup)], { type: "application/json" }), "recap-backup-" + stamp + ".json");
+  try {
+    await downloadBlob(new Blob([JSON.stringify(backup)], { type: "application/json" }), "recap-backup-" + stamp + ".json");
+  } catch (e) { toast(e.message || "Couldn't save the backup"); return; }
   state.lastBackupAt = new Date().toISOString();
   await DB.setSetting("lastBackupAt", state.lastBackupAt);
   renderBackupStatus();
@@ -2744,7 +2750,45 @@ async function importBackup(file) {
   toast("Restored " + clean.length + " expenses");
 }
 
-function downloadBlob(blob, name) {
+/* Blob -> bare base64 (no data-URL prefix), for the native Filesystem
+   bridge. Mirrors ocr.js's fileToBase64 (same pattern, kept local — ocr.js
+   loads before app.js and neither depends on the other). */
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => {
+      const s = String(fr.result || "");
+      const comma = s.indexOf(",");
+      resolve(comma >= 0 ? s.slice(comma + 1) : s);
+    };
+    fr.onerror = () => reject(new Error("Could not read the export data."));
+    fr.readAsDataURL(blob);
+  });
+}
+
+/* A plain `<a download>` click on a blob: URL is a no-op in the native
+   Capacitor WebView — Chromium's blob-download handling needs a registered
+   native download listener, which this app never wires up, so the click
+   silently does nothing (confirmed live: no file, no dialog, nothing —
+   OCR-ENGINE-PLAN.md Phase 4's backup/restore smoke check). On native,
+   write the blob to the app's cache dir via @capacitor/filesystem, then
+   hand it to the OS share sheet via @capacitor/share so the user can save
+   it to Downloads/Drive/email/wherever — same two-plugin pattern as
+   captureNative()'s Camera usage above (window.Capacitor.Plugins.X, no
+   registerPlugin — this app has no bundler to resolve that). Web/PWA path
+   is completely unchanged. */
+async function downloadBlob(blob, name) {
+  if (isNative()) {
+    const Fs = window.Capacitor.Plugins.Filesystem;
+    const Sh = window.Capacitor.Plugins.Share;
+    if (Fs && Sh) {
+      const base64 = await blobToBase64(blob);
+      const written = await Fs.writeFile({ path: name, data: base64, directory: "CACHE" });
+      await Sh.share({ title: name, url: written.uri, dialogTitle: "Save " + name });
+      return;
+    }
+    throw new Error("Saving files isn't available on this build");
+  }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = name;
