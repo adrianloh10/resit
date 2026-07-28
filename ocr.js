@@ -439,6 +439,17 @@ async function getOcrWorker() {
   return ocrWorker;
 }
 
+/* Warm-up (Phase 5 speed pass): called when the Add chooser opens, before the
+   user has even picked a photo, so the first scan doesn't pay the tesseract.js
+   load + worker-boot cost (~0.5-1s cold). getOcrWorker() caches, so the scan
+   that follows reuses this exact worker. Best-effort and idempotent — a
+   warm-up failure must never surface or affect a real scan. Only the main
+   full-page worker is pre-started (the sniper pool stays lazy — it's only
+   needed for the minority of weak/missing-total receipts). */
+async function warmUp() {
+  try { await getOcrWorker(); } catch (e) { /* best-effort; the real scan retries */ }
+}
+
 /* A usable read has real length AND money amounts in it. Binarization can
    shred small digits on noisy phone photos even when big text survives —
    if that happens, retry with the gentler contrast pass. */
@@ -1729,4 +1740,4 @@ function getPrep() {
   return { master: prepMasterOverride, config: { ...PREP_CONFIG } };
 }
 
-window.ReceiptOCR = { ocrImage, scanReceipt, parseReceiptText, guessCategory, amountFromLine, CATEGORIES, setPrep, getPrep, setSniper, getSniper, setNative, getNative };
+window.ReceiptOCR = { ocrImage, scanReceipt, warmUp, parseReceiptText, guessCategory, amountFromLine, CATEGORIES, setPrep, getPrep, setSniper, getSniper, setNative, getNative };

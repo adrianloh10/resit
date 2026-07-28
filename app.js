@@ -63,6 +63,7 @@ let state = {
   budget: 3000,
   editing: null,
   ocrCancelled: false,
+  _scanSeq: 0,       /* monotonic id per scan — the race merges only into the scan still on screen (no duplicate-sheet / lost-scan / cross-scan clobber) */
   merchantCats: {},
   merchantNames: {},
   totalHints: {},
@@ -1770,6 +1771,158 @@ async function cloudRead(file) {
   return res.json();
 }
 
+/* ---------- Cloud-first seamless read (cloudFirst, OCR-ENGINE-PLAN Phase 5) ----
+   RACE-THEN-RECONCILE: on scan, the local reader and the cloud reader run at
+   the same time. Whichever produces a usable result first PAINTS the confirm
+   sheet (usually local, ~1-2s); when the cloud result lands it merges in as
+   AUTHORITATIVE over every field the user has NOT edited, and learnFromAI fires
+   on every raced scan (more distillation signal). cloudFirst OFF, offline,
+   consent OFF, or no endpoint → the classic local-first path is untouched (it
+   stays the resilience floor). Default ON — see cloudFirstEnabled(). */
+const CLOUD_TIMEOUT_MS = 6000;          /* if local isn't usable, wait at most this long for cloud to lead the first paint; a later cloud result still merges before save */
+const BATCH_CLOUD_CONCURRENCY = 3;      /* scan-all-then-confirm pipelines this many cloud uploads at once (network-bound) while local reads run one at a time (CPU-bound) */
+
+async function cloudFirstEnabled() {
+  try { return (await DB.getSetting("cloudFirst", "yes")) === "yes"; }
+  catch (e) { return true; }
+}
+/* All the runtime conditions for racing the cloud: the flag is on, an endpoint
+   exists, the user hasn't switched cloud reading off, and we're online. */
+async function cloudFirstActive() {
+  return !!cloudEndpoint() && state.cloudConsent !== "no" && navigator.onLine && await cloudFirstEnabled();
+}
+
+const delay = ms => new Promise(r => setTimeout(r, ms));
+
+/* A cloud read that resolves to null (never rejects) on error OR after `ms`, so
+   one slow/stuck upload can't hang a batch. On timeout the underlying request
+   is left running (its result is simply ignored). */
+function cloudReadTimed(file, ms) {
+  return Promise.race([ cloudRead(file).catch(() => null), delay(ms).then(() => null) ]);
+}
+
+/* Tiny concurrency limiter: at most `max` of the queued thunks run at once. */
+function makeCloudLimiter(max) {
+  let active = 0;
+  const q = [];
+  const pump = () => {
+    while (active < max && q.length) {
+      const { fn, res, rej } = q.shift();
+      active++;
+      Promise.resolve().then(fn).then(
+        v => { active--; res(v); pump(); },
+        e => { active--; rej(e); pump(); }
+      );
+    }
+  };
+  return fn => new Promise((res, rej) => { q.push({ fn, res, rej }); pump(); });
+}
+
+/* "Usable" mirrors handleImage's existing bar: something worth showing. */
+function usableParsed(p) {
+  return !!(p && (p.total || (p.merchant && String(p.merchant).trim()) || (p.items && p.items.length)));
+}
+function cloudUsable(ai) {
+  return !!(ai && ai.readable !== false &&
+    (ai.total || (ai.merchant && ai.merchant.length >= 2) || (Array.isArray(ai.items) && ai.items.length)));
+}
+/* A blank parse skeleton so the cloud reading can stand alone when the local
+   reader returned nothing at all (blurry photo the cloud can still read). */
+function emptyParsed() {
+  return { rawText: "", total: null, totalConf: 0, merchant: "", category: "Other", date: null, time: null, items: [] };
+}
+
+/* What the confirm sheet was painted with, captured the moment it opens from
+   the local result — the no-clobber baseline: a field the cloud may overwrite
+   ONLY while it still equals what local painted (i.e. the user hasn't touched
+   it). */
+function capturePaintedFields() {
+  const e = state.editing;
+  return {
+    amount: $("confirm-amount") ? $("confirm-amount").value : "",
+    merchant: $("confirm-merchant") ? $("confirm-merchant").value : "",
+    date: $("confirm-date") ? $("confirm-date").value : "",
+    time: $("confirm-time") ? $("confirm-time").value : "",
+    category: e ? e.category : "",
+    itemsJSON: e ? JSON.stringify(e.items || []) : "[]"
+  };
+}
+
+/* Merge a cloud-authoritative draft into the ALREADY-OPEN confirm sheet without
+   clobbering anything the user has edited (Phase 8's no-clobber rule). Runs
+   only for the scan still on screen (scanId + overlay open). `painted` is the
+   baseline from capturePaintedFields(). */
+function applyCloudToOpenSheet(scanId, cloudDraft, painted) {
+  const e = state.editing;
+  if (!e || e._scanId !== scanId || !painted) return;
+  const ov = $("confirm-overlay");
+  if (!ov || ov.hidden) return;
+  /* Only re-baseline the unsaved-changes guard if the user hadn't already
+     edited something — so an auto-merge never masks a real pending edit. */
+  const hadEdits = state._sheetSnapshot !== undefined && sheetFingerprint() !== state._sheetSnapshot;
+  let changed = false;
+
+  const amtEl = $("confirm-amount");
+  if (amtEl && amtEl.value === painted.amount && cloudDraft.amount != null && cloudDraft.amount > 0) {
+    const v = cloudDraft.amount.toFixed(2);
+    if (amtEl.value !== v) { amtEl.value = v; changed = true; }
+    e.amount = cloudDraft.amount;
+    /* Keep the "as-parsed" baseline authoritative too, so a clean save (no
+       further edit) is NOT mistaken for a user correction — that would
+       re-learn what learnFromAI already learned AND pop a spurious "Noted…"
+       toast (learnFromCorrections compares record.amount to _parsedTotal). */
+    e._parsedTotal = cloudDraft._parsedTotal;
+    painted.amount = amtEl.value;
+  }
+  const merEl = $("confirm-merchant");
+  if (merEl && merEl.value === painted.merchant && cloudDraft.merchant) {
+    if (merEl.value !== cloudDraft.merchant) { merEl.value = cloudDraft.merchant; changed = true; }
+    e.merchant = cloudDraft.merchant;
+    e._parsedMerchant = cloudDraft._parsedMerchant;
+    painted.merchant = merEl.value;
+  }
+  if (!e.userPicked && cloudDraft.category && cloudDraft.category !== e.category) {
+    e.category = cloudDraft.category;
+    painted.category = e.category;
+    renderCategoryChips();
+    changed = true;
+  }
+  const dEl = $("confirm-date"), tEl = $("confirm-time");
+  if (dEl && tEl && dEl.value === painted.date && tEl.value === painted.time && cloudDraft.date) {
+    const cd = new Date(cloudDraft.date);
+    if (!isNaN(cd)) {
+      const ds = cd.getFullYear() + "-" + String(cd.getMonth() + 1).padStart(2, "0") + "-" + String(cd.getDate()).padStart(2, "0");
+      const ts = String(cd.getHours()).padStart(2, "0") + ":" + String(cd.getMinutes()).padStart(2, "0");
+      if (dEl.value !== ds || tEl.value !== ts) { dEl.value = ds; tEl.value = ts; changed = true; }
+      e.date = cloudDraft.date;
+      painted.date = dEl.value; painted.time = tEl.value;
+    }
+  }
+  if (JSON.stringify(e.items || []) === painted.itemsJSON && Array.isArray(cloudDraft.items) && cloudDraft.items.length) {
+    e.items = cloudDraft.items.map(i => ({ ...i }));
+    painted.itemsJSON = JSON.stringify(e.items);
+    renderItemsEditor();
+    changed = true;
+  }
+  e._source = "cloud";
+  if (changed && !hadEdits) state._sheetSnapshot = sheetFingerprint();
+}
+
+/* Speed pass: the instant the Add chooser opens, start warming the two things a
+   scan waits on — the Tesseract worker (boot cost) and the cloud edge (TLS +
+   Worker cold start). Both fire-and-forget; picking manual entry instead just
+   means the warmed worker is reused next time and the ping was one tiny GET.
+   The ping is throttled so re-opening the chooser can't spam the edge. */
+let lastCloudWarmAt = 0;
+function warmUpScan() {
+  try { if (window.ReceiptOCR && window.ReceiptOCR.warmUp) window.ReceiptOCR.warmUp(); } catch (e) {}
+  const now = Date.now();
+  if (cloudEndpoint() && state.cloudConsent !== "no" && navigator.onLine && now - lastCloudWarmAt > 20000) {
+    lastCloudWarmAt = now;
+    try { fetch(cloudEndpoint(), { method: "GET", cache: "no-store" }).catch(() => {}); } catch (e) {}
+  }
+}
+
 /* Explicit, one-time consent before any photo leaves the device (PDPA). The
    choice is remembered and can be changed in Settings. */
 
@@ -1989,6 +2142,7 @@ function renderQuickAdd() {
 function openChooser() {
   renderQuickAdd();
   $("chooser-overlay").hidden = false;
+  warmUpScan();   /* Phase 5 speed pass: pre-warm the OCR worker + cloud edge */
 }
 
 async function handleImage(file) {
@@ -2029,6 +2183,17 @@ async function handleImage(file) {
       return;
     }
   }
+  /* Cloud-first (default): race the local and cloud readers; the first usable
+     result paints, the cloud result then merges authoritative. Off / offline /
+     consent-off / no endpoint → the classic local-first path (resilience floor). */
+  if (await cloudFirstActive()) return handleImageRaced(file);
+  return handleImageLocalFirst(file);
+}
+
+/* Classic local-first read (unchanged behaviour): on-device first, cloud only
+   when the on-device result is weak/empty. Runs when cloudFirst is off, the
+   device is offline, or cloud reading is switched off. */
+async function handleImageLocalFirst(file) {
   state.ocrCancelled = false;
   /* Non-blocking read: no full-screen overlay. The ledger shows a live
      "reading" row and a small pill breathes at the bottom (tap = cancel);
@@ -2042,6 +2207,7 @@ async function handleImage(file) {
     if (state.ocrCancelled) return;
     DB.setSetting("lastScan", parsed.rawText || "");
     applyLearnedTotalHint(parsed);
+    let source = "local";
     /* Cloud fallback: only when on-device reading came up empty or weak, and
        the user hasn't switched cloud reading off (it's on by default). */
     const weak = parsed.total === null || (parsed.totalConf || 0) <= 1;
@@ -2053,6 +2219,7 @@ async function handleImage(file) {
           if (state.ocrCancelled) return;
           learnFromAI(parsed.rawText, ai, parsed.total, parsed.merchant);
           mergeAIResult(parsed, ai);
+          if (ai && ai.readable !== false) source = "cloud";
         } catch (err) {
           toast(err.message || "Cloud reading failed");
         }
@@ -2073,6 +2240,7 @@ async function handleImage(file) {
     if (usable && !isPro()) await bumpScanUsed();
     const draft = parsedToDraft(parsed);
     draft._file = file;
+    draft._source = source;
     openConfirmSheet(draft);
   } catch (err) {
     if (state.ocrCancelled) return;
@@ -2082,6 +2250,136 @@ async function handleImage(file) {
     toast(err.message || "Something went wrong reading the receipt");
     openConfirmSheet(null);
   }
+}
+
+/* Cloud-first RACE (Phase 5): fire the local and cloud readers at once. The
+   first usable result paints the confirm sheet — usually local (~1-2s), but on
+   a hard receipt where local runs its slow sniper passes the cloud read
+   (~3s) often wins and paints first. When the cloud result lands it merges as
+   AUTHORITATIVE into every field the user hasn't edited, and learnFromAI fires
+   on every raced scan. A monotonic scanId (state._scanSeq) guarantees a
+   cancelled or superseded scan's late cloud result can never touch the wrong
+   sheet (no duplicate-sheet / lost-scan / cross-scan clobber). */
+async function handleImageRaced(file) {
+  const myId = ++state._scanSeq;
+  state.ocrCancelled = false;
+  state.scanning = true;
+  switchView("home");
+  renderHome();
+  showScanPill("Reading receipt…");
+
+  let parsed = null, cloudAi = null, painted = null;
+  let localDone = false, cloudDone = false;
+  let learned = false, sheetOpened = false, mergedIntoSheet = false, counted = false, painting = false, pillPending = false;
+
+  /* Is this still the scan on screen? (not cancelled, not superseded by a newer
+     scan). UI-mutating steps require it; learnFromAI does not — it's
+     scan-independent and always worth doing, even for a superseded scan. */
+  const stillCurrent = () => myId === state._scanSeq && !state.ocrCancelled;
+  const sheetUsable = () => {
+    if (!sheetOpened) return false;
+    const amt = $("confirm-amount") ? $("confirm-amount").value.trim() : "";
+    const mer = $("confirm-merchant") ? $("confirm-merchant").value.trim() : "";
+    const items = state.editing && state.editing.items && state.editing.items.length;
+    return !!(amt || mer || items);
+  };
+  /* A read that produced something consumes the free daily scan; a blurry
+     failure costs nothing. Counted once, from machine output (before the user
+     can type). */
+  const countIfUsable = () => { if (!counted && !isPro() && sheetUsable()) { counted = true; bumpScanUsed(); } };
+  const openSheet = (p, source) => {
+    const draft = parsedToDraft(p);
+    draft._file = file;
+    draft._scanId = myId;
+    draft._source = source;
+    openConfirmSheet(draft);
+    painted = capturePaintedFields();
+    sheetOpened = true;
+  };
+  /* Rest the pill. While the sheet holds nothing usable but the cloud read is
+     still in flight, keep it breathing (cloud may still fill it) rather than
+     declaring failure. */
+  const settlePill = () => {
+    if (!stillCurrent()) return;
+    if (sheetUsable()) { pillPending = false; completeScanPill("Scan complete ✓"); }
+    else if (!cloudDone) { pillPending = true; showScanPill("Reading with cloud…"); }
+    else { pillPending = false; hideScanPill(); toast(state.ghToken ? "Couldn't read it — save anyway, Claude will fill it in" : "That one was too blurry — try more light, or just type it in"); }
+  };
+  /* Learn from the cloud read once BOTH readers are done (needs local rawText).
+     Runs regardless of cancel/supersede. */
+  const learnFromCloud = () => {
+    if (learned || !localDone || !cloudDone || !cloudAi || !parsed) return;
+    try { learnFromAI(parsed.rawText, cloudAi, parsed.total, parsed.merchant); } catch (e) {}
+    learned = true;
+  };
+  /* Merge the cloud reading (authoritative) into the open sheet, once. */
+  const mergeCloudIntoSheet = () => {
+    if (mergedIntoSheet || !cloudDone || !cloudAi || !sheetOpened || !stillCurrent()) return;
+    mergedIntoSheet = true;
+    try {
+      const merged = mergeAIResult(Object.assign({}, parsed || emptyParsed()), cloudAi);
+      applyCloudToOpenSheet(myId, parsedToDraft(merged), painted);
+    } catch (e) {}
+    countIfUsable();
+  };
+  /* Paint from the first usable read. Prefer cloud (more accurate); else local;
+     `force` (both readers done, or the 6s cap elapsed with local in) paints
+     whatever we have so the user is never stuck. A cloud-painted sheet needs no
+     later local merge; a local-painted sheet takes the authoritative cloud
+     merge when it lands. */
+  const tryPaint = (force) => {
+    if (painting || sheetOpened || !stillCurrent()) return;
+    if (cloudDone && cloudUsable(cloudAi)) {
+      painting = true;
+      learnFromCloud();
+      openSheet(mergeAIResult(Object.assign({}, parsed || emptyParsed()), cloudAi), "cloud");
+      mergedIntoSheet = true;
+    } else if (localDone && usableParsed(parsed)) {
+      painting = true;
+      openSheet(parsed, "local");
+    } else if (force && localDone) {
+      painting = true;
+      openSheet(parsed || emptyParsed(), "local");
+    } else {
+      return;
+    }
+    state.scanning = false;
+    renderHome();
+    countIfUsable();
+    mergeCloudIntoSheet();   /* if cloud is already in, merge it now */
+    settlePill();
+  };
+
+  /* Cloud read — fired concurrently with local below. */
+  cloudRead(file).then(a => a, () => null).then(a => {
+    cloudAi = a; cloudDone = true;
+    try {
+      learnFromCloud();
+      tryPaint(false);           /* cloud may be the first usable result */
+      mergeCloudIntoSheet();     /* or merge into an already-open (local-painted) sheet */
+      if (pillPending) settlePill();
+      if (localDone) tryPaint(true);   /* both done, still nothing usable → paint what we have */
+    } catch (e) {}
+  });
+
+  /* Local read. */
+  (async () => {
+    let p = null;
+    try { p = await window.ReceiptOCR.scanReceipt(file, msg => { if (stillCurrent()) showScanPill(msg); }); }
+    catch (e) { p = null; }
+    localDone = true;
+    try {
+      if (p) { DB.setSetting("lastScan", p.rawText || ""); applyLearnedTotalHint(p); p._source = "local"; }
+      parsed = p;
+      learnFromCloud();
+      tryPaint(false);
+      if (cloudDone) tryPaint(true);
+    } catch (e) {}
+  })();
+
+  /* Cloud slower than the cap → proceed with the local result (once it's in);
+     a late cloud result still merges into the open sheet before save. */
+  delay(CLOUD_TIMEOUT_MS).then(() => { if (localDone) tryPaint(true); });
 }
 
 /* ---- Batch scan (Pro): read every receipt in the stack up front (one
@@ -2106,18 +2404,48 @@ async function startBatch(fileList) {
 }
 
 /* Reads every queued file into a draft, in order, before any confirm sheet
-   opens. Cancellable the same way a single scan is (tap the scan pill). */
+   opens. Cancellable the same way a single scan is (tap the scan pill).
+   Cloud-first (Phase 5): the cloud reads are fired up front and pipelined a few
+   at a time (network-bound) while the local reads run one at a time
+   (CPU-bound), so the two overlap — a receipt's cloud read is usually already
+   done by the time the sequential local loop reaches it. Cloud is authoritative
+   and learnFromAI fires on every raced receipt. cloudFirst off / offline /
+   consent-off → each receipt keeps the classic local-first, cloud-when-weak
+   behaviour. */
 async function scanAllInBatch() {
   state.ocrCancelled = false;
-  for (let i = 0; i < state.batchFiles.length; i++) {
+  const files = state.batchFiles;
+  const cloudOn = await cloudFirstActive();
+  let cloudReads = null;
+  if (cloudOn) {
+    const limit = makeCloudLimiter(BATCH_CLOUD_CONCURRENCY);
+    cloudReads = files.map(f => limit(() =>
+      (!state.batchMode || state.ocrCancelled) ? null : cloudReadTimed(f, CLOUD_TIMEOUT_MS)
+    ).catch(() => null));
+  }
+  for (let i = 0; i < files.length; i++) {
     if (!state.batchMode || state.ocrCancelled) break;
-    const file = state.batchFiles[i];
+    const file = files[i];
     const pos = (i + 1) + " of " + state.batchTotal;
     showScanPill("Reading receipt " + pos + "…");
+    let parsed = null;
     try {
-      const parsed = await window.ReceiptOCR.scanReceipt(file, msg => showScanPill(msg + " (" + pos + ")"));
-      if (state.ocrCancelled || !state.batchMode) break;
-      applyLearnedTotalHint(parsed);
+      parsed = await window.ReceiptOCR.scanReceipt(file, msg => showScanPill(msg + " (" + pos + ")"));
+    } catch (err) { parsed = null; }
+    if (!state.batchMode || state.ocrCancelled) break;
+    if (parsed) applyLearnedTotalHint(parsed);
+
+    let source = "local";
+    if (cloudOn) {
+      showScanPill("Reading with cloud… (" + pos + ")");
+      const ai = await cloudReads[i];
+      if (!state.batchMode || state.ocrCancelled) break;
+      if (ai) {
+        if (parsed) learnFromAI(parsed.rawText, ai, parsed.total, parsed.merchant);
+        if (cloudUsable(ai)) { parsed = mergeAIResult(parsed || emptyParsed(), ai); source = "cloud"; }
+      }
+    } else if (parsed) {
+      /* classic: cloud only when the local read is weak */
       const weak = parsed.total === null || (parsed.totalConf || 0) <= 1;
       if (cloudEndpoint() && weak && state.cloudConsent !== "no") {
         showScanPill("Reading with cloud… (" + pos + ")");
@@ -2126,16 +2454,21 @@ async function scanAllInBatch() {
           if (state.ocrCancelled || !state.batchMode) break;
           learnFromAI(parsed.rawText, ai, parsed.total, parsed.merchant);
           mergeAIResult(parsed, ai);
+          if (ai && ai.readable !== false) source = "cloud";
         } catch (err) { /* keep the on-device result and carry on */ }
       }
+    }
+
+    if (parsed) {
       const draft = parsedToDraft(parsed);
       draft._file = file;
+      draft._source = source;
       state.batchDrafts.push(draft);
-    } catch (err) {
-      /* Unreadable one — still queue it so the user can type it in and keep going. */
+    } else {
+      /* Unreadable by both — still queue it so the user can type it in and keep going. */
       state.batchDrafts.push({
         amount: null, merchant: "", category: "Other", scope: "Personal",
-        date: new Date().toISOString(), items: [], note: "", fromReceipt: true, _file: file
+        date: new Date().toISOString(), items: [], note: "", fromReceipt: true, _file: file, _source: "local"
       });
     }
   }
