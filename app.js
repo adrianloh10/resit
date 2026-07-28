@@ -2312,9 +2312,13 @@ async function handleImageRaced(file) {
     try { learnFromAI(parsed.rawText, cloudAi, parsed.total, parsed.merchant); } catch (e) {}
     learned = true;
   };
-  /* Merge the cloud reading (authoritative) into the open sheet, once. */
+  /* Merge the cloud reading (authoritative) into the open sheet, once. A cloud
+     result that couldn't read the receipt (failed / readable:false) contributes
+     nothing — leave the sheet and its _source="local" tag untouched so Phase
+     8's "Re-read with AI" affordance still applies to it. */
   const mergeCloudIntoSheet = () => {
-    if (mergedIntoSheet || !cloudDone || !cloudAi || !sheetOpened || !stillCurrent()) return;
+    if (mergedIntoSheet || !cloudDone || !sheetOpened || !stillCurrent()) return;
+    if (!cloudAi || !cloudUsable(cloudAi)) { mergedIntoSheet = true; return; }
     mergedIntoSheet = true;
     try {
       const merged = mergeAIResult(Object.assign({}, parsed || emptyParsed()), cloudAi);
