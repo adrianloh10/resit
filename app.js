@@ -62,8 +62,8 @@ let state = {
   expenses: [],
   budget: 3000,
   editing: null,
-  ocrCancelled: false, /* batch-scan cancellation only (scanAllInBatch) — single-scan cancellation uses cancelledScanId below, which survives a newer scan starting; this one doesn't need to */
-  cancelledScanId: 0,  /* set to state._scanSeq's value at cancel-tap time; a scan checks myId===cancelledScanId to know if it SPECIFICALLY was cancelled, immune to a later scan resetting a shared flag */
+  ocrCancelled: false, /* batch-scan cancellation only (scanAllInBatch) — single-scan cancellation uses cancelledScanIds below, which survives a newer scan starting; this one doesn't need to */
+  cancelledScanIds: new Set(), /* scan ids cancelled via the pill tap; a scan checks cancelledScanIds.has(myId) to know if it SPECIFICALLY was cancelled. A Set (not a single id) because more than one scan can be independently cancelled while still in flight — e.g. cancel scan A, then later cancel a different scan B before A's own (up to 20s) cloud read has settled; a single overwritable id would forget A was ever cancelled the moment B's cancel recorded over it */
   _scanSeq: 0,       /* monotonic id per scan — the race merges only into the scan still on screen (no duplicate-sheet / lost-scan / cross-scan clobber) */
   pendingScans: [],  /* finished scans superseded by a newer rapid-fire scan before they could paint — queued for review instead of discarded, shown as soon as the screen frees up */
   merchantCats: {},
@@ -2266,10 +2266,21 @@ async function handleImageLocalFirst(file) {
      cancel-tap trips every "if (cancelled) return"), or gets silently
      reset by whichever scan starts next, letting an explicitly-cancelled
      scan proceed anyway (and still charge the daily quota) once a second
-     one begins. myId === state.cancelledScanId only matches the scan the
-     user actually meant. */
+     one begins. state.cancelledScanIds.has(myId) only matches the scan the
+     user actually meant, and (being a Set, not a single overwritable id)
+     stays correct even if another, different scan gets cancelled afterward
+     while this one is still in flight. */
   const myId = ++state._scanSeq;
-  const cancelled = () => myId === state.cancelledScanId;
+  const cancelled = () => state.cancelledScanIds.has(myId);
+  /* Is this scan's progress still worth showing on the shared pill —
+     neither eclipsed by a newer scan NOR (this was missed the first time
+     round) explicitly cancelled. Without the cancellation half, a scan
+     whose OWN cancel-tap already hid the pill could still un-hide it the
+     next time its still-running (uncancellable) OCR pass reports progress
+     — ocr.js fires onProgress several times across real async passes,
+     each seconds apart — leaving the pill stuck forever once this scan
+     finally resolves and bails out without ever calling hideScanPill(). */
+  const stillCurrent = () => myId === state._scanSeq && !cancelled();
   /* Non-blocking read: no full-screen overlay. The ledger shows a live
      "reading" row and a small pill breathes at the bottom (tap = cancel);
      the wait never blocks looking at your expenses. Only the LATEST scan's
@@ -2281,7 +2292,7 @@ async function handleImageLocalFirst(file) {
   renderHome();
   showScanPill("Reading receipt…");
   try {
-    const parsed = await window.ReceiptOCR.scanReceipt(file, msg => { if (myId === state._scanSeq) showScanPill(msg); });
+    const parsed = await window.ReceiptOCR.scanReceipt(file, msg => { if (stillCurrent()) showScanPill(msg); });
     if (cancelled()) return;
     DB.setSetting("lastScan", parsed.rawText || "");
     applyLearnedTotalHint(parsed);
@@ -2291,7 +2302,7 @@ async function handleImageLocalFirst(file) {
     const weak = parsed.total === null || (parsed.totalConf || 0) <= 1;
     if (cloudEndpoint() && weak && state.cloudConsent !== "no") {
       {
-        if (myId === state._scanSeq) showScanPill("Reading with cloud…");
+        if (stillCurrent()) showScanPill("Reading with cloud…");
         try {
           const ai = await cloudRead(file);
           if (cancelled()) return;
@@ -2360,7 +2371,7 @@ async function handleImageRaced(file) {
   /* Is this still the scan on screen? (not cancelled, not superseded by a newer
      scan). UI-mutating steps require it; learnFromAI does not — it's
      scan-independent and always worth doing, even for a superseded scan. */
-  const stillCurrent = () => myId === state._scanSeq && myId !== state.cancelledScanId;
+  const stillCurrent = () => myId === state._scanSeq && !state.cancelledScanIds.has(myId);
   /* Superseded specifically by a NEWER scan (not this scan's own explicit
      cancel). The pill only ever shows/updates for the current scan (its
      progress callback below checks stillCurrent()), so a cancel-tap always
@@ -2449,7 +2460,7 @@ async function handleImageRaced(file) {
          still get queued/resurrected the moment anything else starts. Only
          a scan that was never cancelled and is merely eclipsed by a newer
          one is safe to queue. */
-      if (myId === state.cancelledScanId) return;
+      if (state.cancelledScanIds.has(myId)) return;
       if (supersededByNewer()) tryEnqueue(force);
       return;
     }
@@ -2550,6 +2561,15 @@ async function handleImageRaced(file) {
     if (!queued || !enqueuedDraft) return;
     const best = bestAvailable();
     if (!best) return;
+    const sheetOpen = mySheetIsOpen();
+    const stillQueued = state.pendingScans.includes(enqueuedDraft);
+    /* The draft may already be gone by the time a slower reader (cloud can
+       take up to CLOUD_HARD_CAP_MS) finally resolves — saved, discarded, or
+       evicted (evictOldestUnchargedIfFull can drop an as-yet-uncharged
+       queued draft under a large overlap). Bail BEFORE the charge check:
+       charging for a result that has nowhere left to go would silently
+       spend the user's daily scan on a receipt they'll never see. */
+    if (!sheetOpen && !stillQueued) return;
     const fresh = parsedToDraft(best.p);
     /* tryEnqueue may have queued this as a blank/weak draft (nothing usable
        yet, so nothing charged) before either reader had enough to show —
@@ -2557,7 +2577,7 @@ async function handleImageRaced(file) {
        produced something" rule the live path enforces via countIfUsable(),
        just applied on the delayed path instead of at paint time. */
     if (!charged && !isPro() && draftUsable(fresh) && scanAllowed()) { bumpScanUsed(); charged = true; }
-    if (mySheetIsOpen()) {
+    if (sheetOpen) {
       if (!painted) return;   /* __markShown hasn't fired yet (shouldn't happen if mySheetIsOpen(), but stay safe) */
       /* applyCloudToOpenSheet only touches the DOM-bound fields (amount/
          merchant/category/date/items) — restore _rawText here too, same as
@@ -2568,9 +2588,7 @@ async function handleImageRaced(file) {
       try { applyCloudToOpenSheet(myId, fresh, painted); } catch (e) {}
       return;
     }
-    if (state.pendingScans.includes(enqueuedDraft)) {
-      Object.assign(enqueuedDraft, fresh, { _file: file, _scanId: myId, _source: best.source, _charged: charged });
-    }
+    Object.assign(enqueuedDraft, fresh, { _file: file, _scanId: myId, _source: best.source, _charged: charged });
   };
 
   /* Cloud read — fired concurrently with local below. Bounded by a generous
@@ -3756,7 +3774,7 @@ async function init() {
     const p = $("scan-pill");
     if (!state.scanning || (p && p.classList.contains("done"))) return;
     state.ocrCancelled = true;         /* stops an in-progress batch read (scanAllInBatch) */
-    state.cancelledScanId = state._scanSeq;  /* stops specifically the scan currently on the pill (handleImageRaced/handleImageLocalFirst) */
+    state.cancelledScanIds.add(state._scanSeq);  /* stops specifically the scan currently on the pill (handleImageRaced/handleImageLocalFirst) */
     state.scanning = false;
     hideScanPill();
     renderHome();
