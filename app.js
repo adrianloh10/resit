@@ -2304,6 +2304,14 @@ async function handleImageRaced(file) {
      never queued or charged. Only a scan actually eclipsed by a later one is
      safe to resurrect. */
   const supersededByNewer = () => myId !== state._scanSeq;
+  /* Is there actually nowhere else this result needs to go? A scan can be
+     current (not superseded) and STILL have no free screen to paint into —
+     e.g. an earlier scan from the same overlap already painted and its
+     sheet is still open, or Pro batch mode owns the screen. Painting over
+     that would silently replace whatever's already showing with zero
+     warning — the same class of loss tryEnqueue was built to prevent, just
+     for the "current" scan instead of a superseded one. */
+  const screenFree = () => !state.editing && !state.batchMode;
   const sheetUsable = () => {
     if (!sheetOpened) return false;
     const amt = $("confirm-amount") ? $("confirm-amount").value.trim() : "";
@@ -2384,6 +2392,7 @@ async function handleImageRaced(file) {
       if (supersededByNewer()) tryEnqueue(force);
       return;
     }
+    if (!screenFree()) { tryEnqueue(force); return; }
     if (cloudDone && cloudUsable(cloudAi)) {
       painting = true;
       paintedWithoutLocal = !parsed;   /* cloud won the race before local finished — reconcile local's rawText + cloud-null fields when it lands */
@@ -2405,12 +2414,17 @@ async function handleImageRaced(file) {
     mergeCloudIntoSheet();   /* if cloud is already in, merge it now */
     settlePill();
   };
-  /* Superseded by a newer scan (rapid-fire) before this one had anything to
-     show: don't discard the receipt — queue the same-quality result (cloud
-     preferred, else local, else forced-local after the timeout) for review
-     the moment the screen frees up, instead of silently losing it. A cloud
-     result that lands AFTER this point (only possible if this scan forced a
-     local-only queue before its own cloud read finished) is not folded in —
+  /* Called for two distinct reasons — tryPaint routes both here:
+     (a) superseded by a newer scan (rapid-fire) before this one had
+         anything to show, or
+     (b) still current, but the screen isn't free (an earlier scan from the
+         same overlap already painted its own sheet, or batch mode owns it).
+     Either way: don't discard the receipt or silently overwrite what's on
+     screen — queue the same-quality result (cloud preferred, else local,
+     else forced-local after the timeout) for review the moment the screen
+     frees up. A cloud result that lands AFTER this point (only possible if
+     this scan forced a local-only queue before its own cloud read finished)
+     is not folded in —
      the queued draft simply keeps its local-source value, same as the
      pre-Phase-5 behaviour; learnFromCloud() still fires independently either
      way so the learning signal isn't lost. */
@@ -2445,6 +2459,16 @@ async function handleImageRaced(file) {
       state.pendingScans.shift();   /* drop the oldest rather than grow unbounded */
     }
     state.pendingScans.push(draft);
+    /* If this scan is still current (queued only because the screen was
+       occupied, not because a newer scan superseded it), nothing else will
+       ever clear its own scanning flag/pill — a superseded scan's flag
+       belongs to whichever newer scan is now current and must NOT be
+       touched here. */
+    if (stillCurrent()) {
+      state.scanning = false;
+      renderHome();
+      hideScanPill();
+    }
     showNextPendingScan();
   };
 
