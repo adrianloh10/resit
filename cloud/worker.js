@@ -12,10 +12,11 @@
  *   FALLBACK_API_KEY   — optional; enables the failover reader
  *   TURNSTILE_SECRET   — optional; if set, requests must carry a valid token
  *   PRO_UNLOCK         — master code; gates /mint and /revoke
- * Vars (wrangler.toml): ALLOW_ORIGINS, DAILY_CAP, GEMINI_MODEL,
- *   FALLBACK_URL, FALLBACK_MODEL (OpenAI-compatible provider serving an open
- *   vision model, e.g. DeepInfra/Together/OpenRouter + Qwen-VL).
- * Binding: DB (D1) — optional; if absent, quota is skipped.
+ * Vars (wrangler.toml): ALLOW_ORIGINS, DAILY_CAP, RATE_LIMIT_PER_MIN,
+ *   GEMINI_MODEL, FALLBACK_URL, FALLBACK_MODEL (OpenAI-compatible provider
+ *   serving an open vision model, e.g. DeepInfra/Together/OpenRouter + Qwen-VL).
+ * Binding: DB (D1) — optional; if absent, both the daily quota and the
+ *   per-minute rate limit are skipped (fail-open, same as the original quota).
  *
  * Reading is provider-agnostic: Gemini is tried first; on ANY failure
  * (outage, quota, key problem, junk output) the request fails over to the
@@ -270,6 +271,37 @@ async function bumpQuota(db, deviceId) {
     "INSERT INTO device_quota(device_id, day, count) VALUES(?1, ?2, 1) " +
     "ON CONFLICT(device_id, day) DO UPDATE SET count = count + 1"
   ).bind(deviceId, day).run();
+}
+
+/* Per-device burst guard (Phase 17): a fixed-window per-minute counter,
+   independent of the daily cost cap above — protects against a rapid-fire
+   burst hammering the provider regardless of whether the daily count would
+   still allow it. Charged on every attempt that reaches this point (not
+   just successful reads), unlike the daily quota, since the point is
+   request RATE, not cost. Table is lazily created (same "no migration
+   ever needed" reasoning as license_keys/shared_rules) rather than added to
+   schema.sql, since device_quota's one-time-manual-apply is the exception
+   here, not the rule. */
+async function ensureRateTable(db) {
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS device_rate (device_id TEXT NOT NULL, minute_bucket INTEGER NOT NULL, count INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(device_id, minute_bucket))"
+  ).run();
+}
+async function rateLimited(db, deviceId, cap) {
+  const minute = Math.floor(Date.now() / 60000);
+  const row = await db.prepare("SELECT count FROM device_rate WHERE device_id=?1 AND minute_bucket=?2").bind(deviceId, minute).first();
+  return (row ? row.count : 0) >= cap;
+}
+async function bumpRate(db, deviceId) {
+  const minute = Math.floor(Date.now() / 60000);
+  await db.prepare(
+    "INSERT INTO device_rate(device_id, minute_bucket, count) VALUES(?1, ?2, 1) " +
+    "ON CONFLICT(device_id, minute_bucket) DO UPDATE SET count = count + 1"
+  ).bind(deviceId, minute).run();
+  /* Opportunistic sweep so the table can't grow unbounded — cheap (a handful
+     of stale rows at most) since it only ever deletes buckets a couple of
+     minutes old, run inline so no separate cron/cleanup job is needed. */
+  await db.prepare("DELETE FROM device_rate WHERE minute_bucket < ?1").bind(minute - 2).run();
 }
 
 /* Constant-time string compare so a === short-circuit can't leak the secret
@@ -547,10 +579,22 @@ export default {
       const ip = request.headers.get("CF-Connecting-IP") || "noip";
       const key = (deviceId && typeof deviceId === "string" && deviceId.trim())
         ? "d:" + deviceId.slice(0, 64) : "ip:" + ip.slice(0, 64);
-      const cap = parseInt(env.DAILY_CAP || "20", 10);
+      /* Rate limit first (cheap burst guard, checked before the cost-tracking
+         daily cap): a device tripping this recovers within a minute, so it
+         gets its own `code` — the app stays silent on this one rather than
+         showing the daily "resumes tomorrow" notice for a transient block. */
+      const rateCap = parseInt(env.RATE_LIMIT_PER_MIN || "10", 10);
+      try {
+        await ensureRateTable(env.DB);
+        if (await rateLimited(env.DB, key, rateCap))
+          return json({ error: "Reading too fast — reading on-device for a moment", code: "rate_limited" }, 429, cors);
+        await bumpRate(env.DB, key);
+      } catch (e) { /* rate table missing/erroring must not block reading */ }
+
+      const cap = parseInt(env.DAILY_CAP || "30", 10);
       try {
         if (await quotaExceeded(env.DB, key, cap))
-          return json({ error: "Daily limit reached — read on-device or enter it manually" }, 429, cors);
+          return json({ error: "Daily limit reached — read on-device or enter it manually", code: "daily_cap" }, 429, cors);
         quota = { db: env.DB, id: key };
       } catch (e) { /* quota table missing/erroring must not block reading */ }
     }

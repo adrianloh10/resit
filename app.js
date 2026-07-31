@@ -95,6 +95,7 @@ let state = {
   lastRuleUpload: 0, /* ISO timestamp of the last successful /rules upload (weekly cadence) */
   scanDay: "",       /* local "YYYY-MM-DD" the free scan counter belongs to */
   scanCount: 0,      /* scanned receipts used today (free tier: 1/day) */
+  quotaNoticeDay: "", /* local "YYYY-MM-DD" the fair-use "AI reads used up" notice was last shown (Phase 17: at most once/day) */
   lastBackupAt: null,
   backupNudgeSnooze: "",
   licenseKey: "",
@@ -1751,6 +1752,23 @@ function fileToThumb(file, maxDim) {
   return loadScaledJpeg(file, maxDim, 0.6);
 }
 
+/* Phase 17 (fair-use caps): the Worker's daily cap declines a read once in a
+   while; the race already falls back to the on-device result on its own, so
+   this is just reassurance, not an error — shown at most once per LOCAL day
+   (not once per receipt: a batch or a rapid-fire burst of raced scans could
+   otherwise all decline within the same minute and each try to toast). The
+   per-minute rate-limit decline deliberately does NOT come through here (see
+   cloudRead) — it clears within a minute, so "AI resumes tomorrow" would be
+   wrong, and the existing silent on-device fallback is the right behavior
+   for it. */
+function noteCloudQuotaDecline() {
+  const today = todayKey();
+  if (state.quotaNoticeDay === today) return;
+  state.quotaNoticeDay = today;
+  DB.setSetting("quotaNoticeDay", today);
+  toast("Today's AI reads are used — reading on-device; AI resumes tomorrow");
+}
+
 /* Cloud reading: send the photo to the relay (Cloudflare Worker, or an old
    Vercel relay if an access code is set). Returns the same shape the on-device
    parser uses, so mergeAIResult() handles both. Nothing is stored server-side. */
@@ -1769,7 +1787,15 @@ async function cloudRead(file, signal) {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Cloud reading failed");
+    /* Phase 17: the Worker declines a read at 429 for two reasons — the
+       daily fair-use cap (recovers tomorrow) or a per-minute burst guard
+       (recovers within a minute); `code` distinguishes them so only the
+       daily one surfaces a notice. */
+    if (res.status === 429 && body.code === "daily_cap") noteCloudQuotaDecline();
+    const err = new Error(body.error || "Cloud reading failed");
+    err.status = res.status;
+    err.code = body.code;
+    throw err;
   }
   return res.json();
 }
@@ -2310,7 +2336,10 @@ async function handleImageLocalFirst(file) {
           mergeAIResult(parsed, ai);
           if (ai && ai.readable !== false) source = "cloud";
         } catch (err) {
-          toast(err.message || "Cloud reading failed");
+          /* A 429 decline already surfaced its own notice (or, for the
+             per-minute rate limit, deliberately stays silent) inside
+             cloudRead — don't also show the raw server message here. */
+          if (err.status !== 429) toast(err.message || "Cloud reading failed");
         }
       }
     }
@@ -3444,6 +3473,7 @@ async function init() {
     state.pro = await DB.getSetting("pro", false);
     state.scanDay = await DB.getSetting("scanDay", "");
     state.scanCount = await DB.getSetting("scanCount", 0);
+    state.quotaNoticeDay = await DB.getSetting("quotaNoticeDay", "");
     state.lastBackupAt = await DB.getSetting("lastBackupAt", null);
     state.backupNudgeSnooze = await DB.getSetting("backupNudgeSnooze", "");
     state.licenseKey = await DB.getSetting("licenseKey", "");

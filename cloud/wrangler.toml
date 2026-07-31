@@ -14,7 +14,11 @@ database_id = "cc890234-c8a9-4a5d-ace5-1d097c7015ed"
 # Origins allowed to call the reader: web app + native (Capacitor) shells.
 ALLOW_ORIGINS = "https://adrianloh10.github.io,http://localhost:8902,https://localhost,http://localhost,capacitor://localhost,ionic://localhost"
 # Max receipts one device may read per day via the cloud (protects the free quota).
-DAILY_CAP = "20"
+# Raised 20->30 (Phase 17, Adrian's numbers 29 Jul 2026).
+DAILY_CAP = "30"
+# Per-device burst guard: at most this many /read attempts per rolling minute,
+# independent of the daily cap above (Phase 17).
+RATE_LIMIT_PER_MIN = "10"
 # Gemini model. flash-lite = cheapest tier. Google's whole 2.5 generation
 # (flash + flash-lite) returns 404 "no longer available to new users" for
 # this project regardless of the model's own docs-listed shutdown date --
