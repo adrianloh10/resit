@@ -62,7 +62,8 @@ let state = {
   expenses: [],
   budget: 3000,
   editing: null,
-  ocrCancelled: false,
+  ocrCancelled: false, /* batch-scan cancellation only (scanAllInBatch) — single-scan cancellation uses cancelledScanId below, which survives a newer scan starting; this one doesn't need to */
+  cancelledScanId: 0,  /* set to state._scanSeq's value at cancel-tap time; a scan checks myId===cancelledScanId to know if it SPECIFICALLY was cancelled, immune to a later scan resetting a shared flag */
   _scanSeq: 0,       /* monotonic id per scan — the race merges only into the scan still on screen (no duplicate-sheet / lost-scan / cross-scan clobber) */
   pendingScans: [],  /* finished scans superseded by a newer rapid-fire scan before they could paint — queued for review instead of discarded, shown as soon as the screen frees up */
   merchantCats: {},
@@ -1864,12 +1865,23 @@ function anyOtherOverlayOpen() {
 function screenFree() {
   return !state.editing && !state.batchMode && !anyOtherOverlayOpen();
 }
+/* Keep the queue's soft cap without evicting a draft that already spent the
+   user's daily free scan. Drops the oldest UNcharged entry; if every queued
+   draft happens to be charged (only possible with a genuinely large
+   overlapping burst), lets the queue grow past MAX_PENDING_SCANS by one
+   rather than silently discarding a receipt the user already paid for with
+   no refund path. */
+function evictOldestUnchargedIfFull(queue) {
+  if (queue.length < MAX_PENDING_SCANS) return;
+  const idx = queue.findIndex(d => !d._charged);
+  if (idx !== -1) queue.splice(idx, 1);
+}
 /* Open a finished draft normally if the screen is free, otherwise queue it
    (same fallback every scan path uses) rather than silently overwriting
    whatever's already on screen. */
 function openOrQueueDraft(draft) {
   if (screenFree()) { openConfirmSheet(draft); return; }
-  if (state.pendingScans.length >= MAX_PENDING_SCANS) state.pendingScans.shift();
+  evictOldestUnchargedIfFull(state.pendingScans);
   state.pendingScans.push(draft);
   showNextPendingScan();
 }
@@ -2245,17 +2257,32 @@ async function handleImage(file) {
    when the on-device result is weak/empty. Runs when cloudFirst is off, the
    device is offline, or cloud reading is switched off. */
 async function handleImageLocalFirst(file) {
-  state.ocrCancelled = false;
+  /* Per-scan id, same monotonic counter handleImageRaced uses. Needed
+     because this function has no supersede/queue awareness of its own —
+     two overlapping calls (e.g. cloud off, user scans twice quickly) run
+     fully independently. Without an id, cancellation below would target
+     ANY in-flight scan rather than specifically this one: a shared
+     boolean flag either discards every overlapping scan at once (one
+     cancel-tap trips every "if (cancelled) return"), or gets silently
+     reset by whichever scan starts next, letting an explicitly-cancelled
+     scan proceed anyway (and still charge the daily quota) once a second
+     one begins. myId === state.cancelledScanId only matches the scan the
+     user actually meant. */
+  const myId = ++state._scanSeq;
+  const cancelled = () => myId === state.cancelledScanId;
   /* Non-blocking read: no full-screen overlay. The ledger shows a live
      "reading" row and a small pill breathes at the bottom (tap = cancel);
-     the wait never blocks looking at your expenses. */
+     the wait never blocks looking at your expenses. Only the LATEST scan's
+     progress touches the shared pill text, same discipline as
+     handleImageRaced, so two overlapping reads can't stomp each other's
+     message. */
   state.scanning = true;
   switchView("home");
   renderHome();
   showScanPill("Reading receipt…");
   try {
-    const parsed = await window.ReceiptOCR.scanReceipt(file, msg => showScanPill(msg));
-    if (state.ocrCancelled) return;
+    const parsed = await window.ReceiptOCR.scanReceipt(file, msg => { if (myId === state._scanSeq) showScanPill(msg); });
+    if (cancelled()) return;
     DB.setSetting("lastScan", parsed.rawText || "");
     applyLearnedTotalHint(parsed);
     let source = "local";
@@ -2264,10 +2291,10 @@ async function handleImageLocalFirst(file) {
     const weak = parsed.total === null || (parsed.totalConf || 0) <= 1;
     if (cloudEndpoint() && weak && state.cloudConsent !== "no") {
       {
-        showScanPill("Reading with cloud…");
+        if (myId === state._scanSeq) showScanPill("Reading with cloud…");
         try {
           const ai = await cloudRead(file);
-          if (state.ocrCancelled) return;
+          if (cancelled()) return;
           learnFromAI(parsed.rawText, ai, parsed.total, parsed.merchant);
           mergeAIResult(parsed, ai);
           if (ai && ai.readable !== false) source = "cloud";
@@ -2276,7 +2303,7 @@ async function handleImageLocalFirst(file) {
         }
       }
     }
-    if (state.ocrCancelled) return;
+    if (cancelled()) return;
     state.scanning = false;
     renderHome();
     const usable = !!(parsed.total || parsed.merchant || (parsed.items && parsed.items.length));
@@ -2291,13 +2318,15 @@ async function handleImageLocalFirst(file) {
        scanAllowed() (not just isPro()) for the same reason handleImageRaced
        does: an overlapping scan elsewhere may already have spent today's
        read by the time this one gets here. */
-    if (usable && !isPro() && scanAllowed()) await bumpScanUsed();
+    let charged = false;
+    if (usable && !isPro() && scanAllowed()) { await bumpScanUsed(); charged = true; }
     const draft = parsedToDraft(parsed);
     draft._file = file;
     draft._source = source;
+    draft._charged = charged;
     openOrQueueDraft(draft);
   } catch (err) {
-    if (state.ocrCancelled) return;
+    if (cancelled()) return;
     state.scanning = false;
     hideScanPill();
     renderHome();
@@ -2319,7 +2348,6 @@ async function handleImageLocalFirst(file) {
    sheet (no duplicate-sheet / lost-scan / cross-scan clobber). */
 async function handleImageRaced(file) {
   const myId = ++state._scanSeq;
-  state.ocrCancelled = false;
   state.scanning = true;
   switchView("home");
   renderHome();
@@ -2332,7 +2360,7 @@ async function handleImageRaced(file) {
   /* Is this still the scan on screen? (not cancelled, not superseded by a newer
      scan). UI-mutating steps require it; learnFromAI does not — it's
      scan-independent and always worth doing, even for a superseded scan. */
-  const stillCurrent = () => myId === state._scanSeq && !state.ocrCancelled;
+  const stillCurrent = () => myId === state._scanSeq && myId !== state.cancelledScanId;
   /* Superseded specifically by a NEWER scan (not this scan's own explicit
      cancel). The pill only ever shows/updates for the current scan (its
      progress callback below checks stillCurrent()), so a cancel-tap always
@@ -2414,9 +2442,14 @@ async function handleImageRaced(file) {
   const tryPaint = (force) => {
     if (painting || sheetOpened || queued) return;
     if (!stillCurrent()) {
-      /* Eclipsed by a newer scan → queue it (see tryEnqueue). Cancelled by
-         the user (this exact scan, no newer one) → true dead end, same as
-         pre-Phase-5: no sheet, no queue, no quota charge. */
+      /* Cancelled by the user → true dead end, same as pre-Phase-5: no
+         sheet, no queue, no quota charge — checked FIRST and unconditionally,
+         because a newer scan starting afterward also makes
+         supersededByNewer() true; without this order a cancelled scan would
+         still get queued/resurrected the moment anything else starts. Only
+         a scan that was never cancelled and is merely eclipsed by a newer
+         one is safe to queue. */
+      if (myId === state.cancelledScanId) return;
       if (supersededByNewer()) tryEnqueue(force);
       return;
     }
@@ -2455,6 +2488,7 @@ async function handleImageRaced(file) {
      once superseded even after that draft has been shown via the queue. */
   const mySheetIsOpen = () => !!state.editing && state.editing._scanId === myId;
   let enqueuedDraft = null;
+  let charged = false;
   /* Called for two distinct reasons — tryPaint routes both here:
      (a) superseded by a newer scan (rapid-fire) before this one had
          anything to show, or
@@ -2489,10 +2523,9 @@ async function handleImageRaced(file) {
        counter, letting a quick double-tap burn more than a day's
        allowance. The read already happened either way — not charging a
        second time here just avoids double-billing the user for it. */
-    if (!isPro() && draftUsable(draft) && scanAllowed()) bumpScanUsed();
-    if (state.pendingScans.length >= MAX_PENDING_SCANS) {
-      state.pendingScans.shift();   /* drop the oldest rather than grow unbounded */
-    }
+    if (!isPro() && draftUsable(draft) && scanAllowed()) { bumpScanUsed(); charged = true; }
+    draft._charged = charged;
+    evictOldestUnchargedIfFull(state.pendingScans);
     state.pendingScans.push(draft);
     /* If this scan is still current (queued only because the screen was
        occupied, not because a newer scan superseded it), nothing else will
@@ -2517,14 +2550,26 @@ async function handleImageRaced(file) {
     if (!queued || !enqueuedDraft) return;
     const best = bestAvailable();
     if (!best) return;
+    const fresh = parsedToDraft(best.p);
+    /* tryEnqueue may have queued this as a blank/weak draft (nothing usable
+       yet, so nothing charged) before either reader had enough to show —
+       if THIS reader now makes it usable, charge now. Same "a read that
+       produced something" rule the live path enforces via countIfUsable(),
+       just applied on the delayed path instead of at paint time. */
+    if (!charged && !isPro() && draftUsable(fresh) && scanAllowed()) { bumpScanUsed(); charged = true; }
     if (mySheetIsOpen()) {
       if (!painted) return;   /* __markShown hasn't fired yet (shouldn't happen if mySheetIsOpen(), but stay safe) */
-      try { applyCloudToOpenSheet(myId, parsedToDraft(best.p), painted); } catch (e) {}
+      /* applyCloudToOpenSheet only touches the DOM-bound fields (amount/
+         merchant/category/date/items) — restore _rawText here too, same as
+         reconcileLocalIntoCloudSheet does for the direct-paint path, so a
+         later user total-correction can still be learned from. */
+      if (!state.editing._rawText && fresh._rawText) state.editing._rawText = fresh._rawText;
+      state.editing._charged = charged;
+      try { applyCloudToOpenSheet(myId, fresh, painted); } catch (e) {}
       return;
     }
     if (state.pendingScans.includes(enqueuedDraft)) {
-      const fresh = parsedToDraft(best.p);
-      Object.assign(enqueuedDraft, fresh, { _file: file, _scanId: myId, _source: best.source });
+      Object.assign(enqueuedDraft, fresh, { _file: file, _scanId: myId, _source: best.source, _charged: charged });
     }
   };
 
@@ -3710,7 +3755,8 @@ async function init() {
   on("scan-pill", () => {
     const p = $("scan-pill");
     if (!state.scanning || (p && p.classList.contains("done"))) return;
-    state.ocrCancelled = true;
+    state.ocrCancelled = true;         /* stops an in-progress batch read (scanAllInBatch) */
+    state.cancelledScanId = state._scanSeq;  /* stops specifically the scan currently on the pill (handleImageRaced/handleImageLocalFirst) */
     state.scanning = false;
     hideScanPill();
     renderHome();
