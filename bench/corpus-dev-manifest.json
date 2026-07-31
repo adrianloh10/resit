@@ -1,0 +1,4013 @@
+{
+  "dataset": "corpus-dev",
+  "purpose": "Sweep-selection set (Phase 15b step 2) -- tune/select thresholds here, never on corpus-eval.",
+  "note": "Metadata only (filenames+sha1+truth) -- NO images committed. Images live in bench-corpus/<source>/ or bench-sroie/raw/img/ (both LOCAL-ONLY, outside this git repo, never committed). Frozen 2026-07-31 (Phase 15a); re-running build-splits.py against unchanged bench-corpus/ contents reproduces this file byte-for-byte (deterministic sha1-sort stratified split, no RNG).",
+  "count": 500,
+  "sourceCounts": {
+    "sroie-overflow": 54,
+    "cord": 163,
+    "wildreceipt": 283
+  },
+  "entries": [
+    {
+      "id": "wildreceipt-a1c82716a38f4195161f44330ede9c587ef9b0de",
+      "img": "bench-corpus/wildreceipt/a1c82716a38f4195161f44330ede9c587ef9b0de.jpeg",
+      "sha1": "54de97ca45172a9cf3efb638a6bb7ac0e73834ba",
+      "merchant": "BRUCESHOMECENTER",
+      "total": "1.38",
+      "date": "02-05-1999FRI"
+    },
+    {
+      "id": "cord-cord_train_0123",
+      "img": "bench-corpus/cord/cord_train_0123.png",
+      "sha1": "54f0bc7b3fed0699bf9225f2ad657c75d3b52765",
+      "merchant": null,
+      "total": "32,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-af3eb5099f48c24b31af5f7b3b776391473c5a9d",
+      "img": "bench-corpus/wildreceipt/af3eb5099f48c24b31af5f7b3b776391473c5a9d.jpeg",
+      "sha1": "550c2cd8d2f63e6f502da539b91a06f80ce0d496",
+      "merchant": "HogIslandOysterCo.",
+      "total": "131.08",
+      "date": "01/24/2015"
+    },
+    {
+      "id": "wildreceipt-4237dd949927d1d3a386869a419476bd5a1028e9",
+      "img": "bench-corpus/wildreceipt/4237dd949927d1d3a386869a419476bd5a1028e9.jpeg",
+      "sha1": "550d1c8e3c55007e6d8669abd6ed7700418d2434",
+      "merchant": "IN-N-OUTBURGERSANTACLARA",
+      "total": "$4.40",
+      "date": "2015-01-16"
+    },
+    {
+      "id": "wildreceipt-28282222ba1194d4d8603b0f3e8c001c40350e08",
+      "img": "bench-corpus/wildreceipt/28282222ba1194d4d8603b0f3e8c001c40350e08.jpeg",
+      "sha1": "55242c9346054e41b6339d927e5157c7cbfe85ce",
+      "merchant": "Cane's",
+      "total": "32.38",
+      "date": "Apr04\u201914"
+    },
+    {
+      "id": "wildreceipt-224f253bd994f956ebeefcab2c67aa46b1c2d53d",
+      "img": "bench-corpus/wildreceipt/224f253bd994f956ebeefcab2c67aa46b1c2d53d.jpeg",
+      "sha1": "55528e637f2628e46eb6867aec5d793d51f027ea",
+      "merchant": "Lynnwood#1190",
+      "total": "$110.81",
+      "date": "04/13/2017"
+    },
+    {
+      "id": "cord-cord_test_0090",
+      "img": "bench-corpus/cord/cord_test_0090.png",
+      "sha1": "5578d90f97379bfc6782ce14b7555b81f6217cd6",
+      "merchant": null,
+      "total": "29,500",
+      "date": null
+    },
+    {
+      "id": "sroie-306",
+      "img": "bench-sroie/raw/img/306.jpg",
+      "sha1": "55821b246d20ac3e5c54805fd4b6769e366badf9",
+      "merchant": "THE TOAST F&B SDN BHD",
+      "total": "18.90",
+      "date": "08/04/2018"
+    },
+    {
+      "id": "wildreceipt-8d69e6181fc8a3019229850cf040e2708b477271",
+      "img": "bench-corpus/wildreceipt/8d69e6181fc8a3019229850cf040e2708b477271.jpeg",
+      "sha1": "5592571aac7fac8cc3605a44be2c67c244f954e0",
+      "merchant": "GRISTEDES",
+      "total": "23.20",
+      "date": "12/08/13"
+    },
+    {
+      "id": "cord-cord_train_0541",
+      "img": "bench-corpus/cord/cord_train_0541.png",
+      "sha1": "55a18b928e1ce9f771f0c47774c5cb51fbe1e733",
+      "merchant": null,
+      "total": "30000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0450",
+      "img": "bench-corpus/cord/cord_train_0450.png",
+      "sha1": "55a2609a62529dc3f9a7bba5abb38a675fceff2e",
+      "merchant": null,
+      "total": "21,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-e1e433cb0248593a224537d0be401c7d4734fef1",
+      "img": "bench-corpus/wildreceipt/e1e433cb0248593a224537d0be401c7d4734fef1.jpeg",
+      "sha1": "55ca6ebdb0b6ddb0b9ed353fb7f4fe805198da7a",
+      "merchant": "CostcoWholesale#243",
+      "total": "50.00",
+      "date": "6/04/2014"
+    },
+    {
+      "id": "wildreceipt-de782d9aa5d491d9e5e52410e090c4adbf05d979",
+      "img": "bench-corpus/wildreceipt/de782d9aa5d491d9e5e52410e090c4adbf05d979.jpeg",
+      "sha1": "55d5abc2a94afa60dbe0626e7640c6eb090cc021",
+      "merchant": "MAC'S",
+      "total": null,
+      "date": "29May2018"
+    },
+    {
+      "id": "wildreceipt-fff1fab1f4f66d8c47d1847ae54f6c37b3115ae9",
+      "img": "bench-corpus/wildreceipt/fff1fab1f4f66d8c47d1847ae54f6c37b3115ae9.jpeg",
+      "sha1": "55d8004de5e0027fc59e4a2e6b15b6e7351b5cbf",
+      "merchant": "SHELLCANADAPRODUCTS",
+      "total": null,
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0454",
+      "img": "bench-corpus/cord/cord_train_0454.png",
+      "sha1": "55eacbc81122745da3cdd6fb7e787890dd672cb7",
+      "merchant": null,
+      "total": "45,000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0425",
+      "img": "bench-corpus/cord/cord_train_0425.png",
+      "sha1": "55fc603bc7522ad42de6c17af39f92d114f2f33d",
+      "merchant": null,
+      "total": "135,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-3455",
+      "img": "bench-corpus/wildreceipt/3455.jpeg",
+      "sha1": "560ed5816e45095576ac747a6bedd5971dca4106",
+      "merchant": "PYT",
+      "total": "$61.56",
+      "date": "9/8/2014"
+    },
+    {
+      "id": "wildreceipt-5b3fc8cafe1b673f637dcac89c96e56ce4c8e6cb",
+      "img": "bench-corpus/wildreceipt/5b3fc8cafe1b673f637dcac89c96e56ce4c8e6cb.jpeg",
+      "sha1": "563a2dbe676cc23a20b2c4d1f5f1eb98bac2147b",
+      "merchant": "BORDERS\u00ae BORDERS",
+      "total": "10.76",
+      "date": "01/07/2008"
+    },
+    {
+      "id": "sroie-454",
+      "img": "bench-sroie/raw/img/454.jpg",
+      "sha1": "564812e9091780b328159d1121cbbab963c13f77",
+      "merchant": "ENW HARDWARE CENTRE (M) SDN. BHD.",
+      "total": "27.00",
+      "date": "13/04/2018"
+    },
+    {
+      "id": "cord-cord_train_0529",
+      "img": "bench-corpus/cord/cord_train_0529.png",
+      "sha1": "565c0f718d66ae35cd2758bafc715caace6f702a",
+      "merchant": null,
+      "total": "80,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-e276527f8ad2bcc744d41a9dec507d5698ab7ef9",
+      "img": "bench-corpus/wildreceipt/e276527f8ad2bcc744d41a9dec507d5698ab7ef9.jpeg",
+      "sha1": "56981402378b7c54636d4eeb0a631a9836e78374",
+      "merchant": null,
+      "total": "$28.59",
+      "date": "l/21/2018"
+    },
+    {
+      "id": "cord-cord_validation_0089",
+      "img": "bench-corpus/cord/cord_validation_0089.png",
+      "sha1": "56d0d4816ad3d85d9a35821eadf31295dc54899f",
+      "merchant": null,
+      "total": "29.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0718",
+      "img": "bench-corpus/cord/cord_train_0718.png",
+      "sha1": "56dcf784e08307b41bf3b650b39aebc1f952dd9d",
+      "merchant": null,
+      "total": "364,716",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0455",
+      "img": "bench-corpus/cord/cord_train_0455.png",
+      "sha1": "56ffac64e681d77c6891262455f688cb21d0017d",
+      "merchant": null,
+      "total": "70.599",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-296f42bfafc1219f27591fed66cf78db02700e89",
+      "img": "bench-corpus/wildreceipt/296f42bfafc1219f27591fed66cf78db02700e89.jpeg",
+      "sha1": "574c12f87b3b158e7fb370be8024b137ac8b4e39",
+      "merchant": "DAIKO",
+      "total": "58.95",
+      "date": "04/15/17"
+    },
+    {
+      "id": "cord-cord_train_0761",
+      "img": "bench-corpus/cord/cord_train_0761.png",
+      "sha1": "57839875dbb71e8fc63a5faf0710e8f6a3d8bf1f",
+      "merchant": null,
+      "total": "65.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-8258ab01b293fd05bb1cc3308b877870e4113d79",
+      "img": "bench-corpus/wildreceipt/8258ab01b293fd05bb1cc3308b877870e4113d79.jpeg",
+      "sha1": "578ab65cb391029f0b9ce81340c9b0d89d43fa57",
+      "merchant": "Walmart",
+      "total": "102.10",
+      "date": "12/04/09"
+    },
+    {
+      "id": "wildreceipt-1c8f4b6b8b35f4211df8835725b82ded4d87d7b9",
+      "img": "bench-corpus/wildreceipt/1c8f4b6b8b35f4211df8835725b82ded4d87d7b9.jpeg",
+      "sha1": "57ba35e959c6b7b676d4e1bcf9ea2e7eeed8870a",
+      "merchant": "BATHURSTST.POSTSHOP",
+      "total": "$5.00",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-3cc5c60f8ca5a1be6c9646275311039d32a204d2",
+      "img": "bench-corpus/wildreceipt/3cc5c60f8ca5a1be6c9646275311039d32a204d2.jpeg",
+      "sha1": "57bbc7c45eebd75d1f9a9be926d58b8db16f431b",
+      "merchant": "BLENDCAFE",
+      "total": "$60.48",
+      "date": "06-Feb-2016"
+    },
+    {
+      "id": "cord-cord_validation_0045",
+      "img": "bench-corpus/cord/cord_validation_0045.png",
+      "sha1": "57f2e7e4aed9136fd32b01f2cf029216ea66c10a",
+      "merchant": null,
+      "total": "287,760",
+      "date": null
+    },
+    {
+      "id": "cord-cord_test_0051",
+      "img": "bench-corpus/cord/cord_test_0051.png",
+      "sha1": "5805f28c269fba33ffcc0933775914cb0bceb4e7",
+      "merchant": null,
+      "total": "334,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-95b26fc6e8c969335fa86e4a2709e8ac6ff317df",
+      "img": "bench-corpus/wildreceipt/95b26fc6e8c969335fa86e4a2709e8ac6ff317df.jpeg",
+      "sha1": "5806beba127e74e69b6260ea959c795b4c991b1f",
+      "merchant": "Walmart",
+      "total": "20.80",
+      "date": "10/07/14"
+    },
+    {
+      "id": "wildreceipt-9a84b939d659b3d10674609df78319bed18308b7",
+      "img": "bench-corpus/wildreceipt/9a84b939d659b3d10674609df78319bed18308b7.jpeg",
+      "sha1": "58170c6cbe993ceda28bcb9c900a37049f1000e6",
+      "merchant": "IKEA IKEAFOOD",
+      "total": "2.00",
+      "date": "08/04/2016"
+    },
+    {
+      "id": "wildreceipt-ec08503881eb039af7f5909122dc4ca1e7970167",
+      "img": "bench-corpus/wildreceipt/ec08503881eb039af7f5909122dc4ca1e7970167.jpeg",
+      "sha1": "5818d30de90489b6dccd1267fcbec0d7d382ca62",
+      "merchant": "&&&404&&&",
+      "total": "$28.47",
+      "date": "21JAN'17"
+    },
+    {
+      "id": "wildreceipt-1a7d0fc850a4f599b5d828acec124178f8e2be90",
+      "img": "bench-corpus/wildreceipt/1a7d0fc850a4f599b5d828acec124178f8e2be90.jpeg",
+      "sha1": "5832a36979da4edc75dc9214f8ac182680ce2106",
+      "merchant": null,
+      "total": "$15.49",
+      "date": "6/20/2017"
+    },
+    {
+      "id": "cord-cord_train_0049",
+      "img": "bench-corpus/cord/cord_train_0049.png",
+      "sha1": "5833fab249152a5519bc803b1535c8a003fcb94a",
+      "merchant": null,
+      "total": "29,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-952eb692fc85176a6a2b2b4233760d8e6762d97a",
+      "img": "bench-corpus/wildreceipt/952eb692fc85176a6a2b2b4233760d8e6762d97a.jpeg",
+      "sha1": "5838704bb790cb0be846e7efe8c5d5acdff45806",
+      "merchant": "Faji",
+      "total": "1,199.00",
+      "date": "2018-03-31"
+    },
+    {
+      "id": "wildreceipt-a4111c88a3c467e478e22535ec67fae667a3c6c9",
+      "img": "bench-corpus/wildreceipt/a4111c88a3c467e478e22535ec67fae667a3c6c9.jpeg",
+      "sha1": "584728ebc17ab3e0a8e4ead6be9325cd64aedcf0",
+      "merchant": null,
+      "total": null,
+      "date": "02/02/2014"
+    },
+    {
+      "id": "wildreceipt-31846a80265176bcd79756d7cb01849347696863",
+      "img": "bench-corpus/wildreceipt/31846a80265176bcd79756d7cb01849347696863.jpeg",
+      "sha1": "584c61ab33cef465fb2c8a85296040ad881b0154",
+      "merchant": null,
+      "total": null,
+      "date": "06/24/16"
+    },
+    {
+      "id": "cord-cord_test_0067",
+      "img": "bench-corpus/cord/cord_test_0067.png",
+      "sha1": "5869db2676a892fbe1f8c990ab8a059b5ca292fa",
+      "merchant": null,
+      "total": "9.500,00",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-9003ab4011166f0917e31ec058b5f13c98226324",
+      "img": "bench-corpus/wildreceipt/9003ab4011166f0917e31ec058b5f13c98226324.jpeg",
+      "sha1": "586e9d17edb5e81e09ed107f0b00fbfe5e2e37c3",
+      "merchant": "STA.MESA",
+      "total": "P1.827.76",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-58b1ce15f0c255ae8b732efba173e32e17a7a20c",
+      "img": "bench-corpus/wildreceipt/58b1ce15f0c255ae8b732efba173e32e17a7a20c.jpeg",
+      "sha1": "5871a44725788744b0021272f49dace1da0ad5e0",
+      "merchant": "Arby'sRoastBeef#0504",
+      "total": "8.14",
+      "date": "02/11/2016"
+    },
+    {
+      "id": "wildreceipt-0fe7d374270efadbea01cfb13dc06ebfd88c415b",
+      "img": "bench-corpus/wildreceipt/0fe7d374270efadbea01cfb13dc06ebfd88c415b.jpeg",
+      "sha1": "5887d348deba453efb9541058f1c26dccc99ab8e",
+      "merchant": null,
+      "total": "286.00",
+      "date": "23/03/2018"
+    },
+    {
+      "id": "cord-cord_train_0132",
+      "img": "bench-corpus/cord/cord_train_0132.png",
+      "sha1": "58a17cf01bc04a4a7b339c27507ef968cfeac86d",
+      "merchant": null,
+      "total": "117,999.00",
+      "date": null
+    },
+    {
+      "id": "sroie-390",
+      "img": "bench-sroie/raw/img/390.jpg",
+      "sha1": "58c0bb3ea8779ce981355283a41c73e9b661150d",
+      "merchant": "MR. D.I.Y. (KUCHAI) SDN BHD",
+      "total": "RM 57.40",
+      "date": "24-01-16"
+    },
+    {
+      "id": "cord-cord_train_0081",
+      "img": "bench-corpus/cord/cord_train_0081.png",
+      "sha1": "58c54cbfa9832a786dff57d9f96883c21dabb2ab",
+      "merchant": null,
+      "total": "36,000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0777",
+      "img": "bench-corpus/cord/cord_train_0777.png",
+      "sha1": "58e2c11a9c0a959466ae197059b3b0983a8cb33e",
+      "merchant": null,
+      "total": "1,303,112",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-d7582a2de64ddc3e2b3d7b669b83850fe2e4861b",
+      "img": "bench-corpus/wildreceipt/d7582a2de64ddc3e2b3d7b669b83850fe2e4861b.jpeg",
+      "sha1": "58eae466613794236d928a4e76fdba8ed7d7d4d6",
+      "merchant": "Citadel",
+      "total": "$109,98",
+      "date": "6/8/2018"
+    },
+    {
+      "id": "cord-cord_train_0281",
+      "img": "bench-corpus/cord/cord_train_0281.png",
+      "sha1": "58ef1319817ce84e8a72595b8697e2ec749ccbc1",
+      "merchant": null,
+      "total": "10,450",
+      "date": null
+    },
+    {
+      "id": "cord-cord_test_0068",
+      "img": "bench-corpus/cord/cord_test_0068.png",
+      "sha1": "59029c42543cd3f6edeeb6e5ea5ffa5e721e1159",
+      "merchant": null,
+      "total": "20,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-fa1cb78a4065dda22dfe0c7b786d3e4ee29847b6",
+      "img": "bench-corpus/wildreceipt/fa1cb78a4065dda22dfe0c7b786d3e4ee29847b6.jpeg",
+      "sha1": "59084759976f4c9ecccaf7e9415686021efcefa8",
+      "merchant": "DEPOT",
+      "total": "$35.23",
+      "date": "07/12/12"
+    },
+    {
+      "id": "cord-cord_train_0380",
+      "img": "bench-corpus/cord/cord_train_0380.png",
+      "sha1": "591f14539b2cd85c6356015b327df5c182f02fc2",
+      "merchant": null,
+      "total": "30,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-11a34f2628528d2ee10d23a7b9a33a536821f880",
+      "img": "bench-corpus/wildreceipt/11a34f2628528d2ee10d23a7b9a33a536821f880.jpeg",
+      "sha1": "594156950e9644b8dcd401318080f7cad9442772",
+      "merchant": "POOLBAR CORALBEACHHTL&RESORTS",
+      "total": "1.58",
+      "date": "17/04/2017"
+    },
+    {
+      "id": "wildreceipt-3d7d1d85045654d1ccba32da323d11e12302bfe0",
+      "img": "bench-corpus/wildreceipt/3d7d1d85045654d1ccba32da323d11e12302bfe0.jpeg",
+      "sha1": "595e2d8780c7461b4b191168326ca91d83b6c61a",
+      "merchant": null,
+      "total": "$62.90",
+      "date": "09/23/18"
+    },
+    {
+      "id": "wildreceipt-d4cc218aef4575c0499aa3c93c290d87e268048d",
+      "img": "bench-corpus/wildreceipt/d4cc218aef4575c0499aa3c93c290d87e268048d.jpeg",
+      "sha1": "5976b64f5cf38ea38b0c1707e9cf1e78766d0e7d",
+      "merchant": "RoyalHotel TaxInvoice",
+      "total": "$69.60",
+      "date": "30-DEC-2016"
+    },
+    {
+      "id": "wildreceipt-375ac92e91a434a100134c84c897d80b61836d36",
+      "img": "bench-corpus/wildreceipt/375ac92e91a434a100134c84c897d80b61836d36.jpeg",
+      "sha1": "59846aa8b2c581518ec3f1355e957369c3048cbb",
+      "merchant": "JAIPUR",
+      "total": "661.00",
+      "date": "10/12/2016"
+    },
+    {
+      "id": "wildreceipt-8de36450c1a130437c33445f21fcfb454c9b96d6",
+      "img": "bench-corpus/wildreceipt/8de36450c1a130437c33445f21fcfb454c9b96d6.jpeg",
+      "sha1": "599297559be62eff7523696733e98f96da491c73",
+      "merchant": "RestaurantMcDonald'sVersaillesManege",
+      "total": "16.30",
+      "date": "05/07/2014"
+    },
+    {
+      "id": "wildreceipt-5619f7bb7829216a2c048cc8b4fc5bc9650fd97b",
+      "img": "bench-corpus/wildreceipt/5619f7bb7829216a2c048cc8b4fc5bc9650fd97b.jpeg",
+      "sha1": "599ff4296e5039767382508548230e041c2771cc",
+      "merchant": "SPEEDWAY",
+      "total": "$48.10",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-09fbc41d79dcad86a8d00329e492e7bbfcca7912",
+      "img": "bench-corpus/wildreceipt/09fbc41d79dcad86a8d00329e492e7bbfcca7912.jpeg",
+      "sha1": "59a9e8f4760dc77dd19c106f283734b8e98a3e37",
+      "merchant": "SHIMARESTAURANT",
+      "total": "150.42",
+      "date": "06/09/2015"
+    },
+    {
+      "id": "wildreceipt-16d8198f9119a59e68b8a3884f874b57527226d6",
+      "img": "bench-corpus/wildreceipt/16d8198f9119a59e68b8a3884f874b57527226d6.jpeg",
+      "sha1": "5a188cd4ba23c04fb4f4951b4152c80ced2dac78",
+      "merchant": "HarvardGardens",
+      "total": "70.97",
+      "date": "04/07/2018"
+    },
+    {
+      "id": "wildreceipt-4be848b6e453537ffa1ce1142d745bc4ac8a3c9c",
+      "img": "bench-corpus/wildreceipt/4be848b6e453537ffa1ce1142d745bc4ac8a3c9c.jpeg",
+      "sha1": "5a5371400f823a783a3479824b5d633e3368a8b5",
+      "merchant": null,
+      "total": "$19.15",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-26aeccce362eac61ea171ae991b2328de7791fd8",
+      "img": "bench-corpus/wildreceipt/26aeccce362eac61ea171ae991b2328de7791fd8.jpeg",
+      "sha1": "5a7ac1accd96fa56cc0bbff63c4e9ae3ad8ecc9d",
+      "merchant": null,
+      "total": "627.72",
+      "date": "05/10/2074"
+    },
+    {
+      "id": "wildreceipt-828ed85f4e772a9f1c7036c98cd21ab47e59ce56",
+      "img": "bench-corpus/wildreceipt/828ed85f4e772a9f1c7036c98cd21ab47e59ce56.jpeg",
+      "sha1": "5a8bb73d81e3fd5ad241c8ae80f8f57381ba69a3",
+      "merchant": "SAMDAEKOREANBBQ",
+      "total": "12.97",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-598aa4b8f621027f7c4045bc13b053675e701135",
+      "img": "bench-corpus/wildreceipt/598aa4b8f621027f7c4045bc13b053675e701135.jpeg",
+      "sha1": "5acddff63349d74b3784f322896186aaf233451a",
+      "merchant": "FRANK'SITALIANKESIRURAN",
+      "total": null,
+      "date": "11/11/11"
+    },
+    {
+      "id": "wildreceipt-764b6cf50e5f5f8987498ef037c84a22cf9cf805",
+      "img": "bench-corpus/wildreceipt/764b6cf50e5f5f8987498ef037c84a22cf9cf805.jpeg",
+      "sha1": "5aebf6d58e43f44737fd343982fa3581213563a5",
+      "merchant": "WelcometoDunkin'Donuts",
+      "total": "$3.33",
+      "date": "11/5/2013"
+    },
+    {
+      "id": "cord-cord_train_0324",
+      "img": "bench-corpus/cord/cord_train_0324.png",
+      "sha1": "5b22bb2ea6a7a8db378bd0cc6c9fb95e60e08ab2",
+      "merchant": null,
+      "total": "39,200,00",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-822d783ab48925d50c7cc804f27c6bc02bbe41e0",
+      "img": "bench-corpus/wildreceipt/822d783ab48925d50c7cc804f27c6bc02bbe41e0.jpeg",
+      "sha1": "5b2517559588b2ca71d5ba06f4278e0d97ef7131",
+      "merchant": "KohGrill&SushiBar",
+      "total": "190.05",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-b4da219f30e2083a396331faf52bf6e5ea4d4939",
+      "img": "bench-corpus/wildreceipt/b4da219f30e2083a396331faf52bf6e5ea4d4939.jpeg",
+      "sha1": "5b28649c5b5038ec5bd39617133788f7e8ff9750",
+      "merchant": "OCEANABEACHINN",
+      "total": "$553.00",
+      "date": "08/22/16"
+    },
+    {
+      "id": "wildreceipt-29278b4f32364c9be5613a8ff2a39763ce628166",
+      "img": "bench-corpus/wildreceipt/29278b4f32364c9be5613a8ff2a39763ce628166.jpeg",
+      "sha1": "5b43aa08bc30412ad0fcf78613444e79b6ba229a",
+      "merchant": "PORTUGALWINEBAR&GRILL",
+      "total": "61.33",
+      "date": "11/27/2016"
+    },
+    {
+      "id": "wildreceipt-45fe6307520947c289dfed1591c98f703ecc8afb",
+      "img": "bench-corpus/wildreceipt/45fe6307520947c289dfed1591c98f703ecc8afb.jpeg",
+      "sha1": "5b7535e44ce6484a2fdf418bcfceb41134113734",
+      "merchant": null,
+      "total": "85.12",
+      "date": "06/01/08"
+    },
+    {
+      "id": "sroie-420",
+      "img": "bench-sroie/raw/img/420.jpg",
+      "sha1": "5b8e2d5a096eca922f7921e545998d328b3074b8",
+      "merchant": "GUARDIAN HEALTH AND BEAUTY SDN BHD",
+      "total": "2.28",
+      "date": "18/05/18"
+    },
+    {
+      "id": "sroie-426",
+      "img": "bench-sroie/raw/img/426.jpg",
+      "sha1": "5b9eb890bf27da080b19df7796c3ff113fbcca3f",
+      "merchant": "AEON CO. (M) BHD",
+      "total": "99.90",
+      "date": "27/05/2018"
+    },
+    {
+      "id": "wildreceipt-6aa1a16efcc7eb138bfee9ca90df704ef7498b54",
+      "img": "bench-corpus/wildreceipt/6aa1a16efcc7eb138bfee9ca90df704ef7498b54.jpeg",
+      "sha1": "5bab0c4bb95a2e3c12d67d72d077b3a34a114f22",
+      "merchant": null,
+      "total": "38.88",
+      "date": "07/12/2015"
+    },
+    {
+      "id": "wildreceipt-2522b072b9bfde5f2031f7352abb48ef9c7207fc",
+      "img": "bench-corpus/wildreceipt/2522b072b9bfde5f2031f7352abb48ef9c7207fc.jpeg",
+      "sha1": "5bb1a373a827ad751058f4cf6ef31013cae012f3",
+      "merchant": "SAMCO",
+      "total": null,
+      "date": "26/03/2017."
+    },
+    {
+      "id": "cord-cord_train_0690",
+      "img": "bench-corpus/cord/cord_train_0690.png",
+      "sha1": "5bd40e4f076fa3c9b087249a040482fbdb36aeee",
+      "merchant": null,
+      "total": "Rp. 57.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-404a6057223a31f67f654d21d44e144a1fb781a0",
+      "img": "bench-corpus/wildreceipt/404a6057223a31f67f654d21d44e144a1fb781a0.jpeg",
+      "sha1": "5bfba844fcf85765c295e78c76ff5f1233b813be",
+      "merchant": null,
+      "total": "$26.56",
+      "date": "12/20/2016"
+    },
+    {
+      "id": "cord-cord_train_0083",
+      "img": "bench-corpus/cord/cord_train_0083.png",
+      "sha1": "5bfcb157507c74b387be3bfdc564a4d043e586f6",
+      "merchant": null,
+      "total": "101.000",
+      "date": null
+    },
+    {
+      "id": "sroie-348",
+      "img": "bench-sroie/raw/img/348.jpg",
+      "sha1": "5c398bea226fc87654951861c9f29ad698830692",
+      "merchant": "GARDENIA BAKERIES (KL) SDN BHD",
+      "total": "48.04",
+      "date": "28/09/2017"
+    },
+    {
+      "id": "cord-cord_test_0061",
+      "img": "bench-corpus/cord/cord_test_0061.png",
+      "sha1": "5c752358e3b723bcc8f852b60da36d673949b332",
+      "merchant": null,
+      "total": "24,500",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-57f85c492df38d20d65dc0bab59a110ccc3a6c99",
+      "img": "bench-corpus/wildreceipt/57f85c492df38d20d65dc0bab59a110ccc3a6c99.jpeg",
+      "sha1": "5ce62ccbf9789033096744605d75534b8ee1734a",
+      "merchant": "lapoma",
+      "total": "106.55\u20ac",
+      "date": "30/08/2017"
+    },
+    {
+      "id": "wildreceipt-670897c4a0c8682598b5bcada56b29ba94206d53",
+      "img": "bench-corpus/wildreceipt/670897c4a0c8682598b5bcada56b29ba94206d53.jpeg",
+      "sha1": "5d0c0266dbfd4c83b0a534ffb79f7bb43c3515ff",
+      "merchant": null,
+      "total": "42.261",
+      "date": "20/02/2009"
+    },
+    {
+      "id": "cord-cord_validation_0007",
+      "img": "bench-corpus/cord/cord_validation_0007.png",
+      "sha1": "5d1e49712c4fa38efd56d158dd46a3a3ebe941f7",
+      "merchant": null,
+      "total": "59,500",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-6b68629cfdbc45df5e19782e789fa1b0f5aa460a",
+      "img": "bench-corpus/wildreceipt/6b68629cfdbc45df5e19782e789fa1b0f5aa460a.jpeg",
+      "sha1": "5d21e1518c7854aba96eaa12115b06cd75b68268",
+      "merchant": "LATITUDE31",
+      "total": "450.00",
+      "date": "06-03-2015"
+    },
+    {
+      "id": "sroie-326",
+      "img": "bench-sroie/raw/img/326.jpg",
+      "sha1": "5d27a9ffdf553e241528841faf309592f3fa84a6",
+      "merchant": "KHIAM AIK CHAN SDN BHD",
+      "total": "28.40",
+      "date": "25/09/2017"
+    },
+    {
+      "id": "cord-cord_train_0439",
+      "img": "bench-corpus/cord/cord_train_0439.png",
+      "sha1": "5d2db56ece8e6fb3544ce44b7d99122bbde59a48",
+      "merchant": null,
+      "total": "1126510",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-1149",
+      "img": "bench-corpus/wildreceipt/1149.jpeg",
+      "sha1": "5d64570d65b2f494250ecd450785e46012879abc",
+      "merchant": "GUS&PAUL'S",
+      "total": null,
+      "date": "09-28-2013"
+    },
+    {
+      "id": "cord-cord_validation_0031",
+      "img": "bench-corpus/cord/cord_validation_0031.png",
+      "sha1": "5d7200fc72f110492571d39f1056e182cd375269",
+      "merchant": null,
+      "total": "24,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-df89fe84f76624635ebbfdee8e30fa3bbcf3dd92",
+      "img": "bench-corpus/wildreceipt/df89fe84f76624635ebbfdee8e30fa3bbcf3dd92.jpeg",
+      "sha1": "5d72e137b10d40e8c9b3f472a140099aeda59e17",
+      "merchant": "ANYRESTAURANT",
+      "total": null,
+      "date": "02/02/2014"
+    },
+    {
+      "id": "wildreceipt-5d2bee732012177b3663966aa764e6a1a0acf94d",
+      "img": "bench-corpus/wildreceipt/5d2bee732012177b3663966aa764e6a1a0acf94d.jpeg",
+      "sha1": "5d76833e7e334d77a5025bd57e28836e48358fa6",
+      "merchant": null,
+      "total": "542.00",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-ee66acdc8e04a02734bf69da2314cb278290466b",
+      "img": "bench-corpus/wildreceipt/ee66acdc8e04a02734bf69da2314cb278290466b.jpeg",
+      "sha1": "5d813188831834e9d74982039860252842819434",
+      "merchant": "RISTORANTECOSO",
+      "total": "58.00",
+      "date": "14/11/14"
+    },
+    {
+      "id": "cord-cord_train_0404",
+      "img": "bench-corpus/cord/cord_train_0404.png",
+      "sha1": "5d9886ee5d6b9a5c8353373829dca1db66221f31",
+      "merchant": null,
+      "total": "49,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-7325a58dff6d2383fff57b1dd8efcc3457be2bd6",
+      "img": "bench-corpus/wildreceipt/7325a58dff6d2383fff57b1dd8efcc3457be2bd6.jpeg",
+      "sha1": "5dc583e2e315b1bc81efd921ea8d16ae076ddf65",
+      "merchant": "DARTMOUTHBOOKSTORE.INC.",
+      "total": "$24.65",
+      "date": "11/07/01"
+    },
+    {
+      "id": "wildreceipt-9ebdc29b5d0b8f415ce9b908706c88a3a37bc076",
+      "img": "bench-corpus/wildreceipt/9ebdc29b5d0b8f415ce9b908706c88a3a37bc076.jpeg",
+      "sha1": "5dcf1edc6d96e9050379f6a384e6dc458df6e338",
+      "merchant": "watsons",
+      "total": null,
+      "date": null
+    },
+    {
+      "id": "wildreceipt-84db17790cdc1a77105b91353a95e1f65775d281",
+      "img": "bench-corpus/wildreceipt/84db17790cdc1a77105b91353a95e1f65775d281.jpeg",
+      "sha1": "5dd06284d8b84f6ed3b5a61afc2e7790dfaa6289",
+      "merchant": null,
+      "total": "63,30",
+      "date": "16/04/2012"
+    },
+    {
+      "id": "cord-cord_train_0379",
+      "img": "bench-corpus/cord/cord_train_0379.png",
+      "sha1": "5e0e7d5ee3626d08fc86be570f97374c1fe6af15",
+      "merchant": null,
+      "total": "80,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-67d589f847add2268fdafdb97c6f7bcd6403981a",
+      "img": "bench-corpus/wildreceipt/67d589f847add2268fdafdb97c6f7bcd6403981a.jpeg",
+      "sha1": "5e4599ec506fe1881ca59397c4329d9ca24aabcf",
+      "merchant": "Justin\u2019sRosevilleCarWash",
+      "total": null,
+      "date": "07/19/16,"
+    },
+    {
+      "id": "cord-cord_train_0771",
+      "img": "bench-corpus/cord/cord_train_0771.png",
+      "sha1": "5e6aa07360f1cc982c87f4b71ca08cacde3618c1",
+      "merchant": null,
+      "total": "Rp 29000.00",
+      "date": null
+    },
+    {
+      "id": "cord-cord_validation_0020",
+      "img": "bench-corpus/cord/cord_validation_0020.png",
+      "sha1": "5e6fb0216bd5b2e2d4690e2ca46c53115a40e284",
+      "merchant": null,
+      "total": "16,500",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0298",
+      "img": "bench-corpus/cord/cord_train_0298.png",
+      "sha1": "5e7fbc49cd0dbeeb36bd6eaf7581dadd20e94739",
+      "merchant": null,
+      "total": "63,000",
+      "date": null
+    },
+    {
+      "id": "sroie-620",
+      "img": "bench-sroie/raw/img/620.jpg",
+      "sha1": "5e8c94031fb971d15702197ef6556b462175c60e",
+      "merchant": "ONE ONE THREE SEAFOOD RESTAURANT SDN BHD",
+      "total": "58.00",
+      "date": "17-06-2018"
+    },
+    {
+      "id": "cord-cord_train_0241",
+      "img": "bench-corpus/cord/cord_train_0241.png",
+      "sha1": "5eae81e4913c74e115d07eb7aedeeb4fc3f6faea",
+      "merchant": null,
+      "total": "49,500",
+      "date": null
+    },
+    {
+      "id": "cord-cord_validation_0064",
+      "img": "bench-corpus/cord/cord_validation_0064.png",
+      "sha1": "5ebabad8e2f196ce91c2669e1057f188cc471d7d",
+      "merchant": null,
+      "total": "20,000",
+      "date": null
+    },
+    {
+      "id": "sroie-381",
+      "img": "bench-sroie/raw/img/381.jpg",
+      "sha1": "5ec2d785bdc4bb8a56b2e0234fc2d5aac1a60230",
+      "merchant": "COSWAY (M) SDN BHD",
+      "total": "RM111.90",
+      "date": "(06/12/2016)"
+    },
+    {
+      "id": "cord-cord_train_0229",
+      "img": "bench-corpus/cord/cord_train_0229.png",
+      "sha1": "5ed00df545a9fbfbbcb99f6368106eb47a614243",
+      "merchant": null,
+      "total": "33,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-ecf844f930c8cf009cf4fbd91c96d103420910fc",
+      "img": "bench-corpus/wildreceipt/ecf844f930c8cf009cf4fbd91c96d103420910fc.jpeg",
+      "sha1": "5ede92c2126908a7f894ff59f43d979fe7437bdd",
+      "merchant": null,
+      "total": "$10.23",
+      "date": "2016-10-09"
+    },
+    {
+      "id": "cord-cord_train_0592",
+      "img": "bench-corpus/cord/cord_train_0592.png",
+      "sha1": "5ef360ca6fb1b8585fc2268563043da56e5389ed",
+      "merchant": null,
+      "total": "54,500",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-073d3a684b7215062e026bf59c69c4b5933a8b6e",
+      "img": "bench-corpus/wildreceipt/073d3a684b7215062e026bf59c69c4b5933a8b6e.jpeg",
+      "sha1": "5f21fcf4e5d8715100f223eb74fc11082135b266",
+      "merchant": null,
+      "total": "$26.11",
+      "date": "15-Aug-2016"
+    },
+    {
+      "id": "wildreceipt-78473b79a2d833905fd5a5ff88a15a0fd279fb04",
+      "img": "bench-corpus/wildreceipt/78473b79a2d833905fd5a5ff88a15a0fd279fb04.jpeg",
+      "sha1": "5f311f79f3b97575eb6c3f246eccee570f1a2dcf",
+      "merchant": "SARAYRESTAURANT ADISYON",
+      "total": "130,00",
+      "date": "05.10.2014"
+    },
+    {
+      "id": "wildreceipt-31d79102f2f2aec863d9fc6391ed6a913cfecd89",
+      "img": "bench-corpus/wildreceipt/31d79102f2f2aec863d9fc6391ed6a913cfecd89.jpeg",
+      "sha1": "5f8337aa102a4f23ba2ed8e199f8bc77f74aada4",
+      "merchant": "LEDOPIZZA#208",
+      "total": "$16.94",
+      "date": "9/20/2014"
+    },
+    {
+      "id": "wildreceipt-ceae7253737bd73b0e41c4bf345ca9b186596aca",
+      "img": "bench-corpus/wildreceipt/ceae7253737bd73b0e41c4bf345ca9b186596aca.jpeg",
+      "sha1": "5f997a62b4f1c8091de753fb13628963a0941207",
+      "merchant": "march\u00e9",
+      "total": "35.00",
+      "date": "10Nov'16"
+    },
+    {
+      "id": "wildreceipt-ad20cc872df1df8d0cf67d9e51cea897fbe14faa",
+      "img": "bench-corpus/wildreceipt/ad20cc872df1df8d0cf67d9e51cea897fbe14faa.jpeg",
+      "sha1": "5f9b96154790c70b008b924a3cb34639af134e01",
+      "merchant": "BasicHotelInnsbruck -K-U-N-D-E-N-B-E-L-E-G-",
+      "total": "120.05",
+      "date": "05/12"
+    },
+    {
+      "id": "cord-cord_train_0689",
+      "img": "bench-corpus/cord/cord_train_0689.png",
+      "sha1": "5f9f0819c7514ba9574c3e6e463eacf23362971d",
+      "merchant": null,
+      "total": "24.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-ce16914d6f7a8c21a3d6a6b4c3075003eac7e86a",
+      "img": "bench-corpus/wildreceipt/ce16914d6f7a8c21a3d6a6b4c3075003eac7e86a.jpeg",
+      "sha1": "5f9f64c1d135a2cf35e5a042bba3cfff544c945d",
+      "merchant": "HEMARESTO",
+      "total": "224,400",
+      "date": "21-09-15"
+    },
+    {
+      "id": "wildreceipt-5db188ff166f3959756f776d3edcd0246f059c59",
+      "img": "bench-corpus/wildreceipt/5db188ff166f3959756f776d3edcd0246f059c59.jpeg",
+      "sha1": "5fb28a2f5690dca8e2ae951ba5f294deadacf8cd",
+      "merchant": null,
+      "total": null,
+      "date": "2015/09/23"
+    },
+    {
+      "id": "cord-cord_train_0595",
+      "img": "bench-corpus/cord/cord_train_0595.png",
+      "sha1": "5fc898958247515a3a0ff857aab3ed2fba5591bb",
+      "merchant": null,
+      "total": "211,365",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-ef6aea1a7ca2ff593b724a13383c62248851ea23",
+      "img": "bench-corpus/wildreceipt/ef6aea1a7ca2ff593b724a13383c62248851ea23.jpeg",
+      "sha1": "5fd67a245eaad97e16b128c3e223cd0e075ed3ba",
+      "merchant": "WHOLE FOODS\ufffc MARKET",
+      "total": "$22.45",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-05d44310d6b6bf7d57e30d218af5e3b513342d31",
+      "img": "bench-corpus/wildreceipt/05d44310d6b6bf7d57e30d218af5e3b513342d31.jpeg",
+      "sha1": "5fec757417a7243742a0e75ab42bb80718c5dae7",
+      "merchant": "KennyRogersRoasters",
+      "total": "RM73.70",
+      "date": "2017/09/23"
+    },
+    {
+      "id": "wildreceipt-1dde06959841388e68bd28dcf3fac2bda6220f17",
+      "img": "bench-corpus/wildreceipt/1dde06959841388e68bd28dcf3fac2bda6220f17.jpeg",
+      "sha1": "5ff1d696f84d0292761b7ae4b1ec583d11308f63",
+      "merchant": null,
+      "total": "21.00",
+      "date": "05/12/2013"
+    },
+    {
+      "id": "cord-cord_train_0550",
+      "img": "bench-corpus/cord/cord_train_0550.png",
+      "sha1": "6007d888249883e7e3f3b9f5ab24c1438ea3c6f4",
+      "merchant": null,
+      "total": "125,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-afd0b019dfa5d3f6e9face207a963363a5be35cb",
+      "img": "bench-corpus/wildreceipt/afd0b019dfa5d3f6e9face207a963363a5be35cb.jpeg",
+      "sha1": "6028ba4b06f318fb9d6cad9bcee664551da21889",
+      "merchant": null,
+      "total": "21,70#",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-2587",
+      "img": "bench-corpus/wildreceipt/2587.jpeg",
+      "sha1": "6028c71f0d39dd252c393709c972ff673199886c",
+      "merchant": null,
+      "total": "0.00",
+      "date": "03/23/2013"
+    },
+    {
+      "id": "cord-cord_validation_0021",
+      "img": "bench-corpus/cord/cord_validation_0021.png",
+      "sha1": "602f993e9d207f4589e05132654037a176462730",
+      "merchant": null,
+      "total": "Rp 224,908",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0605",
+      "img": "bench-corpus/cord/cord_train_0605.png",
+      "sha1": "6040f09bd765ea7dedba492f36ea3c935deaa494",
+      "merchant": null,
+      "total": "128.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-e580559e9b37edefea912d46c9051b30305a9602",
+      "img": "bench-corpus/wildreceipt/e580559e9b37edefea912d46c9051b30305a9602.jpeg",
+      "sha1": "605e4ea5438945118c9135b225123f2bd5b82a39",
+      "merchant": null,
+      "total": "141.78",
+      "date": "02/08/11"
+    },
+    {
+      "id": "wildreceipt-0abd54c958f8658dac0ba32ee5ca8f8b264ce131",
+      "img": "bench-corpus/wildreceipt/0abd54c958f8658dac0ba32ee5ca8f8b264ce131.jpeg",
+      "sha1": "606580ed5dfd2ec3c3662d76f9e8d6d31ad3eef5",
+      "merchant": "Janfe'sItallan",
+      "total": "44.85",
+      "date": "22Aug'16"
+    },
+    {
+      "id": "sroie-609",
+      "img": "bench-sroie/raw/img/609.jpg",
+      "sha1": "6065e62d7c9aa15404324c08edd6c60cbc66c150",
+      "merchant": "KEDAI PAPAN YEW CHUAN",
+      "total": "68.90",
+      "date": "11/05/2018"
+    },
+    {
+      "id": "wildreceipt-a14c10baf0cd1f8e05a34d5d3e0d06a33b0b7ca3",
+      "img": "bench-corpus/wildreceipt/a14c10baf0cd1f8e05a34d5d3e0d06a33b0b7ca3.jpeg",
+      "sha1": "6075aba7f0f34448a8c3628f620956bf7d66e9b7",
+      "merchant": null,
+      "total": null,
+      "date": "07Dec'12"
+    },
+    {
+      "id": "wildreceipt-42251cc6fe0f5934696d230f902599eb8e57e993",
+      "img": "bench-corpus/wildreceipt/42251cc6fe0f5934696d230f902599eb8e57e993.jpeg",
+      "sha1": "60c4c0faa24bba7f06f58df4cdd5be8d5c3f4d8e",
+      "merchant": "AnnAdyARestaurant&Bar",
+      "total": null,
+      "date": "01/01/20"
+    },
+    {
+      "id": "wildreceipt-45331a50ae6d011bed8f6546ec07835a91e88603",
+      "img": "bench-corpus/wildreceipt/45331a50ae6d011bed8f6546ec07835a91e88603.jpeg",
+      "sha1": "60cfe33b0f98a16c5ba968ef898a51ddc2311a2f",
+      "merchant": "Delicacy",
+      "total": "356.0",
+      "date": "26/03/2018"
+    },
+    {
+      "id": "cord-cord_train_0532",
+      "img": "bench-corpus/cord/cord_train_0532.png",
+      "sha1": "60d3e6d6a19ffe4d36f0c97fc3a2841cf34ab925",
+      "merchant": null,
+      "total": "63,800",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-2099f8b82dfdff720358e5a7886287d29ad33483",
+      "img": "bench-corpus/wildreceipt/2099f8b82dfdff720358e5a7886287d29ad33483.jpeg",
+      "sha1": "60da83e4a7c4a7de257eaf4b56293486d4070a44",
+      "merchant": "VINELANDSHELL SHELL",
+      "total": "25.50",
+      "date": "03/21/16"
+    },
+    {
+      "id": "cord-cord_train_0472",
+      "img": "bench-corpus/cord/cord_train_0472.png",
+      "sha1": "60e22191437715abdbac106baefe9739f77445ee",
+      "merchant": null,
+      "total": "3,100",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-3f9e6d375a09374d51d29cd7f287a36378290eea",
+      "img": "bench-corpus/wildreceipt/3f9e6d375a09374d51d29cd7f287a36378290eea.jpeg",
+      "sha1": "6108debafdc2811b2e67303947508b1447386c36",
+      "merchant": "BURGERKING",
+      "total": "30.86",
+      "date": "A0031'16"
+    },
+    {
+      "id": "cord-cord_train_0096",
+      "img": "bench-corpus/cord/cord_train_0096.png",
+      "sha1": "6126b4f7f6255383b968266374371658c1110f97",
+      "merchant": null,
+      "total": "22.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-192ede0f2e641d3e3e436baa4d83744b9c00ee6a",
+      "img": "bench-corpus/wildreceipt/192ede0f2e641d3e3e436baa4d83744b9c00ee6a.jpeg",
+      "sha1": "6138131bbfd7913b647f48c7d59f8bd8aba0c451",
+      "merchant": "REWEM.SiebertoHG",
+      "total": "EUR17,04",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0564",
+      "img": "bench-corpus/cord/cord_train_0564.png",
+      "sha1": "61427caaece8f6fd8c80ff357a80d74bd29dfa7f",
+      "merchant": null,
+      "total": "36,000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0504",
+      "img": "bench-corpus/cord/cord_train_0504.png",
+      "sha1": "6149906572223015fa4add3aaf3675b595b2dba5",
+      "merchant": null,
+      "total": "10,450",
+      "date": null
+    },
+    {
+      "id": "sroie-571",
+      "img": "bench-sroie/raw/img/571.jpg",
+      "sha1": "61548b9f60df066252d0ae06c9941b4724257163",
+      "merchant": "MIZU MENTAI SDN. BHD.",
+      "total": "68.00",
+      "date": "04-06-2018"
+    },
+    {
+      "id": "wildreceipt-66611920d733f3fcc181006f0dfc590ce2447ff4",
+      "img": "bench-corpus/wildreceipt/66611920d733f3fcc181006f0dfc590ce2447ff4.jpeg",
+      "sha1": "615dab2ba66994d5a0354b44f0a0d62a63085cda",
+      "merchant": "Restaurant WindmillFamily",
+      "total": "23.45",
+      "date": "Friday,Hay26,2017"
+    },
+    {
+      "id": "sroie-437",
+      "img": "bench-sroie/raw/img/437.jpg",
+      "sha1": "615f78380bc43b861a708088a9c41bdaf0d99471",
+      "merchant": "GERBANG ALAF RESTAURANTS SDN BHD",
+      "total": "11.10",
+      "date": "25/05/2018"
+    },
+    {
+      "id": "sroie-536",
+      "img": "bench-sroie/raw/img/536.jpg",
+      "sha1": "616be27af76c451d60f9c471e3b6af21db5ee66d",
+      "merchant": "UNIHAKKA INTERNATIONAL SDN BHD",
+      "total": "RM8.20",
+      "date": "18 JUN 2018"
+    },
+    {
+      "id": "wildreceipt-2372aea0a590d4c2a4f4bfc9bb5b189ebef78307",
+      "img": "bench-corpus/wildreceipt/2372aea0a590d4c2a4f4bfc9bb5b189ebef78307.jpeg",
+      "sha1": "6176ebe70dce843262e88cd40ac430557775934a",
+      "merchant": "BREIZHCAFE",
+      "total": "78.30EUR",
+      "date": "16/07/2014"
+    },
+    {
+      "id": "wildreceipt-4302",
+      "img": "bench-corpus/wildreceipt/4302.jpeg",
+      "sha1": "619973204f1aa000a7c1c64bbcb46fdb9961a835",
+      "merchant": "LITTLECAESARS PIZZA",
+      "total": "$14.04",
+      "date": "09/18/2015"
+    },
+    {
+      "id": "wildreceipt-5969dd2cf2da7872765c4b09c4a37c0f90f05deb",
+      "img": "bench-corpus/wildreceipt/5969dd2cf2da7872765c4b09c4a37c0f90f05deb.jpeg",
+      "sha1": "61a6c8073b15d7b1a20ff8d55958e5a14cd08a00",
+      "merchant": "LaqueNailBar&",
+      "total": "$75.00",
+      "date": "1/4/2015"
+    },
+    {
+      "id": "cord-cord_test_0023",
+      "img": "bench-corpus/cord/cord_test_0023.png",
+      "sha1": "61aacee2a58f9953d4c0128f430977495fb15420",
+      "merchant": null,
+      "total": "63,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-23bdf3141a5531d18ea9a4be14f3e002ce6f02c5",
+      "img": "bench-corpus/wildreceipt/23bdf3141a5531d18ea9a4be14f3e002ce6f02c5.jpeg",
+      "sha1": "61d5e685c2320640488b9f454c257ba0960d3d5a",
+      "merchant": "KitschatEmbassy",
+      "total": "\u00a364,279.70",
+      "date": "10/10/13"
+    },
+    {
+      "id": "wildreceipt-a7604a3efca6e79014e7d8eb232932a50989daa1",
+      "img": "bench-corpus/wildreceipt/a7604a3efca6e79014e7d8eb232932a50989daa1.jpeg",
+      "sha1": "61e4b2489ac25b999780ee01d97f55665cf2ca20",
+      "merchant": "RESTAURANT PICCADILLY BANGKOKMASALA",
+      "total": "RM25.85",
+      "date": "10/04/2010"
+    },
+    {
+      "id": "sroie-552",
+      "img": "bench-sroie/raw/img/552.jpg",
+      "sha1": "61ec192b3ddbe512eebf2f2ee3df1fddac1af9d4",
+      "merchant": "RESTORAN WAN SHENG",
+      "total": "5.00",
+      "date": "06-05-2018"
+    },
+    {
+      "id": "wildreceipt-88852c88437231d25273684a3912da209c9506c8",
+      "img": "bench-corpus/wildreceipt/88852c88437231d25273684a3912da209c9506c8.jpeg",
+      "sha1": "61eebaeec5d3b7faa65c1b1537e9930198c122c3",
+      "merchant": "BestLockers,LLC GoPodLockerRental",
+      "total": "$20.00",
+      "date": "05/27/2017"
+    },
+    {
+      "id": "wildreceipt-0d191259c308f1063e887b537fd93b280fd596e3",
+      "img": "bench-corpus/wildreceipt/0d191259c308f1063e887b537fd93b280fd596e3.jpeg",
+      "sha1": "61fc578ff9b05954298ed138b525e2c13a254cce",
+      "merchant": "67PallMall",
+      "total": "\u00a3196.03",
+      "date": "30Dec15"
+    },
+    {
+      "id": "wildreceipt-54461025f04cec91ea4c7331286965ad578e05a6",
+      "img": "bench-corpus/wildreceipt/54461025f04cec91ea4c7331286965ad578e05a6.jpeg",
+      "sha1": "624044349d47fa750713daa82d4f5d4e0be3f84e",
+      "merchant": "TARGET",
+      "total": "$18.02",
+      "date": "02/27/2018"
+    },
+    {
+      "id": "cord-cord_train_0640",
+      "img": "bench-corpus/cord/cord_train_0640.png",
+      "sha1": "627557a0c0a348f1b9d95df52e3b468ddd3019c9",
+      "merchant": null,
+      "total": "49,000.00",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-6b5590e354468763d82f06b9448e535767014bab",
+      "img": "bench-corpus/wildreceipt/6b5590e354468763d82f06b9448e535767014bab.jpeg",
+      "sha1": "6298fab90e84bb68cec62f1159eba5bfa720ad38",
+      "merchant": "21Club",
+      "total": "18736.18",
+      "date": "May10'12"
+    },
+    {
+      "id": "wildreceipt-7ce1623d6d1aebb79015e1d9b78edf235e611eb4",
+      "img": "bench-corpus/wildreceipt/7ce1623d6d1aebb79015e1d9b78edf235e611eb4.jpeg",
+      "sha1": "629c0aee942135c328466000005fae38649ba5eb",
+      "merchant": "jack'sSeafood",
+      "total": "$58.73",
+      "date": "10/14/2016"
+    },
+    {
+      "id": "wildreceipt-8478b4dc8864a5c95abbd708a4279792d5c218c2",
+      "img": "bench-corpus/wildreceipt/8478b4dc8864a5c95abbd708a4279792d5c218c2.jpeg",
+      "sha1": "629ed4e2db20a3d9e2b7369ac2610dc54761e26c",
+      "merchant": "TRADERJOE'S",
+      "total": "USD$14.81",
+      "date": "11/14/2015"
+    },
+    {
+      "id": "wildreceipt-1439",
+      "img": "bench-corpus/wildreceipt/1439.jpeg",
+      "sha1": "62a605db0850ce9214847f26de9f90242dbc22b9",
+      "merchant": null,
+      "total": "44.53",
+      "date": null
+    },
+    {
+      "id": "sroie-402",
+      "img": "bench-sroie/raw/img/402.jpg",
+      "sha1": "62bec35d88c10a165ae373ab7ece7018f5f45946",
+      "merchant": "NADEJE PLATINUM SDN BHD",
+      "total": "RM51.30",
+      "date": "2016/05/01"
+    },
+    {
+      "id": "sroie-349",
+      "img": "bench-sroie/raw/img/349.jpg",
+      "sha1": "62d7891bed363112328f4d136604027291cfffff",
+      "merchant": "GARDENIA BAKERIES (KL) SDN BHD",
+      "total": "36.55",
+      "date": "25/09/2017"
+    },
+    {
+      "id": "wildreceipt-e4f065feb567419eed2ce0dd38026d20df2cc5e8",
+      "img": "bench-corpus/wildreceipt/e4f065feb567419eed2ce0dd38026d20df2cc5e8.jpeg",
+      "sha1": "62e0388c83562747937bff1ef5bf096dd9694cc0",
+      "merchant": null,
+      "total": "20.74",
+      "date": "12/31/2016"
+    },
+    {
+      "id": "wildreceipt-a64aabf4996197ff1ba3f96f3f56db32facd8047",
+      "img": "bench-corpus/wildreceipt/a64aabf4996197ff1ba3f96f3f56db32facd8047.jpeg",
+      "sha1": "62e34fa60fed3e68462bb5fba7dc0c8b9ead0713",
+      "merchant": "CIRCLEKVIETNAM",
+      "total": "38,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-529f47f473847a91a8976c286e1a65b1e577504c",
+      "img": "bench-corpus/wildreceipt/529f47f473847a91a8976c286e1a65b1e577504c.jpeg",
+      "sha1": "62f76dd01585bb7d41fa4c2e90f89467bf96d77f",
+      "merchant": "Taxoil",
+      "total": null,
+      "date": "08/17/15"
+    },
+    {
+      "id": "cord-cord_train_0524",
+      "img": "bench-corpus/cord/cord_train_0524.png",
+      "sha1": "6312fc1bd9cd9ad9efdf27e14c4558d758cf294e",
+      "merchant": null,
+      "total": "28.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-01a645e7b7a5179f2fc6c3d22242a43b67eb92ae",
+      "img": "bench-corpus/wildreceipt/01a645e7b7a5179f2fc6c3d22242a43b67eb92ae.jpeg",
+      "sha1": "6329089e25de1a64c43eabf8032f4949586ae9b7",
+      "merchant": "PapaJohns Restaurant#3070 ladychinkyeyes",
+      "total": null,
+      "date": "01/06/2012"
+    },
+    {
+      "id": "sroie-602",
+      "img": "bench-sroie/raw/img/602.jpg",
+      "sha1": "634964cf1eddb36dd8b508b91a634a414c77097d",
+      "merchant": "KEDAI PAPAN YEW CHUAN",
+      "total": "87.45",
+      "date": "20/04/2018"
+    },
+    {
+      "id": "wildreceipt-2a2d38ad90cf8774bfc57e657ab1124f898cafb6",
+      "img": "bench-corpus/wildreceipt/2a2d38ad90cf8774bfc57e657ab1124f898cafb6.jpeg",
+      "sha1": "635764eb66d4d99664a71473713ed1ee76c29b1c",
+      "merchant": "WHOLE FOODS MARKET",
+      "total": null,
+      "date": null
+    },
+    {
+      "id": "wildreceipt-47344da0d0f936a4aaea3934ee19230b0a89e4ac",
+      "img": "bench-corpus/wildreceipt/47344da0d0f936a4aaea3934ee19230b0a89e4ac.jpeg",
+      "sha1": "63659ac5b97bc417b5b1343314fbcb29ef7aaa95",
+      "merchant": null,
+      "total": "$87.73",
+      "date": "2018-02-15"
+    },
+    {
+      "id": "cord-cord_train_0754",
+      "img": "bench-corpus/cord/cord_train_0754.png",
+      "sha1": "63763f28025c0f382453b22a55b7ba658f4748d5",
+      "merchant": null,
+      "total": "301,003",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0385",
+      "img": "bench-corpus/cord/cord_train_0385.png",
+      "sha1": "6398a95c79516a901724050bd7c265f59da0209e",
+      "merchant": null,
+      "total": "268,950",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0723",
+      "img": "bench-corpus/cord/cord_train_0723.png",
+      "sha1": "63aab9331f04b43f8fc43ad4c3851dc8113a75fa",
+      "merchant": null,
+      "total": "28,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-17b95fded75dfb42c9388a2627201f53eacf998b",
+      "img": "bench-corpus/wildreceipt/17b95fded75dfb42c9388a2627201f53eacf998b.jpeg",
+      "sha1": "63aec7224fdb4e060dc5a4b3d8cb6509c109f948",
+      "merchant": "MadronaChevron MadronnaChevron",
+      "total": "$20.99",
+      "date": "11/09/2016"
+    },
+    {
+      "id": "wildreceipt-3097",
+      "img": "bench-corpus/wildreceipt/3097.jpeg",
+      "sha1": "63c44b903b8c1a3efabe95f00a56a4abb02c50fc",
+      "merchant": "StarbucksCoffee",
+      "total": "2.10",
+      "date": "31DEC'11"
+    },
+    {
+      "id": "wildreceipt-67ec8bf1bb9b47290ba413711cc640bc52984842",
+      "img": "bench-corpus/wildreceipt/67ec8bf1bb9b47290ba413711cc640bc52984842.jpeg",
+      "sha1": "63c976e884111fb3a3abf544d158faab7ab443f6",
+      "merchant": null,
+      "total": "19.70",
+      "date": "21-05-2015"
+    },
+    {
+      "id": "wildreceipt-2ba1dad1156734e73e4a9bc0074a089c934b744d",
+      "img": "bench-corpus/wildreceipt/2ba1dad1156734e73e4a9bc0074a089c934b744d.jpeg",
+      "sha1": "63e06880f642fe99208bc809b0590391dabff074",
+      "merchant": "GLENDALECARWASH/DETAILCENTER",
+      "total": "$9.99",
+      "date": "9/10/2014"
+    },
+    {
+      "id": "wildreceipt-506cfcab88244943fbb6fb384cc4d8afa25d0584",
+      "img": "bench-corpus/wildreceipt/506cfcab88244943fbb6fb384cc4d8afa25d0584.jpeg",
+      "sha1": "642e42c6ae6f2eb1346ae9ec0aa4c2be6d399fda",
+      "merchant": null,
+      "total": "33.15",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0581",
+      "img": "bench-corpus/cord/cord_train_0581.png",
+      "sha1": "644691f0419c1e7b1bed42e02fb51396eede2fd6",
+      "merchant": null,
+      "total": "25.000",
+      "date": null
+    },
+    {
+      "id": "sroie-340",
+      "img": "bench-sroie/raw/img/340.jpg",
+      "sha1": "645cf3a30ac0bd21032e889a06e7657ebc7f6b85",
+      "merchant": "GARDENIA BAKERIES (KL) SDN BHD",
+      "total": "68.41",
+      "date": "06/08/2017"
+    },
+    {
+      "id": "sroie-502",
+      "img": "bench-sroie/raw/img/502.jpg",
+      "sha1": "646cedb08b30dfce35a7bc8fa824b8431d164429",
+      "merchant": "SANYU STATIONERY SHOP",
+      "total": "33.60",
+      "date": "29/11/2017"
+    },
+    {
+      "id": "sroie-377",
+      "img": "bench-sroie/raw/img/377.jpg",
+      "sha1": "646d221082ed71cf118532cd517111b41ba5c51a",
+      "merchant": "MR. D.I.Y. (M) SDN BHD",
+      "total": "RM 8.60",
+      "date": "06-04-16"
+    },
+    {
+      "id": "wildreceipt-c1ba0c75421fc43226ea408d9062a79094ea4372",
+      "img": "bench-corpus/wildreceipt/c1ba0c75421fc43226ea408d9062a79094ea4372.jpeg",
+      "sha1": "64726ae4d971c5840d46388780cda5f66255dfdb",
+      "merchant": "NIKEFactoryStore",
+      "total": "$56.52",
+      "date": "4/30/2014"
+    },
+    {
+      "id": "wildreceipt-e9c6f480560d4180962cddb68245a3699a67557b",
+      "img": "bench-corpus/wildreceipt/e9c6f480560d4180962cddb68245a3699a67557b.jpeg",
+      "sha1": "647455c906ab47b6524e52ce7e647112237ae4bd",
+      "merchant": "DARKHORSE",
+      "total": "\u00a314.90",
+      "date": "11JUNE2017"
+    },
+    {
+      "id": "cord-cord_train_0609",
+      "img": "bench-corpus/cord/cord_train_0609.png",
+      "sha1": "6477b59cc23e0d5187a4d703d3c802e753a199a4",
+      "merchant": null,
+      "total": "34,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-be3c6eb716bc1fd03a4241c09e28fb0669b8b9e3",
+      "img": "bench-corpus/wildreceipt/be3c6eb716bc1fd03a4241c09e28fb0669b8b9e3.jpeg",
+      "sha1": "647964f056ebab3640f4a50c62361aadffba8c76",
+      "merchant": null,
+      "total": null,
+      "date": "26/02/18"
+    },
+    {
+      "id": "wildreceipt-c7cdd69b06e27ceb9d7ed7aa74222e7fb664a5a6",
+      "img": "bench-corpus/wildreceipt/c7cdd69b06e27ceb9d7ed7aa74222e7fb664a5a6.jpeg",
+      "sha1": "649c3c67afeebe830d48e1db0cef010bb14981a4",
+      "merchant": "BremerRatskeller",
+      "total": "48.65EUR",
+      "date": "29.01.2018"
+    },
+    {
+      "id": "cord-cord_validation_0099",
+      "img": "bench-corpus/cord/cord_validation_0099.png",
+      "sha1": "64d117afd465a7a341aa3bbc2dd25ad5fa04203b",
+      "merchant": null,
+      "total": "Rp. 39.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0178",
+      "img": "bench-corpus/cord/cord_train_0178.png",
+      "sha1": "64d21ac39451baa2dbf86186adbf3b404b86cc48",
+      "merchant": null,
+      "total": "259.000",
+      "date": null
+    },
+    {
+      "id": "sroie-546",
+      "img": "bench-sroie/raw/img/546.jpg",
+      "sha1": "64d4a84099828b40d094fa51680ecf69517e72ef",
+      "merchant": "RESTORAN WAN SHENG",
+      "total": "8.60",
+      "date": "09-04-2018"
+    },
+    {
+      "id": "wildreceipt-6cdc7ec61f7416b0321019dcacf805a5120653ea",
+      "img": "bench-corpus/wildreceipt/6cdc7ec61f7416b0321019dcacf805a5120653ea.jpeg",
+      "sha1": "64de110bac1c212da97a4fedd77cd287f5d04959",
+      "merchant": "Jollibee",
+      "total": "3.70",
+      "date": "18Feb14"
+    },
+    {
+      "id": "cord-cord_test_0075",
+      "img": "bench-corpus/cord/cord_test_0075.png",
+      "sha1": "6512b7f8de69c032074b667c4e39a04fa6afaee2",
+      "merchant": null,
+      "total": "282,000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0645",
+      "img": "bench-corpus/cord/cord_train_0645.png",
+      "sha1": "65532fd47ed60c3b9bcfc0f278ea2b3e544e6f8c",
+      "merchant": null,
+      "total": "69,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-6fe07898eafbfba6af910a2f5281a36d60e25349",
+      "img": "bench-corpus/wildreceipt/6fe07898eafbfba6af910a2f5281a36d60e25349.jpeg",
+      "sha1": "655f81e8226358259552ddfe45349641b0e6501a",
+      "merchant": "BOWWOWCAFESDNbHD",
+      "total": "180.00",
+      "date": "10/11/2015"
+    },
+    {
+      "id": "cord-cord_validation_0094",
+      "img": "bench-corpus/cord/cord_validation_0094.png",
+      "sha1": "6569fc309242c03e8b296fe8eec0ae5e9b310bd0",
+      "merchant": null,
+      "total": "80.100",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-d5de7f2a20751e50b84c747c17a24cd98bed3554",
+      "img": "bench-corpus/wildreceipt/d5de7f2a20751e50b84c747c17a24cd98bed3554.jpeg",
+      "sha1": "656fe181fb1c5e0a2ac98a4a2706559b28650fd1",
+      "merchant": "SAFEWAY",
+      "total": null,
+      "date": null
+    },
+    {
+      "id": "wildreceipt-edac5e0993826aee0d71787fa58d71013c2d64ad",
+      "img": "bench-corpus/wildreceipt/edac5e0993826aee0d71787fa58d71013c2d64ad.jpeg",
+      "sha1": "657560f38777a0c88d600758a7c2894e3d4dda6a",
+      "merchant": "SUPREMENY",
+      "total": "105.42",
+      "date": "3/1/2018"
+    },
+    {
+      "id": "wildreceipt-4114",
+      "img": "bench-corpus/wildreceipt/4114.jpeg",
+      "sha1": "65a3edbe5e2659a52b13b7e333d8e9b06496afe1",
+      "merchant": "TheGoldenSpoon#3 ChinaTownRestaurant-CCC",
+      "total": "R07.200",
+      "date": "8/27/2008"
+    },
+    {
+      "id": "cord-cord_train_0717",
+      "img": "bench-corpus/cord/cord_train_0717.png",
+      "sha1": "65e02b6c652a6aa6284940960cb0895580f5c394",
+      "merchant": null,
+      "total": "55.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-2205",
+      "img": "bench-corpus/wildreceipt/2205.jpeg",
+      "sha1": "664f9d0345e374ae137b85aaad7cf1932cd3caa0",
+      "merchant": null,
+      "total": "17.13",
+      "date": "02/18/2011"
+    },
+    {
+      "id": "cord-cord_train_0194",
+      "img": "bench-corpus/cord/cord_train_0194.png",
+      "sha1": "66522a797724e55ca119b5d6446f83acd67c72b5",
+      "merchant": null,
+      "total": "705,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-31069916ee9a545fdf5b3aef0e5be30b0e719e94",
+      "img": "bench-corpus/wildreceipt/31069916ee9a545fdf5b3aef0e5be30b0e719e94.jpeg",
+      "sha1": "6668347438ddb0fe10b505c587bfd2cc68b28841",
+      "merchant": "PeterChang",
+      "total": "114.95",
+      "date": "05/07/2016"
+    },
+    {
+      "id": "wildreceipt-286eb0bb824866262dcea038c24b16e5862db803",
+      "img": "bench-corpus/wildreceipt/286eb0bb824866262dcea038c24b16e5862db803.jpeg",
+      "sha1": "667e37bc7a0bc408f800173d5b278df3e491c683",
+      "merchant": "MsinStreetRestaurant",
+      "total": "$160.30",
+      "date": "Mon04/10/2017"
+    },
+    {
+      "id": "cord-cord_train_0787",
+      "img": "bench-corpus/cord/cord_train_0787.png",
+      "sha1": "66986be6ffc3f8a0c310279c0cbeb5fd3e078094",
+      "merchant": null,
+      "total": "246.073",
+      "date": null
+    },
+    {
+      "id": "sroie-451",
+      "img": "bench-sroie/raw/img/451.jpg",
+      "sha1": "66a6c9183def355378ebe8fd61f0f97c6e7027f2",
+      "merchant": "MR. D.I.Y. (M) SDN BHD",
+      "total": "5.00",
+      "date": "30-04-18"
+    },
+    {
+      "id": "wildreceipt-84dd424c75815a06f310648940536c08b2de8f79",
+      "img": "bench-corpus/wildreceipt/84dd424c75815a06f310648940536c08b2de8f79.jpeg",
+      "sha1": "66e2f654fd498c8872606c636b1afd7da37f0a11",
+      "merchant": "FootLocker",
+      "total": "217.50",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0709",
+      "img": "bench-corpus/cord/cord_train_0709.png",
+      "sha1": "66eedfb4ec97cd93e74e0ab5ab0237d9eba40321",
+      "merchant": null,
+      "total": "1,579,190",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-2c418be59a5028ce4b836f0c544008eac545c651",
+      "img": "bench-corpus/wildreceipt/2c418be59a5028ce4b836f0c544008eac545c651.jpeg",
+      "sha1": "66eeeff0192db3db79a552d3439a59cb9c40cbe0",
+      "merchant": "FAMILYRESTAURANT",
+      "total": "50.40",
+      "date": "23-08-16"
+    },
+    {
+      "id": "cord-cord_train_0510",
+      "img": "bench-corpus/cord/cord_train_0510.png",
+      "sha1": "66f8843507b8fe256f3a9151dea2f46707225886",
+      "merchant": null,
+      "total": "48.000",
+      "date": null
+    },
+    {
+      "id": "sroie-427",
+      "img": "bench-sroie/raw/img/427.jpg",
+      "sha1": "6717bad4547690d259e65c2265a774bd52a38c3e",
+      "merchant": "AEON CO. (M) BHD",
+      "total": "476.80",
+      "date": "11/05/2018"
+    },
+    {
+      "id": "wildreceipt-b4113afb7e241ab6ba9bdde81f394ece64a25d4f",
+      "img": "bench-corpus/wildreceipt/b4113afb7e241ab6ba9bdde81f394ece64a25d4f.jpeg",
+      "sha1": "6721e74dd95460e74e1413a044a781778aeafc1d",
+      "merchant": "FOODS",
+      "total": "12.51",
+      "date": "07/14/17"
+    },
+    {
+      "id": "wildreceipt-5b74988dfc7f0cb1c187632fe7490be9a83e6e18",
+      "img": "bench-corpus/wildreceipt/5b74988dfc7f0cb1c187632fe7490be9a83e6e18.jpeg",
+      "sha1": "6740fe08056a8b00ded2468e36d3912a2ff9345c",
+      "merchant": "Walmart",
+      "total": "3.74",
+      "date": "10/13/11"
+    },
+    {
+      "id": "wildreceipt-841bc5fdbd71557014745a6dfe81bcd84a17871b",
+      "img": "bench-corpus/wildreceipt/841bc5fdbd71557014745a6dfe81bcd84a17871b.jpeg",
+      "sha1": "674bb726bd5db3e55d3661bfabcafcef8bfbd1fa",
+      "merchant": "CowabungaBayLasVegas",
+      "total": "211.74",
+      "date": "05Oct2014"
+    },
+    {
+      "id": "wildreceipt-d961880ef8b62f844711f3e903b5c2ff2a770871",
+      "img": "bench-corpus/wildreceipt/d961880ef8b62f844711f3e903b5c2ff2a770871.jpeg",
+      "sha1": "674d715bcb07b3175c49fa209bb84374726d0930",
+      "merchant": "CornerstoneCafe",
+      "total": "17.42",
+      "date": "8/16/17"
+    },
+    {
+      "id": "wildreceipt-015858b37d96d72e58262b00bf4d77a6a760071e",
+      "img": "bench-corpus/wildreceipt/015858b37d96d72e58262b00bf4d77a6a760071e.jpeg",
+      "sha1": "6762dcc0c5387ff974083669c38d16fc62bdca6c",
+      "merchant": null,
+      "total": "$17.40",
+      "date": "10/16/2013"
+    },
+    {
+      "id": "cord-cord_train_0743",
+      "img": "bench-corpus/cord/cord_train_0743.png",
+      "sha1": "6796eec9f71608be30fbc8cb58f6c6ed512abed0",
+      "merchant": null,
+      "total": "143,908",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-a3a00049a62f8a6cec4203a51338a2c9db4f99a4",
+      "img": "bench-corpus/wildreceipt/a3a00049a62f8a6cec4203a51338a2c9db4f99a4.jpeg",
+      "sha1": "67b6264cee38e6f6cf48d033951a2f9173ad8151",
+      "merchant": "Walmart",
+      "total": "43.15",
+      "date": "12/27/14"
+    },
+    {
+      "id": "wildreceipt-b58913780ad34edddef3e6671546fe96d0d5e104",
+      "img": "bench-corpus/wildreceipt/b58913780ad34edddef3e6671546fe96d0d5e104.jpeg",
+      "sha1": "67c52a11da56a401b291ab62d9930560f34afab9",
+      "merchant": "GREEN'SFEEDINC.",
+      "total": "$6.86",
+      "date": "5/27/2016"
+    },
+    {
+      "id": "wildreceipt-660c7c4c97e529317102a0e303fced459e055d5c",
+      "img": "bench-corpus/wildreceipt/660c7c4c97e529317102a0e303fced459e055d5c.jpeg",
+      "sha1": "67d9d34a0a3bd09ff1e22fe632f1581850d5decd",
+      "merchant": "Kitchen&Bar Loulay",
+      "total": "48.22",
+      "date": "May07'15"
+    },
+    {
+      "id": "cord-cord_train_0156",
+      "img": "bench-corpus/cord/cord_train_0156.png",
+      "sha1": "67e62da135408d5bcffd1728242b3b8dc8c56aba",
+      "merchant": null,
+      "total": "27,300",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0483",
+      "img": "bench-corpus/cord/cord_train_0483.png",
+      "sha1": "67e71abcd2419259e84fa77c2d44aaf39341d29a",
+      "merchant": null,
+      "total": "25.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0452",
+      "img": "bench-corpus/cord/cord_train_0452.png",
+      "sha1": "67ec126ba5bdd96b26c3441848f8b55b648612c4",
+      "merchant": null,
+      "total": "22,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-a2d26bcb85cfd1032820ca79540c0be3bc21bcce",
+      "img": "bench-corpus/wildreceipt/a2d26bcb85cfd1032820ca79540c0be3bc21bcce.jpeg",
+      "sha1": "67f3a5971ab54eab9304521de69285dfbe6396fa",
+      "merchant": null,
+      "total": "691.70",
+      "date": "03/30/14"
+    },
+    {
+      "id": "wildreceipt-54a6a3cfa6296af8f321a96de5921fab29866625",
+      "img": "bench-corpus/wildreceipt/54a6a3cfa6296af8f321a96de5921fab29866625.jpeg",
+      "sha1": "67f748e4e4ad483ac939983a335bbc7650d41f44",
+      "merchant": "HEERING",
+      "total": "*1177.00",
+      "date": "31/07/2015"
+    },
+    {
+      "id": "wildreceipt-978b05e7abdee531370d84ba4198e3988bf5fcb7",
+      "img": "bench-corpus/wildreceipt/978b05e7abdee531370d84ba4198e3988bf5fcb7.jpeg",
+      "sha1": "6818d7e90625ea06c557d9fa53e737027516211c",
+      "merchant": "Subway#4415-0",
+      "total": "9.01",
+      "date": "11/14/2014"
+    },
+    {
+      "id": "sroie-446",
+      "img": "bench-sroie/raw/img/446.jpg",
+      "sha1": "682b0e6aa3e56e3875fa8bb39e4165510ee88ec3",
+      "merchant": "MR. D.I.Y. (M) SDN BHD",
+      "total": "48.10",
+      "date": "25-04-18"
+    },
+    {
+      "id": "wildreceipt-ba80600eba5485f259e9932ec6d5f7a5939f23ee",
+      "img": "bench-corpus/wildreceipt/ba80600eba5485f259e9932ec6d5f7a5939f23ee.jpeg",
+      "sha1": "683ca56479fdf64a0c76ed633c5ad4437734432b",
+      "merchant": "ROCCO'SNYPIZZAPASTA",
+      "total": null,
+      "date": "07/05/2017"
+    },
+    {
+      "id": "wildreceipt-f42151afd3d8904ed4a0040c9a87dac82bcc38f4",
+      "img": "bench-corpus/wildreceipt/f42151afd3d8904ed4a0040c9a87dac82bcc38f4.jpeg",
+      "sha1": "6849d5a6f25c35781c1711ffb7fbdb4a41e35314",
+      "merchant": "CVS/pharmacy",
+      "total": ".82",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0389",
+      "img": "bench-corpus/cord/cord_train_0389.png",
+      "sha1": "684f081f50b81a3e8a927648f9a3f73756b30c17",
+      "merchant": null,
+      "total": "19,500",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0208",
+      "img": "bench-corpus/cord/cord_train_0208.png",
+      "sha1": "689ff1a829c8a81a2a666ae05512f2964e7c02d8",
+      "merchant": null,
+      "total": "60,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-e74ca8204d2e43e5f9b509fcd8c716ca752853e5",
+      "img": "bench-corpus/wildreceipt/e74ca8204d2e43e5f9b509fcd8c716ca752853e5.jpeg",
+      "sha1": "68ae5f6b79c15852b68718b6cc79b2b4b17c6fa5",
+      "merchant": "SHAKESHACK",
+      "total": "15.20",
+      "date": "07/14/2017"
+    },
+    {
+      "id": "cord-cord_train_0735",
+      "img": "bench-corpus/cord/cord_train_0735.png",
+      "sha1": "68c51aae29ca4d41a8942d3732f725d0efcac572",
+      "merchant": null,
+      "total": "83,497",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0520",
+      "img": "bench-corpus/cord/cord_train_0520.png",
+      "sha1": "68f132b4c0ac9c5b72373a13c6ec41317c0c2d5b",
+      "merchant": null,
+      "total": "23.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0209",
+      "img": "bench-corpus/cord/cord_train_0209.png",
+      "sha1": "68fdf6a0cc6a5897dcaad12f6fd2bbab6aa5698f",
+      "merchant": null,
+      "total": "96,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-575a5c7429ef7312641401e48791bb8d51797721",
+      "img": "bench-corpus/wildreceipt/575a5c7429ef7312641401e48791bb8d51797721.jpeg",
+      "sha1": "68ff52a685fc86962fc38ccc4cf708fb8b70c402",
+      "merchant": "REDHAWK",
+      "total": "$67.31",
+      "date": "19-Sep-2015"
+    },
+    {
+      "id": "wildreceipt-d6cf7814253c7f7355fe06417d1c2063d61f3fb3",
+      "img": "bench-corpus/wildreceipt/d6cf7814253c7f7355fe06417d1c2063d61f3fb3.jpeg",
+      "sha1": "68ff596d02548e6707986d85b2a7e62a7e0d8114",
+      "merchant": "WEIKEE RESTORAN",
+      "total": null,
+      "date": "21/05/2009"
+    },
+    {
+      "id": "sroie-528",
+      "img": "bench-sroie/raw/img/528.jpg",
+      "sha1": "691a487a77de07d4eb0009f34fcfbdb3c37d6871",
+      "merchant": "DE LUXE CIRCLE FRESH MART SDN BHD",
+      "total": "25.85",
+      "date": "02/06/18"
+    },
+    {
+      "id": "cord-cord_train_0458",
+      "img": "bench-corpus/cord/cord_train_0458.png",
+      "sha1": "691b94c17e6c16be949cf4160768834b2219fd25",
+      "merchant": null,
+      "total": "22.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0493",
+      "img": "bench-corpus/cord/cord_train_0493.png",
+      "sha1": "69231b2ab8fc42c53b25ba157b436cd2e5d9911e",
+      "merchant": null,
+      "total": "41.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-944",
+      "img": "bench-corpus/wildreceipt/944.jpeg",
+      "sha1": "6941497456bc736f91df21eae5d61ce73088d7ce",
+      "merchant": "Gus's",
+      "total": "35.45",
+      "date": "08-05-2015"
+    },
+    {
+      "id": "wildreceipt-17879e88d2ad235edc7238eb9a54be1c8c7b00c3",
+      "img": "bench-corpus/wildreceipt/17879e88d2ad235edc7238eb9a54be1c8c7b00c3.jpeg",
+      "sha1": "699b213446e732aa05cc6a178fe8c4b899d18cb8",
+      "merchant": "LATAURINA S.C.LATAURINA",
+      "total": "4,70",
+      "date": "11/02/17"
+    },
+    {
+      "id": "wildreceipt-a5e966b78d7df79c80c36f71b5ec4d96ab2307dd",
+      "img": "bench-corpus/wildreceipt/a5e966b78d7df79c80c36f71b5ec4d96ab2307dd.jpeg",
+      "sha1": "69a4c4a9a823033bbf3299aa2f35aa256cd5af60",
+      "merchant": null,
+      "total": "125.38",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-bec86e307e07d0fcf015b60dc046e9609bc21c37",
+      "img": "bench-corpus/wildreceipt/bec86e307e07d0fcf015b60dc046e9609bc21c37.jpeg",
+      "sha1": "69a99b604d98c15ff5cb141af7e6670ba96dffbd",
+      "merchant": "AROMASOP",
+      "total": "\u00b7119,600",
+      "date": "27-05-2014"
+    },
+    {
+      "id": "sroie-549",
+      "img": "bench-sroie/raw/img/549.jpg",
+      "sha1": "69cce366a4b40cfa91d55d9fc70972a20abfb703",
+      "merchant": "RESTORAN WAN SHENG",
+      "total": "6.70",
+      "date": "02-04-2018"
+    },
+    {
+      "id": "wildreceipt-4041",
+      "img": "bench-corpus/wildreceipt/4041.jpeg",
+      "sha1": "6a1ee39da5e902b9338fc3849b89e664ff5ec6d9",
+      "merchant": "AGpplebee's APPLEBEE'S",
+      "total": null,
+      "date": "02-10-13"
+    },
+    {
+      "id": "wildreceipt-20991c73f3af1ed12bcce99e96e55c85db100a27",
+      "img": "bench-corpus/wildreceipt/20991c73f3af1ed12bcce99e96e55c85db100a27.jpeg",
+      "sha1": "6a2412980826c8e63d10a5a165bea75b536b8139",
+      "merchant": null,
+      "total": "76.06",
+      "date": "01/13/2017"
+    },
+    {
+      "id": "sroie-412",
+      "img": "bench-sroie/raw/img/412.jpg",
+      "sha1": "6a50407a648a802080b92627f69aedcb1dcc1af4",
+      "merchant": "SKCA HARDWARE & TIMBER SDN. BHD.",
+      "total": "142.00",
+      "date": "01-NOV-2017"
+    },
+    {
+      "id": "cord-cord_train_0112",
+      "img": "bench-corpus/cord/cord_train_0112.png",
+      "sha1": "6a5f8490f725f41fef6ce5cd3b8e5ed2e095f21a",
+      "merchant": null,
+      "total": "20,000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0481",
+      "img": "bench-corpus/cord/cord_train_0481.png",
+      "sha1": "6a70d52ddbef33f5378d56bb29ad07e83a984830",
+      "merchant": null,
+      "total": "62.000,00",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-165d67e579cc7172f6529d2e03e8d1ede96e17bb",
+      "img": "bench-corpus/wildreceipt/165d67e579cc7172f6529d2e03e8d1ede96e17bb.jpeg",
+      "sha1": "6a8e536becec0a3b77d8bf515da1bad972f62386",
+      "merchant": "TARGET",
+      "total": "$399.99",
+      "date": "06/17/2010"
+    },
+    {
+      "id": "wildreceipt-48a658a325e2879cc2e0856c653105f9fdab7645",
+      "img": "bench-corpus/wildreceipt/48a658a325e2879cc2e0856c653105f9fdab7645.jpeg",
+      "sha1": "6aa2a88e4e18461216408f6e3545e491b7542179",
+      "merchant": "KintonRamen5",
+      "total": "$45.74",
+      "date": "03/09/17"
+    },
+    {
+      "id": "wildreceipt-2a2c8310af1abaf8a53a75f5aabc75289807a646",
+      "img": "bench-corpus/wildreceipt/2a2c8310af1abaf8a53a75f5aabc75289807a646.jpeg",
+      "sha1": "6ab6ea85ee66785dcc7a27f0d8ee00668635d196",
+      "merchant": null,
+      "total": "133.41",
+      "date": "05/25/2016"
+    },
+    {
+      "id": "wildreceipt-afa61748ef431aecf2598221d6e78e27ff98c537",
+      "img": "bench-corpus/wildreceipt/afa61748ef431aecf2598221d6e78e27ff98c537.jpeg",
+      "sha1": "6ab7261f9938282bdfb16c97aecf70c96f05e593",
+      "merchant": "ShopRite WelcometoShopRite",
+      "total": "92.58",
+      "date": "08/19/12"
+    },
+    {
+      "id": "cord-cord_train_0271",
+      "img": "bench-corpus/cord/cord_train_0271.png",
+      "sha1": "6ab749927bc5345a25b0664a03a7cf8bfe3ffa76",
+      "merchant": null,
+      "total": "36.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_test_0097",
+      "img": "bench-corpus/cord/cord_test_0097.png",
+      "sha1": "6b096ef9c1c6bc0c761da23c509f2b5186fa81ba",
+      "merchant": null,
+      "total": "55.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-da2f65ef9cac268e455f53cd978a7c4de15ca301",
+      "img": "bench-corpus/wildreceipt/da2f65ef9cac268e455f53cd978a7c4de15ca301.jpeg",
+      "sha1": "6b3abffb15522b8a8dfb5d84d09775c229d89c02",
+      "merchant": "JwGrosvenor House",
+      "total": "\uffe162.45",
+      "date": "10APP'15"
+    },
+    {
+      "id": "wildreceipt-28afe51ca2e498e4a2fc1de59874231e0cc448ab",
+      "img": "bench-corpus/wildreceipt/28afe51ca2e498e4a2fc1de59874231e0cc448ab.jpeg",
+      "sha1": "6b59efa9b9706cd853256ebc373e0350d9c5ebab",
+      "merchant": "KENYON'SMEATMARKET",
+      "total": "$88.19",
+      "date": "08/28/2013"
+    },
+    {
+      "id": "sroie-421",
+      "img": "bench-sroie/raw/img/421.jpg",
+      "sha1": "6b5a63783ef05ae9ec01ad08b698900c80e427d3",
+      "merchant": "GUARDIAN HEALTH AND BEAUTY SDN BHD",
+      "total": "4.50",
+      "date": "24/05/18"
+    },
+    {
+      "id": "wildreceipt-88ee0b334b6384a9981a03c26c4fee16350d03da",
+      "img": "bench-corpus/wildreceipt/88ee0b334b6384a9981a03c26c4fee16350d03da.jpeg",
+      "sha1": "6b5d7a3f7e47e942b981de1d23ed824e46e36ae1",
+      "merchant": "CUBSBAR&GRILL",
+      "total": "$35.89",
+      "date": "NOV04'16"
+    },
+    {
+      "id": "wildreceipt-52edee385903d860f837cb6bff503fafcda7234d",
+      "img": "bench-corpus/wildreceipt/52edee385903d860f837cb6bff503fafcda7234d.jpeg",
+      "sha1": "6b6840ed3f39f045e147e657fb601302c08bccf6",
+      "merchant": "RedHouseAt TheQuayside",
+      "total": "179.20",
+      "date": "18/04/2008"
+    },
+    {
+      "id": "cord-cord_train_0423",
+      "img": "bench-corpus/cord/cord_train_0423.png",
+      "sha1": "6b6e4e84aa7cbefb56cc98af9753aafe80832dc1",
+      "merchant": null,
+      "total": "22,000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0282",
+      "img": "bench-corpus/cord/cord_train_0282.png",
+      "sha1": "6b78d9bbb0366d4b9b9fe3c9ec5a160d74d5a676",
+      "merchant": null,
+      "total": "88.620",
+      "date": null
+    },
+    {
+      "id": "sroie-544",
+      "img": "bench-sroie/raw/img/544.jpg",
+      "sha1": "6b7c53162665abb647256e8d51ad7ec97a9ee285",
+      "merchant": "RESTORAN DE COFFEE O",
+      "total": "11.60",
+      "date": "03/04/2018"
+    },
+    {
+      "id": "wildreceipt-c5f0dc6326ab307ed3234b8c2adabb95ddd72c94",
+      "img": "bench-corpus/wildreceipt/c5f0dc6326ab307ed3234b8c2adabb95ddd72c94.jpeg",
+      "sha1": "6b83bc09f3bf5d681dc2d17bb275e1097cfa2026",
+      "merchant": "RedondoCarWash",
+      "total": "$200.00",
+      "date": "2/15/2017"
+    },
+    {
+      "id": "wildreceipt-2300",
+      "img": "bench-corpus/wildreceipt/2300.jpeg",
+      "sha1": "6bbfe444dd15c2cd6545da3116f91096963cd10d",
+      "merchant": "PLAZA:Benicia-MartinezBridge",
+      "total": "$5.00",
+      "date": "ThuAug09,2012"
+    },
+    {
+      "id": "wildreceipt-0e81f49e920b415e87bb5963ef57b02f984cd233",
+      "img": "bench-corpus/wildreceipt/0e81f49e920b415e87bb5963ef57b02f984cd233.jpeg",
+      "sha1": "6bcc3bcad943ce37a87873778a5e1aa571adee89",
+      "merchant": "Jeni'ssplendidIceCreams,LLC",
+      "total": "$14.00",
+      "date": "9/24/2016"
+    },
+    {
+      "id": "wildreceipt-7a14db504e93e99d248f400f1a83a19a68e074cb",
+      "img": "bench-corpus/wildreceipt/7a14db504e93e99d248f400f1a83a19a68e074cb.jpeg",
+      "sha1": "6be32e37ed180f9a7db4643d6c05e9b47d4eeb0b",
+      "merchant": null,
+      "total": "$2.17",
+      "date": "2012-04-27"
+    },
+    {
+      "id": "cord-cord_train_0086",
+      "img": "bench-corpus/cord/cord_train_0086.png",
+      "sha1": "6c0627994e8ac6ad3daeef25a1f098b26d009e6c",
+      "merchant": null,
+      "total": "22.660",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-dda2ecdceffd2830eb2a31a56a24b058e83252b1",
+      "img": "bench-corpus/wildreceipt/dda2ecdceffd2830eb2a31a56a24b058e83252b1.jpeg",
+      "sha1": "6c0f819854d6231227fe1435a9f54527012068b0",
+      "merchant": "TWOBROTHERSRESTAURANT",
+      "total": "$21.49",
+      "date": "04-Jan-2017"
+    },
+    {
+      "id": "cord-cord_test_0040",
+      "img": "bench-corpus/cord/cord_test_0040.png",
+      "sha1": "6c3195c10defa288ff484b9ab0abe78921623a69",
+      "merchant": null,
+      "total": "68,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-ba2c0c239d65d4a69ff17ebdb6095834a599d8ba",
+      "img": "bench-corpus/wildreceipt/ba2c0c239d65d4a69ff17ebdb6095834a599d8ba.jpeg",
+      "sha1": "6c3e49cf103f2d5ea7352df0cc22a52c0ce253b2",
+      "merchant": null,
+      "total": "33.90",
+      "date": "16-10-2015"
+    },
+    {
+      "id": "wildreceipt-55b65dd0288a990d3e9dbf3ab6845768799e03d6",
+      "img": "bench-corpus/wildreceipt/55b65dd0288a990d3e9dbf3ab6845768799e03d6.jpeg",
+      "sha1": "6c51022febbf37e7f923148583a5649aa7c43991",
+      "merchant": "PaneraBread",
+      "total": null,
+      "date": "1/3/2016"
+    },
+    {
+      "id": "wildreceipt-f08140cf5dda5ad160d72328eacebc172dbb7fc5",
+      "img": "bench-corpus/wildreceipt/f08140cf5dda5ad160d72328eacebc172dbb7fc5.jpeg",
+      "sha1": "6c65245794900574a1a47369759a334a950945ca",
+      "merchant": "MIOPRONTO",
+      "total": "42,00",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-3258",
+      "img": "bench-corpus/wildreceipt/3258.jpeg",
+      "sha1": "6c6c0ace028a64f0c7e4c169f5ff78f759e32d2b",
+      "merchant": null,
+      "total": null,
+      "date": "09Jul,13"
+    },
+    {
+      "id": "cord-cord_train_0167",
+      "img": "bench-corpus/cord/cord_train_0167.png",
+      "sha1": "6c75e4dbed6babda3e237b4a446f09680d7270ae",
+      "merchant": null,
+      "total": "12,600",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-9823b1a6297fefe3f5b12d3e165e16249426ac38",
+      "img": "bench-corpus/wildreceipt/9823b1a6297fefe3f5b12d3e165e16249426ac38.jpeg",
+      "sha1": "6c9c6a0e052e7b8653cf854ba79c9124e26b7dab",
+      "merchant": "SUPREMELA",
+      "total": "229.95",
+      "date": "8/21/2018"
+    },
+    {
+      "id": "cord-cord_train_0522",
+      "img": "bench-corpus/cord/cord_train_0522.png",
+      "sha1": "6cb3f4808cbe1823d84f3bc04d7e82a06c32603f",
+      "merchant": null,
+      "total": "63,500",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-0069776df9951208276e00acf6ac263b45f64598",
+      "img": "bench-corpus/wildreceipt/0069776df9951208276e00acf6ac263b45f64598.jpeg",
+      "sha1": "6cb6df18682bcbecb32d192579e0ca09d8c47753",
+      "merchant": "SUPREMELA",
+      "total": "52.44",
+      "date": "8/26/2017"
+    },
+    {
+      "id": "wildreceipt-940",
+      "img": "bench-corpus/wildreceipt/940.jpeg",
+      "sha1": "6cd2694edd0c990d3f2d1a05a298d3f7df17ec8a",
+      "merchant": null,
+      "total": "87.53",
+      "date": "Feb03'15"
+    },
+    {
+      "id": "cord-cord_train_0223",
+      "img": "bench-corpus/cord/cord_train_0223.png",
+      "sha1": "6cf738cf2e3e192f66c6bc7e66b820239ba66b81",
+      "merchant": null,
+      "total": "29,500",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-84701b0a041ae581cd9b3e090883c4150a554884",
+      "img": "bench-corpus/wildreceipt/84701b0a041ae581cd9b3e090883c4150a554884.jpeg",
+      "sha1": "6cfa40b9a2fe3866bce5f6747d0c2ebe167315af",
+      "merchant": "ROSS",
+      "total": "$95.63",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0638",
+      "img": "bench-corpus/cord/cord_train_0638.png",
+      "sha1": "6d24ece88039f31c74f48e7d02639a9f83522f47",
+      "merchant": null,
+      "total": "30,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-3078",
+      "img": "bench-corpus/wildreceipt/3078.jpeg",
+      "sha1": "6d3d9e5241f8e27a5eb1fdd1dd07691cf72844a1",
+      "merchant": "SHONEY'S #333441",
+      "total": "19.23",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-79f5a2e2d0863de5c7ccab9ec20159107f8e0426",
+      "img": "bench-corpus/wildreceipt/79f5a2e2d0863de5c7ccab9ec20159107f8e0426.jpeg",
+      "sha1": "6d4ea8cba1d73cbcc2b277a47d45239021bdd04d",
+      "merchant": "WESTMINSTERKITCHEN",
+      "total": "\u00a372.28",
+      "date": "12/01/2019"
+    },
+    {
+      "id": "wildreceipt-9992bfe82772ad9be5bbeca902eb08d3d7b37e4a",
+      "img": "bench-corpus/wildreceipt/9992bfe82772ad9be5bbeca902eb08d3d7b37e4a.jpeg",
+      "sha1": "6d5e4d25ba5d8c2b5c6a2d5be6f72c35ffca4ee4",
+      "merchant": "Pappadeaux#30",
+      "total": null,
+      "date": "04/15/14"
+    },
+    {
+      "id": "cord-cord_train_0795",
+      "img": "bench-corpus/cord/cord_train_0795.png",
+      "sha1": "6da82c7e81f3405c04977a1a8a164cd354e579d4",
+      "merchant": null,
+      "total": "48.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0355",
+      "img": "bench-corpus/cord/cord_train_0355.png",
+      "sha1": "6daa03f8bc269aefc72b3190bdfaa6ee596fffe5",
+      "merchant": null,
+      "total": "92,000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0114",
+      "img": "bench-corpus/cord/cord_train_0114.png",
+      "sha1": "6daef56f77e5d7eac5a8cff8b75ce29d318dc856",
+      "merchant": null,
+      "total": "70,000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0149",
+      "img": "bench-corpus/cord/cord_train_0149.png",
+      "sha1": "6de2860672a1863a3490ecfa2d46597e2a943323",
+      "merchant": null,
+      "total": "53,020",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0637",
+      "img": "bench-corpus/cord/cord_train_0637.png",
+      "sha1": "6de81654431b83bc7520aa91b254e9f6689ea840",
+      "merchant": null,
+      "total": "40.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-ce42d91aedd96b6a6c67b0b59784e66d49ce7298",
+      "img": "bench-corpus/wildreceipt/ce42d91aedd96b6a6c67b0b59784e66d49ce7298.jpeg",
+      "sha1": "6df8354d3fb22144d11f8dac8ac6e8a5f84df100",
+      "merchant": null,
+      "total": "$109.33",
+      "date": "04/28/2017Fri"
+    },
+    {
+      "id": "wildreceipt-425fd7774ece694f8e526f6cd84cb56333d6371e",
+      "img": "bench-corpus/wildreceipt/425fd7774ece694f8e526f6cd84cb56333d6371e.jpeg",
+      "sha1": "6df94df7725bdbdb367782cb1e90f1beb1144dcc",
+      "merchant": "DOWNSTAIRS DOWNSTARIRS",
+      "total": "30.99",
+      "date": null
+    },
+    {
+      "id": "sroie-597",
+      "img": "bench-sroie/raw/img/597.jpg",
+      "sha1": "6e230e2ccece4eff0f8ebdbcc67363f271e2b742",
+      "merchant": "ONE ONE THREE SEAFOOD RESTAURANT SDN BHD",
+      "total": "71.00",
+      "date": "22-05-2018"
+    },
+    {
+      "id": "cord-cord_train_0147",
+      "img": "bench-corpus/cord/cord_train_0147.png",
+      "sha1": "6e33b9f54421783c5e5179efa5d70a18a345dd77",
+      "merchant": null,
+      "total": "17,001",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-ec0b9b3ddaa3006a918a38476533149004a061a9",
+      "img": "bench-corpus/wildreceipt/ec0b9b3ddaa3006a918a38476533149004a061a9.jpeg",
+      "sha1": "6e37278815e7d1a49602732cff67b600f7c747c9",
+      "merchant": "HARVESTSIATION",
+      "total": "$11.50",
+      "date": "12/11/2014"
+    },
+    {
+      "id": "cord-cord_train_0546",
+      "img": "bench-corpus/cord/cord_train_0546.png",
+      "sha1": "6e5032c7bccd6648357f2af27f44a41b741b683f",
+      "merchant": null,
+      "total": "20.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0160",
+      "img": "bench-corpus/cord/cord_train_0160.png",
+      "sha1": "6e8b34924efde03f98d58bdc53d2b866709e0d23",
+      "merchant": null,
+      "total": "43,890",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-3681",
+      "img": "bench-corpus/wildreceipt/3681.jpeg",
+      "sha1": "6ea03a89d706b08bf642b5d028da356d4682e065",
+      "merchant": "STARBUCKSStore#7475",
+      "total": "$8.24",
+      "date": "12/17/2014"
+    },
+    {
+      "id": "cord-cord_validation_0096",
+      "img": "bench-corpus/cord/cord_validation_0096.png",
+      "sha1": "6ecec9389ae525b33b56db0a4927751aafb4e10d",
+      "merchant": null,
+      "total": "12,750",
+      "date": null
+    },
+    {
+      "id": "sroie-371",
+      "img": "bench-sroie/raw/img/371.jpg",
+      "sha1": "6ee1f399324b5ee1c2bd8f5ee5a1c8a4e56a6eb0",
+      "merchant": "GARDENIA BAKERIES (KL) SDN BHD",
+      "total": "27.20",
+      "date": "10/10/2017"
+    },
+    {
+      "id": "sroie-515",
+      "img": "bench-sroie/raw/img/515.jpg",
+      "sha1": "6ef6e4db0341b473316bc6663c987fade97e77c9",
+      "merchant": "AIK HUAT HARDWARE ENTERPRISE (SETIA ALAM) SDN BHD",
+      "total": "28.00",
+      "date": "04/09/2017"
+    },
+    {
+      "id": "wildreceipt-a017aba0403cbaecf7f7a55e12b0194bcc9990d1",
+      "img": "bench-corpus/wildreceipt/a017aba0403cbaecf7f7a55e12b0194bcc9990d1.jpeg",
+      "sha1": "6ef7922bc4237b46271906ad650398167b64e277",
+      "merchant": "samui adventure",
+      "total": "\u0e3f200.00",
+      "date": "2015-11-28"
+    },
+    {
+      "id": "wildreceipt-8f4600e1f4ad7565604b1813b7139b61f5e75e13",
+      "img": "bench-corpus/wildreceipt/8f4600e1f4ad7565604b1813b7139b61f5e75e13.jpeg",
+      "sha1": "6eff0229b0053539434dd87efcb764a164c91286",
+      "merchant": "Haagen\u00b7Dazs",
+      "total": "147.60",
+      "date": "24/02/2009"
+    },
+    {
+      "id": "wildreceipt-59f4ec7005b72baf173a55340a411bf56b430205",
+      "img": "bench-corpus/wildreceipt/59f4ec7005b72baf173a55340a411bf56b430205.jpeg",
+      "sha1": "6f11c37884edd048643662bc00a4c97d147b24a4",
+      "merchant": null,
+      "total": "50.88",
+      "date": "07/05/2015"
+    },
+    {
+      "id": "wildreceipt-7911091b6d2dbf7a84fd6d96583ec1eb5533014c",
+      "img": "bench-corpus/wildreceipt/7911091b6d2dbf7a84fd6d96583ec1eb5533014c.jpeg",
+      "sha1": "6f2ae0d21cbd8e6ace7ef9ee3f751b7703cc581f",
+      "merchant": null,
+      "total": null,
+      "date": "01/08/2011"
+    },
+    {
+      "id": "wildreceipt-77320e371cfe09296e23be9e0c1c9c73317e2dec",
+      "img": "bench-corpus/wildreceipt/77320e371cfe09296e23be9e0c1c9c73317e2dec.jpeg",
+      "sha1": "6f2f3e86bfcf2eace4485fca2b2380644600867c",
+      "merchant": "Manita",
+      "total": "23,70",
+      "date": "26/01/2018"
+    },
+    {
+      "id": "wildreceipt-6c2da20088a717fed704a30d68a245c1ee9acae4",
+      "img": "bench-corpus/wildreceipt/6c2da20088a717fed704a30d68a245c1ee9acae4.jpeg",
+      "sha1": "6f4ec0c30ef7dbb4cb88fade7b69d57636056519",
+      "merchant": "GauchoGrill",
+      "total": "270.94",
+      "date": "10/16/15"
+    },
+    {
+      "id": "wildreceipt-161",
+      "img": "bench-corpus/wildreceipt/161.jpeg",
+      "sha1": "6f71bb4c05ff0195d67552d7351c398c4ed375b3",
+      "merchant": "Berghotel GrosseScheidegg",
+      "total": "54.50",
+      "date": "30.07.2007/"
+    },
+    {
+      "id": "cord-cord_test_0000",
+      "img": "bench-corpus/cord/cord_test_0000.png",
+      "sha1": "6f8311607a426d6b85b72a3cba05e236279d1696",
+      "merchant": null,
+      "total": "60.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0560",
+      "img": "bench-corpus/cord/cord_train_0560.png",
+      "sha1": "6fa26c3094972d0259d578c392e1be7b48d2d12b",
+      "merchant": null,
+      "total": "52,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-67c10ac3c00c5da07f0600a5a6bfac69062dc5c0",
+      "img": "bench-corpus/wildreceipt/67c10ac3c00c5da07f0600a5a6bfac69062dc5c0.jpeg",
+      "sha1": "6fa855b1bc22c30cc6212440f4f98d5e99776e73",
+      "merchant": "KhyenChyen",
+      "total": "Rsl,971.00",
+      "date": "17/04/2015"
+    },
+    {
+      "id": "cord-cord_train_0038",
+      "img": "bench-corpus/cord/cord_train_0038.png",
+      "sha1": "6fc7fa5b67d175655e14a6fb7d44d7f3baddb0ff",
+      "merchant": null,
+      "total": "24.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-5ceff02beae53a085e18842334f3d762b5cc5b9b",
+      "img": "bench-corpus/wildreceipt/5ceff02beae53a085e18842334f3d762b5cc5b9b.jpeg",
+      "sha1": "6ffd283b6a7ae450e0945cb01199c4c381926df8",
+      "merchant": "CuriousPalette",
+      "total": "$112.29",
+      "date": "16/01/2016"
+    },
+    {
+      "id": "wildreceipt-185",
+      "img": "bench-corpus/wildreceipt/185.jpeg",
+      "sha1": "70096ef191d077e96dade444731017aba5f45c31",
+      "merchant": "CHIPOTLE",
+      "total": "15.62",
+      "date": "11/10/2014"
+    },
+    {
+      "id": "cord-cord_test_0070",
+      "img": "bench-corpus/cord/cord_test_0070.png",
+      "sha1": "70582b31d79151aea96ae7236d36fb92a072e764",
+      "merchant": null,
+      "total": "1,565,938",
+      "date": null
+    },
+    {
+      "id": "sroie-388",
+      "img": "bench-sroie/raw/img/388.jpg",
+      "sha1": "7075d280e273200bca94d75aa11f963cf533fc71",
+      "merchant": "CHEF LEE SDN BHD",
+      "total": "RM96.20",
+      "date": "13-02-2016"
+    },
+    {
+      "id": "cord-cord_train_0155",
+      "img": "bench-corpus/cord/cord_train_0155.png",
+      "sha1": "70a5e8b530701213b2bfa59e661ef5fa19af92bf",
+      "merchant": null,
+      "total": "41,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-1ed5b2cd1b24d2a94e763512de6bf406b31b7f98",
+      "img": "bench-corpus/wildreceipt/1ed5b2cd1b24d2a94e763512de6bf406b31b7f98.jpeg",
+      "sha1": "70b9d56ada9fb50fc3df49e124320293877e0c9d",
+      "merchant": "REDCOW",
+      "total": "37.39",
+      "date": "06/04/2016"
+    },
+    {
+      "id": "cord-cord_test_0076",
+      "img": "bench-corpus/cord/cord_test_0076.png",
+      "sha1": "70ced5d9074c43d15a219eecaff86ee125a75254",
+      "merchant": null,
+      "total": "*110000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_test_0024",
+      "img": "bench-corpus/cord/cord_test_0024.png",
+      "sha1": "70d49f02b20209bffe8cc9c7480b21408331946f",
+      "merchant": null,
+      "total": "Rp.118.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-b059e1265bef5bd0e337a7801af6f41d8300f66c",
+      "img": "bench-corpus/wildreceipt/b059e1265bef5bd0e337a7801af6f41d8300f66c.jpeg",
+      "sha1": "70e121d811b4c7f083d821b033bbb5dc1d2783b0",
+      "merchant": null,
+      "total": null,
+      "date": "04/06/13"
+    },
+    {
+      "id": "wildreceipt-6e8de4b7545111a1101b49ad266624526351c373",
+      "img": "bench-corpus/wildreceipt/6e8de4b7545111a1101b49ad266624526351c373.jpeg",
+      "sha1": "70e56a59ff5558a2ace88684e63526489585d5fc",
+      "merchant": "PeliPeli",
+      "total": "$81.62",
+      "date": "10/24/2012"
+    },
+    {
+      "id": "cord-cord_train_0497",
+      "img": "bench-corpus/cord/cord_train_0497.png",
+      "sha1": "710c146bfa7f5cea8383248a641df6040943cc9d",
+      "merchant": null,
+      "total": "17,000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0480",
+      "img": "bench-corpus/cord/cord_train_0480.png",
+      "sha1": "712901df47c87c11aeceb6de1d241a1f36bf1949",
+      "merchant": null,
+      "total": "Rp 29000.00",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-354387564973d45f7230db32c18d9b8fab6076f0",
+      "img": "bench-corpus/wildreceipt/354387564973d45f7230db32c18d9b8fab6076f0.jpeg",
+      "sha1": "713b34d142798ee8f47986a6b161ea53a8ec793c",
+      "merchant": "KiwianaRestaurant",
+      "total": "46.54",
+      "date": "2/5/2017"
+    },
+    {
+      "id": "wildreceipt-d1019d13377ee2fc48ebb49279185833ebd3a265",
+      "img": "bench-corpus/wildreceipt/d1019d13377ee2fc48ebb49279185833ebd3a265.jpeg",
+      "sha1": "713d54fe6c157cacd54e3f949de931e9124c0983",
+      "merchant": "SHELLRINCON",
+      "total": "22.00",
+      "date": "03/22/15"
+    },
+    {
+      "id": "sroie-526",
+      "img": "bench-sroie/raw/img/526.jpg",
+      "sha1": "715e54466ff3194be458820ac22522fea68d3442",
+      "merchant": "UNIHAKKA INTERNATIONAL SDN BHD",
+      "total": "RM7.70",
+      "date": "12 JUN 2018"
+    },
+    {
+      "id": "wildreceipt-1849416fb8b3a59c2c66ea389e632e6a6c0803f4",
+      "img": "bench-corpus/wildreceipt/1849416fb8b3a59c2c66ea389e632e6a6c0803f4.jpeg",
+      "sha1": "7185f8a4924aba46afe006ad1d4492a927a77243",
+      "merchant": null,
+      "total": null,
+      "date": "01Apr13"
+    },
+    {
+      "id": "wildreceipt-22bf3bb0bfe2b2fc63e199ad616f0a3146ff8f32",
+      "img": "bench-corpus/wildreceipt/22bf3bb0bfe2b2fc63e199ad616f0a3146ff8f32.jpeg",
+      "sha1": "719b265a29b312b7b95db403accf7942ffe49311",
+      "merchant": "GOODWILLOUTLETSTORE",
+      "total": "$107.04",
+      "date": "01/02/2017"
+    },
+    {
+      "id": "wildreceipt-048295bf72bf290776d20dd717c68093d0e2a8ff",
+      "img": "bench-corpus/wildreceipt/048295bf72bf290776d20dd717c68093d0e2a8ff.jpeg",
+      "sha1": "71a5bb84fcb2be6a5145a34e739f5a259bed8f90",
+      "merchant": "WelcomeToPopeyes",
+      "total": "38.96",
+      "date": "MonNoy14,2016"
+    },
+    {
+      "id": "wildreceipt-4377",
+      "img": "bench-corpus/wildreceipt/4377.jpeg",
+      "sha1": "71e1391e3fd7e3b068a634a30e4b03b07cf42a34",
+      "merchant": "SAFEWAY",
+      "total": "105.95",
+      "date": "7/21/11"
+    },
+    {
+      "id": "wildreceipt-1bfb6e4e6cb469c943313ee9a7cced2a88ae1d05",
+      "img": "bench-corpus/wildreceipt/1bfb6e4e6cb469c943313ee9a7cced2a88ae1d05.jpeg",
+      "sha1": "71e98c328c34b66876bd2c5c67ae968e147a7111",
+      "merchant": "DISNEPPARKS ChefMlckey\u00b4s",
+      "total": "184.25",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-140743f326d1745dada4f330ffe7b765a11f6649",
+      "img": "bench-corpus/wildreceipt/140743f326d1745dada4f330ffe7b765a11f6649.jpeg",
+      "sha1": "71f5329e06bf153dddb474a2f8bc9b82c3d7150c",
+      "merchant": "AUBONMARCHE",
+      "total": null,
+      "date": "06/04/2016"
+    },
+    {
+      "id": "sroie-447",
+      "img": "bench-sroie/raw/img/447.jpg",
+      "sha1": "722b9210dd7a7001413faaa410dbb3e4e9f9a659",
+      "merchant": "MR. D.I.Y. (M) SDN BHD",
+      "total": "2.10",
+      "date": "26-04-18"
+    },
+    {
+      "id": "cord-cord_train_0561",
+      "img": "bench-corpus/cord/cord_train_0561.png",
+      "sha1": "722bd8f2cc4f63dfeed673dff17d6349f4f2b3f5",
+      "merchant": null,
+      "total": "60.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0447",
+      "img": "bench-corpus/cord/cord_train_0447.png",
+      "sha1": "7268b8790716f8de76920b7f4ae659d1ab7a9ec4",
+      "merchant": null,
+      "total": "Rp 29000.00",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0704",
+      "img": "bench-corpus/cord/cord_train_0704.png",
+      "sha1": "72956fa639084eec0fd95ae4e21978876dc0e1e8",
+      "merchant": null,
+      "total": "97,500",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-effbb4aa99082ef0034ee376eda6929974358484",
+      "img": "bench-corpus/wildreceipt/effbb4aa99082ef0034ee376eda6929974358484.jpeg",
+      "sha1": "72a4bd324a8da5ba983530e39e201986dcd11ef0",
+      "merchant": "TECXKEE(2012)CHICKENRICEPTELTD",
+      "total": "$35.50",
+      "date": "30-08-2015"
+    },
+    {
+      "id": "cord-cord_train_0431",
+      "img": "bench-corpus/cord/cord_train_0431.png",
+      "sha1": "72adb864adabae30c7b2fc030e40f5d63fc9645a",
+      "merchant": null,
+      "total": "44,000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_test_0025",
+      "img": "bench-corpus/cord/cord_test_0025.png",
+      "sha1": "72c4624d0d23e25097f18c7ba19b250d88857908",
+      "merchant": null,
+      "total": "43,000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0767",
+      "img": "bench-corpus/cord/cord_train_0767.png",
+      "sha1": "72db463b5739e534d41240f15587a0e73187b8d1",
+      "merchant": null,
+      "total": "80,501",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-53169eceec9ae289070f167c4eb6f98df378242c",
+      "img": "bench-corpus/wildreceipt/53169eceec9ae289070f167c4eb6f98df378242c.jpeg",
+      "sha1": "72ddd57736aadfce99f0959e8596112c6c073b87",
+      "merchant": null,
+      "total": "$36.60",
+      "date": "08/02/02"
+    },
+    {
+      "id": "cord-cord_train_0659",
+      "img": "bench-corpus/cord/cord_train_0659.png",
+      "sha1": "72e4f04b2de9b6eaa10d37ba92a2b11929ddb780",
+      "merchant": null,
+      "total": "293,370",
+      "date": null
+    },
+    {
+      "id": "cord-cord_test_0087",
+      "img": "bench-corpus/cord/cord_test_0087.png",
+      "sha1": "72eb19103f574971b5194e9015b28bc130efc192",
+      "merchant": null,
+      "total": "40,150",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-344eec2139642f7220ce55dd6eef322c2db4d86e",
+      "img": "bench-corpus/wildreceipt/344eec2139642f7220ce55dd6eef322c2db4d86e.jpeg",
+      "sha1": "72f6e49d8f154d027ef0e34e5fdc75be7b42c5b0",
+      "merchant": "CharcoalGrillDiner",
+      "total": "85.22",
+      "date": "6/20/2007"
+    },
+    {
+      "id": "cord-cord_test_0044",
+      "img": "bench-corpus/cord/cord_test_0044.png",
+      "sha1": "73008a2682d966c4dde484810f5996246a488ef5",
+      "merchant": null,
+      "total": "30.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-43b2d91a8890d532f45970813720e7d8779e1ee3",
+      "img": "bench-corpus/wildreceipt/43b2d91a8890d532f45970813720e7d8779e1ee3.jpeg",
+      "sha1": "73196132adcd61590884b788ae1fd276c1290cf5",
+      "merchant": "BAANTHAIKITCHEN",
+      "total": "97.90",
+      "date": "02/06/2017"
+    },
+    {
+      "id": "wildreceipt-af46e44b1f58685fb2e0b88be9a74385b9179831",
+      "img": "bench-corpus/wildreceipt/af46e44b1f58685fb2e0b88be9a74385b9179831.jpeg",
+      "sha1": "734ba4b75e69cc44ead653e5379868b798e58658",
+      "merchant": "BILTEMA BILIEMASWEDENAB/COTEBORG115",
+      "total": "100.00",
+      "date": "06.04.2014"
+    },
+    {
+      "id": "cord-cord_test_0032",
+      "img": "bench-corpus/cord/cord_test_0032.png",
+      "sha1": "734d062f586d224273bf9b39a481549ed1874015",
+      "merchant": null,
+      "total": "24.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_test_0011",
+      "img": "bench-corpus/cord/cord_test_0011.png",
+      "sha1": "735e00bc755af0aba3d039e8f780cd2a41f0fb94",
+      "merchant": null,
+      "total": "230,000",
+      "date": null
+    },
+    {
+      "id": "sroie-496",
+      "img": "bench-sroie/raw/img/496.jpg",
+      "sha1": "737e19b1f5ee018579347475a9d867e232cc7249",
+      "merchant": "SANYU STATIONERY SHOP",
+      "total": "4.50",
+      "date": "06/07/2017"
+    },
+    {
+      "id": "wildreceipt-1",
+      "img": "bench-corpus/wildreceipt/1.jpeg",
+      "sha1": "73985d2ee6024a5eacb3971da71401f42240ed52",
+      "merchant": "DBSHOES-RENO",
+      "total": "DebitCard:$64.62",
+      "date": "12/30/2012"
+    },
+    {
+      "id": "sroie-460",
+      "img": "bench-sroie/raw/img/460.jpg",
+      "sha1": "7399eb1112c9f6921cbe532420e9501f80e00a40",
+      "merchant": "DIMILIKI OLEH T PLUS F&B SDN. BHD.",
+      "total": "9.45",
+      "date": "11/05/2018"
+    },
+    {
+      "id": "cord-cord_train_0150",
+      "img": "bench-corpus/cord/cord_train_0150.png",
+      "sha1": "73a0b2db52d6577e4d05bae3f3d58a05f9364f62",
+      "merchant": null,
+      "total": "22,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-3344fa179ed0b406392228a3eb9cca879296bf55",
+      "img": "bench-corpus/wildreceipt/3344fa179ed0b406392228a3eb9cca879296bf55.jpeg",
+      "sha1": "73b92b5305a777b9b5329ea4f1cb51b73b57cdef",
+      "merchant": "CasablancaCafeandBogart's Bar",
+      "total": null,
+      "date": "Jul12.2017"
+    },
+    {
+      "id": "cord-cord_train_0619",
+      "img": "bench-corpus/cord/cord_train_0619.png",
+      "sha1": "7413588b4e4c9324e367e3c6677cf124b2f6f2d4",
+      "merchant": null,
+      "total": "58.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-7458348932378a9e0043835280ec57a4b4e4fb10",
+      "img": "bench-corpus/wildreceipt/7458348932378a9e0043835280ec57a4b4e4fb10.jpeg",
+      "sha1": "741fb1c0c6710f63a240a6b9327dfda34e2d852c",
+      "merchant": "WantonNoddles",
+      "total": "13.50",
+      "date": "06-11-16"
+    },
+    {
+      "id": "wildreceipt-6c525f8c27384ba7cb64019132d35ff91ddcd53c",
+      "img": "bench-corpus/wildreceipt/6c525f8c27384ba7cb64019132d35ff91ddcd53c.jpeg",
+      "sha1": "742a26bed636b5d13b68c70c39caaac0ff47a5fb",
+      "merchant": null,
+      "total": "17.13",
+      "date": "02/18/2011"
+    },
+    {
+      "id": "wildreceipt-1265ac53a8adf66a8a7079678d9c38f540a7f5fa",
+      "img": "bench-corpus/wildreceipt/1265ac53a8adf66a8a7079678d9c38f540a7f5fa.jpeg",
+      "sha1": "7430b0506d86ff30618aef4dfc199639db844635",
+      "merchant": "PYT",
+      "total": "$61.56",
+      "date": "9/8/2014"
+    },
+    {
+      "id": "wildreceipt-0ab76abe5d90a9489cf9111f6333ba9cbe1742d8",
+      "img": "bench-corpus/wildreceipt/0ab76abe5d90a9489cf9111f6333ba9cbe1742d8.jpeg",
+      "sha1": "74328e7ed277b0a646747199281884cdfce0d87b",
+      "merchant": "BUATHAICUISINEBISTRO",
+      "total": "76.45",
+      "date": "07-03-2014"
+    },
+    {
+      "id": "sroie-487",
+      "img": "bench-sroie/raw/img/487.jpg",
+      "sha1": "745812b37b9290973b66ccb9d4669fa970acc31a",
+      "merchant": "SANYU STATIONERY SHOP",
+      "total": "12.40",
+      "date": "18/09/2017"
+    },
+    {
+      "id": "wildreceipt-d58cebe5562a5d957488dabc70597dfa187f3136",
+      "img": "bench-corpus/wildreceipt/d58cebe5562a5d957488dabc70597dfa187f3136.jpeg",
+      "sha1": "74618197fa07779bb4ac339454a5b9d478cef8a5",
+      "merchant": "PURNIMARESTAURANT",
+      "total": "$64.20",
+      "date": "11-Dec-2014"
+    },
+    {
+      "id": "wildreceipt-a5c238464ccef95a75aaab0645fd47d3e3d4fd1c",
+      "img": "bench-corpus/wildreceipt/a5c238464ccef95a75aaab0645fd47d3e3d4fd1c.jpeg",
+      "sha1": "747daf53a3dfd5e26a1d9a00b7bbdfebc7615345",
+      "merchant": null,
+      "total": "6.65",
+      "date": "18/01/2018"
+    },
+    {
+      "id": "cord-cord_validation_0083",
+      "img": "bench-corpus/cord/cord_validation_0083.png",
+      "sha1": "748091d17720664ee7e719d7e60bd1441386e2e8",
+      "merchant": null,
+      "total": "17,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-a1c677a97afe1caa4f5f434f82b9e3ada742e834",
+      "img": "bench-corpus/wildreceipt/a1c677a97afe1caa4f5f434f82b9e3ada742e834.jpeg",
+      "sha1": "749a67ccc8614c0603e8179f7f62fcdc944e3d94",
+      "merchant": null,
+      "total": "5,10",
+      "date": null
+    },
+    {
+      "id": "cord-cord_validation_0046",
+      "img": "bench-corpus/cord/cord_validation_0046.png",
+      "sha1": "74a9d7cedd4d438e9ef5692683acb7d8a4ee1d45",
+      "merchant": null,
+      "total": "22,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-507bf49f3c2028b84df1b7343d34bd3331cbf8ce",
+      "img": "bench-corpus/wildreceipt/507bf49f3c2028b84df1b7343d34bd3331cbf8ce.jpeg",
+      "sha1": "74bc1884840d6801074c215ba97c191a47bcb837",
+      "merchant": "HAPPYLIQUOR",
+      "total": "$17.41",
+      "date": "12/30/2016FRI"
+    },
+    {
+      "id": "sroie-322",
+      "img": "bench-sroie/raw/img/322.jpg",
+      "sha1": "74d8bb85345c48b5b29dffdea861e300f7fdf6a4",
+      "merchant": "FAMILYMART",
+      "total": "18.80",
+      "date": "16/04/2018"
+    },
+    {
+      "id": "wildreceipt-cf43ca40a080ea0f438bfa26126653deb2207fad",
+      "img": "bench-corpus/wildreceipt/cf43ca40a080ea0f438bfa26126653deb2207fad.jpeg",
+      "sha1": "74e5850020c9c46235d37abc54e7e711428f63f3",
+      "merchant": "CarSpa0017",
+      "total": "164.82",
+      "date": "05/28/15"
+    },
+    {
+      "id": "wildreceipt-a998039bf199636968e23e33ee3d95d0d2cd0d04",
+      "img": "bench-corpus/wildreceipt/a998039bf199636968e23e33ee3d95d0d2cd0d04.jpeg",
+      "sha1": "74fd642c323fe49226e594b1d7ab40627e8b4c4c",
+      "merchant": "GUANAJUATOMEXICAN RESTAURANT",
+      "total": "32.47",
+      "date": "02/02/2016"
+    },
+    {
+      "id": "cord-cord_train_0255",
+      "img": "bench-corpus/cord/cord_train_0255.png",
+      "sha1": "7502a03d0a94e433791a082c85df643e477969f7",
+      "merchant": null,
+      "total": "104,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-b118bac4a4c6b50ec732d51e72ae3b85571008cd",
+      "img": "bench-corpus/wildreceipt/b118bac4a4c6b50ec732d51e72ae3b85571008cd.jpeg",
+      "sha1": "75307cbc6749c7df9d02f51cf977d19cb590fb9d",
+      "merchant": "COSTCO",
+      "total": "200.36",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-f1da43c47aea4699fd877de0ecdd8dfc5c63b36d",
+      "img": "bench-corpus/wildreceipt/f1da43c47aea4699fd877de0ecdd8dfc5c63b36d.jpeg",
+      "sha1": "753e7b04084ecc0ec83ead9b2d777315d315832b",
+      "merchant": "TheButcherShop&Grill",
+      "total": "215.00",
+      "date": "Dec02'16"
+    },
+    {
+      "id": "cord-cord_validation_0010",
+      "img": "bench-corpus/cord/cord_validation_0010.png",
+      "sha1": "754bfc256839b3084d0eb60fdf976415b306a504",
+      "merchant": null,
+      "total": "60.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0032",
+      "img": "bench-corpus/cord/cord_train_0032.png",
+      "sha1": "7551c90fa97ae99b714c695df517aeed5dad090c",
+      "merchant": null,
+      "total": "36,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-1978",
+      "img": "bench-corpus/wildreceipt/1978.jpeg",
+      "sha1": "7555e64bbf564b1bb099d9c2c306c11691a16a2c",
+      "merchant": "specialTEA",
+      "total": "$20.12",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-20de30bff37e86af0d9ef159bb510f16f5a2da8c",
+      "img": "bench-corpus/wildreceipt/20de30bff37e86af0d9ef159bb510f16f5a2da8c.jpeg",
+      "sha1": "756799f7c316236a4768b788490760a0643cca22",
+      "merchant": "SABOTEN JAPANESETONKATSURESTAURANT",
+      "total": "70.05",
+      "date": "19/02/2013"
+    },
+    {
+      "id": "wildreceipt-8984a19efb882f4a3cac1e80030ff75bf405b0a4",
+      "img": "bench-corpus/wildreceipt/8984a19efb882f4a3cac1e80030ff75bf405b0a4.jpeg",
+      "sha1": "756d21806fadb4b9b488b02d2aead628a89e2b53",
+      "merchant": "LOREMSHOP",
+      "total": "$34.50",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0732",
+      "img": "bench-corpus/cord/cord_train_0732.png",
+      "sha1": "75a8a3071e525a603e3edc8bc4393acbdf1b7f79",
+      "merchant": null,
+      "total": "Rp 19.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_test_0014",
+      "img": "bench-corpus/cord/cord_test_0014.png",
+      "sha1": "75cfa5e7e3c3cc7d08c54ea65308f0e8050ff9ae",
+      "merchant": null,
+      "total": "281,435",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-b9d9c1a398823545278fadeb5aa86c46466f73ad",
+      "img": "bench-corpus/wildreceipt/b9d9c1a398823545278fadeb5aa86c46466f73ad.jpeg",
+      "sha1": "75d26d4cccc6f1ad0caf10c134028ae522d3006c",
+      "merchant": "BloodyMary's Restaurant&Bar",
+      "total": "20000",
+      "date": "02Feb'15"
+    },
+    {
+      "id": "wildreceipt-2053",
+      "img": "bench-corpus/wildreceipt/2053.jpeg",
+      "sha1": "75e3aa6cfab2615cdfc1691c2873f4ae3aa64497",
+      "merchant": null,
+      "total": "$26.29",
+      "date": "07/17/14"
+    },
+    {
+      "id": "sroie-397",
+      "img": "bench-sroie/raw/img/397.jpg",
+      "sha1": "75e674f6ba63c34951c7b815ec63169d2759c829",
+      "merchant": "ECOSWAY.COM SDN BHD",
+      "total": "RM78.30",
+      "date": "29/07/2016"
+    },
+    {
+      "id": "wildreceipt-7b39ceaf291a7e99a616f1acebc0acac3c3752e9",
+      "img": "bench-corpus/wildreceipt/7b39ceaf291a7e99a616f1acebc0acac3c3752e9.jpeg",
+      "sha1": "7646eb718246c48ab93655fa0a134d38ab71820d",
+      "merchant": "ARUBA",
+      "total": "118.44",
+      "date": "Jan13'15"
+    },
+    {
+      "id": "sroie-615",
+      "img": "bench-sroie/raw/img/615.jpg",
+      "sha1": "76767a345fc546a83ba7589183de85feeca3591b",
+      "merchant": "MR. D.I.Y. (M) SDN BHD",
+      "total": "7.15",
+      "date": "15-07-18"
+    },
+    {
+      "id": "wildreceipt-f054e657261f15feafa3fc38286af51ac6bf2288",
+      "img": "bench-corpus/wildreceipt/f054e657261f15feafa3fc38286af51ac6bf2288.jpeg",
+      "sha1": "76805b50ad6f9e57c5e6c750b9c2bd0a17f3c5c0",
+      "merchant": "ZARA",
+      "total": "14.99",
+      "date": "31/01/2018"
+    },
+    {
+      "id": "cord-cord_train_0680",
+      "img": "bench-corpus/cord/cord_train_0680.png",
+      "sha1": "76912c0ec89e2b39d12f8b90607574e0949d400c",
+      "merchant": null,
+      "total": "454,462",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-7902181f01d78a4001fc812cce082ab7b1feed72",
+      "img": "bench-corpus/wildreceipt/7902181f01d78a4001fc812cce082ab7b1feed72.jpeg",
+      "sha1": "76d9eb2ce5c72194c24180fc5c61d13fe147a69b",
+      "merchant": "CactusAshleyPhosphate",
+      "total": "19.95",
+      "date": "02/17/14,"
+    },
+    {
+      "id": "cord-cord_train_0305",
+      "img": "bench-corpus/cord/cord_train_0305.png",
+      "sha1": "76eab426359bfdb3b64096a4f26d8e627f35f0a7",
+      "merchant": null,
+      "total": "42,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-0bda337518ced88e59f31c39a63bb2405a828420",
+      "img": "bench-corpus/wildreceipt/0bda337518ced88e59f31c39a63bb2405a828420.jpeg",
+      "sha1": "772b95f505b19300b3e4f533c09f6969cad7f374",
+      "merchant": "Waitrose",
+      "total": "197,70",
+      "date": "03.08.13"
+    },
+    {
+      "id": "cord-cord_train_0051",
+      "img": "bench-corpus/cord/cord_train_0051.png",
+      "sha1": "77320cda7440a7076b17614a1fc06b8839690acf",
+      "merchant": null,
+      "total": "33.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0129",
+      "img": "bench-corpus/cord/cord_train_0129.png",
+      "sha1": "773c29b6f15c6a658212ceb33b8bb6245498e984",
+      "merchant": null,
+      "total": "Rp 116000.00",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-1d80d00cf5338693097577dce43f74166d0806ed",
+      "img": "bench-corpus/wildreceipt/1d80d00cf5338693097577dce43f74166d0806ed.jpeg",
+      "sha1": "77535f86732e69acd06245996048acee15254b32",
+      "merchant": "FIVEGUYS",
+      "total": "$10.04",
+      "date": "2/17/2016"
+    },
+    {
+      "id": "wildreceipt-595b5da8ab99e474662ec93fc1e7ae689d856999",
+      "img": "bench-corpus/wildreceipt/595b5da8ab99e474662ec93fc1e7ae689d856999.jpeg",
+      "sha1": "7758de6d7cb3d53bc2910acc623f93932aee24e1",
+      "merchant": "Walmart",
+      "total": "34.28",
+      "date": null
+    },
+    {
+      "id": "sroie-440",
+      "img": "bench-sroie/raw/img/440.jpg",
+      "sha1": "775e1fb22a8067cd8fdb129166a5a46a687abd87",
+      "merchant": "DOMINO'S PIZZA TAMAN UNIVERSITI",
+      "total": "6.70",
+      "date": "08/05/18"
+    },
+    {
+      "id": "wildreceipt-3d2ab4b7af209cc3949996aeae42ab2e87e3b2e5",
+      "img": "bench-corpus/wildreceipt/3d2ab4b7af209cc3949996aeae42ab2e87e3b2e5.jpeg",
+      "sha1": "7782a97dbb1b56af5bc876bec159962ee157348d",
+      "merchant": "TrendzRestaurantandWineBar",
+      "total": "14.95",
+      "date": "09/27/2014"
+    },
+    {
+      "id": "cord-cord_train_0657",
+      "img": "bench-corpus/cord/cord_train_0657.png",
+      "sha1": "7787e6308efd321a299475fc0690083eb3bb5609",
+      "merchant": null,
+      "total": "Rp 13.200",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0246",
+      "img": "bench-corpus/cord/cord_train_0246.png",
+      "sha1": "779e3a0584b704e421d0542edffb0b2c0f3423b4",
+      "merchant": null,
+      "total": "43,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-4356",
+      "img": "bench-corpus/wildreceipt/4356.jpeg",
+      "sha1": "77afa1d8f7deb5c0db895f46910cd0ae71396cb8",
+      "merchant": "MICHAELSSTCIRE#9416",
+      "total": "4.24",
+      "date": "7/14/12"
+    },
+    {
+      "id": "wildreceipt-42095d393dbf2a3e4ead5a65ab7dde83d53c7ad1",
+      "img": "bench-corpus/wildreceipt/42095d393dbf2a3e4ead5a65ab7dde83d53c7ad1.jpeg",
+      "sha1": "77b295304b9bf891bbc4c941174fd03c822e3b62",
+      "merchant": "Walmart",
+      "total": "60.33",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0588",
+      "img": "bench-corpus/cord/cord_train_0588.png",
+      "sha1": "77c5c5791b8d4d7ecd8f7151ec0157c45321bd5e",
+      "merchant": null,
+      "total": "117,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-a7804eb2f2f127977d3c6fbbe2eb8b505af3e58d",
+      "img": "bench-corpus/wildreceipt/a7804eb2f2f127977d3c6fbbe2eb8b505af3e58d.jpeg",
+      "sha1": "77e7065a5d901617b74cd79956837a6bc051e1c6",
+      "merchant": "Sam's CLUB",
+      "total": "109.55",
+      "date": "10/07/13"
+    },
+    {
+      "id": "sroie-540",
+      "img": "bench-sroie/raw/img/540.jpg",
+      "sha1": "77f13d8acb963a312450d69d49a243ea087e7b2c",
+      "merchant": "UNIHAKKA INTERNATIONAL SDN BHD",
+      "total": "RM8.50",
+      "date": "22 JUN 2018"
+    },
+    {
+      "id": "wildreceipt-881976df4715d8e50c7a466be16e8556e37999d8",
+      "img": "bench-corpus/wildreceipt/881976df4715d8e50c7a466be16e8556e37999d8.jpeg",
+      "sha1": "77fbcaeb0839317365a165d3837ee10f2af92b64",
+      "merchant": "PROFORMA",
+      "total": "34,85EUR",
+      "date": "07/02/2016"
+    },
+    {
+      "id": "cord-cord_validation_0017",
+      "img": "bench-corpus/cord/cord_validation_0017.png",
+      "sha1": "78115e60254e119cc7446a329390600ef032c1a3",
+      "merchant": null,
+      "total": "20,000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0419",
+      "img": "bench-corpus/cord/cord_train_0419.png",
+      "sha1": "786c68b630634f8a25a2a09f744374ba1700b260",
+      "merchant": null,
+      "total": "369,600",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-072422e84548045e6765265569074bc70e67c037",
+      "img": "bench-corpus/wildreceipt/072422e84548045e6765265569074bc70e67c037.jpeg",
+      "sha1": "788d73452e68b04cee39205cd2d2e6cadd19e299",
+      "merchant": null,
+      "total": null,
+      "date": "12/28/16"
+    },
+    {
+      "id": "wildreceipt-6f6e284eb43a3930141be7a5f89f5473b6b9e994",
+      "img": "bench-corpus/wildreceipt/6f6e284eb43a3930141be7a5f89f5473b6b9e994.jpeg",
+      "sha1": "78b98f1a3ccdb3b9bb391f99767813eeb9f87430",
+      "merchant": null,
+      "total": "119.50",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-8ef56728735ab11a22069d35ade8fe41facd84c7",
+      "img": "bench-corpus/wildreceipt/8ef56728735ab11a22069d35ade8fe41facd84c7.jpeg",
+      "sha1": "78c654b77361eeb0ec41ad4bf52e69df7a33c9ae",
+      "merchant": "FINEINDIANCUISINE GANESH",
+      "total": "309,000",
+      "date": "14/9/15"
+    },
+    {
+      "id": "cord-cord_test_0098",
+      "img": "bench-corpus/cord/cord_test_0098.png",
+      "sha1": "78e6120d3af6eb696a779e5790106ef575b0d7c5",
+      "merchant": null,
+      "total": "250,690",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0775",
+      "img": "bench-corpus/cord/cord_train_0775.png",
+      "sha1": "78fdbb06e05cf2ece2cb9c8b94229f7655c53df8",
+      "merchant": null,
+      "total": "23,000",
+      "date": null
+    },
+    {
+      "id": "sroie-342",
+      "img": "bench-sroie/raw/img/342.jpg",
+      "sha1": "7905d813cf50d0010b06c83d41560ecbfb5b1e2e",
+      "merchant": "GARDENIA BAKERIES (KL) SDN BHD",
+      "total": "19.31",
+      "date": "05/08/2017"
+    },
+    {
+      "id": "wildreceipt-880c5509187f5822380d089052c598e2844519bc",
+      "img": "bench-corpus/wildreceipt/880c5509187f5822380d089052c598e2844519bc.jpeg",
+      "sha1": "793b32061724f61f2fa534b978b5186e1f3b6c65",
+      "merchant": "ROSS",
+      "total": "$77.97",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-d4a32f62ddfa1216fc9707cc5dfa7d0b96dad7d2",
+      "img": "bench-corpus/wildreceipt/d4a32f62ddfa1216fc9707cc5dfa7d0b96dad7d2.jpeg",
+      "sha1": "794b4a0a616c9db988567138bf192890ca3c1455",
+      "merchant": null,
+      "total": "120.04",
+      "date": null
+    },
+    {
+      "id": "sroie-395",
+      "img": "bench-sroie/raw/img/395.jpg",
+      "sha1": "795e471824144adf53d8f32563fc232c585ed75d",
+      "merchant": "YAM FRESH",
+      "total": "RM8.35",
+      "date": "2016-07-31"
+    },
+    {
+      "id": "wildreceipt-19ec332feaa036cc747c2447d39fc2afd638059c",
+      "img": "bench-corpus/wildreceipt/19ec332feaa036cc747c2447d39fc2afd638059c.jpeg",
+      "sha1": "797c8c6c98d9a6b34745b485448fa28374fe71f5",
+      "merchant": "TWISTEDROOTBURGERCO.-RICHARDSON",
+      "total": "6.65",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-6f1ac56789061ec015644eb394d469b70b624488",
+      "img": "bench-corpus/wildreceipt/6f1ac56789061ec015644eb394d469b70b624488.jpeg",
+      "sha1": "799592a87f34aff14476dcd52d32a3c8a9fce216",
+      "merchant": null,
+      "total": "$3.44",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0527",
+      "img": "bench-corpus/cord/cord_train_0527.png",
+      "sha1": "799c9e658f4a62286e1d5df0b7434dea1c99ca6d",
+      "merchant": null,
+      "total": "777,840",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-fae9f5dfb4c3ff89837e18eccbc1482a0ce74166",
+      "img": "bench-corpus/wildreceipt/fae9f5dfb4c3ff89837e18eccbc1482a0ce74166.jpeg",
+      "sha1": "79a30d4ae6ba45b5d191750d564a600ac1dc5626",
+      "merchant": "TajMahal SUNDAYBUFFET",
+      "total": "E99.33",
+      "date": "18.04.07"
+    },
+    {
+      "id": "wildreceipt-edbca38b8af462d0ab7a755fb98c5a98f761ff11",
+      "img": "bench-corpus/wildreceipt/edbca38b8af462d0ab7a755fb98c5a98f761ff11.jpeg",
+      "sha1": "79bbcbc53e6ede7df129bac3aa21ed470e4a786a",
+      "merchant": "MEAT",
+      "total": "201.16",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-4fe38ece4fa1c0877994e9c0c33eaad6e13a3333",
+      "img": "bench-corpus/wildreceipt/4fe38ece4fa1c0877994e9c0c33eaad6e13a3333.jpeg",
+      "sha1": "79d919ca109d32ac4f0047d5a584ac0ae312f707",
+      "merchant": "TATEL",
+      "total": "124,00\u20ac",
+      "date": "03/03/2018"
+    },
+    {
+      "id": "cord-cord_train_0186",
+      "img": "bench-corpus/cord/cord_train_0186.png",
+      "sha1": "79e17b271c817e97397ba9e98a6142340016a8ac",
+      "merchant": null,
+      "total": "13,500",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-01762ed851af687e01403cfd1b2da379acb3925f",
+      "img": "bench-corpus/wildreceipt/01762ed851af687e01403cfd1b2da379acb3925f.jpeg",
+      "sha1": "79ed4e4d5838f6e7dd18fbbad8542bede80f149d",
+      "merchant": null,
+      "total": "81,20",
+      "date": "28/06/2017"
+    },
+    {
+      "id": "cord-cord_train_0476",
+      "img": "bench-corpus/cord/cord_train_0476.png",
+      "sha1": "79f3049249926ede27b85b9fcff8dd5fd1a7bb4e",
+      "merchant": null,
+      "total": "75,500.00",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0073",
+      "img": "bench-corpus/cord/cord_train_0073.png",
+      "sha1": "79f9eefc4cc4b1aaae72dcbc1dc000a97adf7fc4",
+      "merchant": null,
+      "total": "9.500,00",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-4833e1d8979fcda2d02ca7a5a9aec7df4879f933",
+      "img": "bench-corpus/wildreceipt/4833e1d8979fcda2d02ca7a5a9aec7df4879f933.jpeg",
+      "sha1": "7a0af3dbb10f5fac241f94d67b3cc1c059bdfb47",
+      "merchant": "JAWEDHABIB",
+      "total": "354.00",
+      "date": "02-Jan-2018"
+    },
+    {
+      "id": "cord-cord_train_0214",
+      "img": "bench-corpus/cord/cord_train_0214.png",
+      "sha1": "7a27ff1f747aa30cbf2e0e289b29252e5f518121",
+      "merchant": null,
+      "total": "58,000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_validation_0049",
+      "img": "bench-corpus/cord/cord_validation_0049.png",
+      "sha1": "7a728b1becdf6f98529ff15178c7254caac80033",
+      "merchant": null,
+      "total": "81.400",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-3332",
+      "img": "bench-corpus/wildreceipt/3332.jpeg",
+      "sha1": "7a758b69bcfa81f6f8ac3884d6e583e5a7669bce",
+      "merchant": "ROSS",
+      "total": null,
+      "date": null
+    },
+    {
+      "id": "wildreceipt-08837c5b4993ebd86c061eb00be19c005fa487a6",
+      "img": "bench-corpus/wildreceipt/08837c5b4993ebd86c061eb00be19c005fa487a6.jpeg",
+      "sha1": "7a8fa7b3ec6ec9cf11a3950f348461d1402a0e66",
+      "merchant": "Bugenvila",
+      "total": "290,00",
+      "date": "19.09.2014"
+    },
+    {
+      "id": "cord-cord_train_0065",
+      "img": "bench-corpus/cord/cord_train_0065.png",
+      "sha1": "7a925cfe3cbbdbf05bf12d74b73fb47462ad80b7",
+      "merchant": null,
+      "total": "650,100",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-233dfe64d61eef3f20ad24f6c7d9e01956c21191",
+      "img": "bench-corpus/wildreceipt/233dfe64d61eef3f20ad24f6c7d9e01956c21191.jpeg",
+      "sha1": "7a975db2790e7e618d65e89dd430c7efd186d895",
+      "merchant": "NOBU Nobu",
+      "total": "598,00\u20ac",
+      "date": "12Jul'17"
+    },
+    {
+      "id": "wildreceipt-f7354af6e1d9858b92b3fab52676062dd5c11e91",
+      "img": "bench-corpus/wildreceipt/f7354af6e1d9858b92b3fab52676062dd5c11e91.jpeg",
+      "sha1": "7a9bb640e7fb5b803e56ec602c098be57492490c",
+      "merchant": "BESTBUY#994",
+      "total": "282.78",
+      "date": "8/20/2016"
+    },
+    {
+      "id": "cord-cord_train_0001",
+      "img": "bench-corpus/cord/cord_train_0001.png",
+      "sha1": "7ab1466065507d5cf7cda1fd3d7b8ebfd4e28c41",
+      "merchant": null,
+      "total": "580,965",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-82a0f972ff0f28a13a27a8e2e1f087ba99a83fa3",
+      "img": "bench-corpus/wildreceipt/82a0f972ff0f28a13a27a8e2e1f087ba99a83fa3.jpeg",
+      "sha1": "7ac57c513199358bc1e7cef9ec8d04d421c68575",
+      "merchant": "BIGBAZAAR(FUTURERETAILLTD)",
+      "total": null,
+      "date": "12.04.2011"
+    },
+    {
+      "id": "wildreceipt-904dad18378d353e6a4e37364f05398f5db02424",
+      "img": "bench-corpus/wildreceipt/904dad18378d353e6a4e37364f05398f5db02424.jpeg",
+      "sha1": "7ae35994a024cd085b735258bab82e1c59bdf9c8",
+      "merchant": null,
+      "total": "816.00",
+      "date": "11/03/2018"
+    },
+    {
+      "id": "sroie-386",
+      "img": "bench-sroie/raw/img/386.jpg",
+      "sha1": "7ae711fdc4ee955ef07d60b3d709869f43f74275",
+      "merchant": "GUARDIAN HEALTH AND BEAUTY SDN BHD",
+      "total": "2.56",
+      "date": "11/02/16"
+    },
+    {
+      "id": "cord-cord_test_0048",
+      "img": "bench-corpus/cord/cord_test_0048.png",
+      "sha1": "7ae8dead96e169f51fd82988c59dc579da745a06",
+      "merchant": null,
+      "total": "25,000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_test_0088",
+      "img": "bench-corpus/cord/cord_test_0088.png",
+      "sha1": "7aee79ebd40e3db459d48ad98565b9e9c53a1ba2",
+      "merchant": null,
+      "total": "47,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-7bab79f40cfe828ca941522fd86324822f25e091",
+      "img": "bench-corpus/wildreceipt/7bab79f40cfe828ca941522fd86324822f25e091.jpeg",
+      "sha1": "7af6c9c2b90b834f8dc07c2e8517f5f4ecc348d8",
+      "merchant": "ThePancakeParlour",
+      "total": "$43.80",
+      "date": "MAY08.17"
+    },
+    {
+      "id": "cord-cord_train_0626",
+      "img": "bench-corpus/cord/cord_train_0626.png",
+      "sha1": "7b0731a89108a06f88a83a65847ef10a8b6affcd",
+      "merchant": null,
+      "total": "161.000",
+      "date": null
+    },
+    {
+      "id": "sroie-520",
+      "img": "bench-sroie/raw/img/520.jpg",
+      "sha1": "7b1661f5f661d8106cb778e90a4ba2241a3895ec",
+      "merchant": "UNIHAKKA INTERNATIONAL SDN BHD",
+      "total": "RM7.70",
+      "date": "04 JUN 2018"
+    },
+    {
+      "id": "cord-cord_train_0353",
+      "img": "bench-corpus/cord/cord_train_0353.png",
+      "sha1": "7b963b678009807ebfd3d92fdafabd035f6a90a7",
+      "merchant": null,
+      "total": "18,999",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-1bf58322901e12bd7a7b943078b20e5aa931b28a",
+      "img": "bench-corpus/wildreceipt/1bf58322901e12bd7a7b943078b20e5aa931b28a.jpeg",
+      "sha1": "7bb4fcfb5aabc7691825d16ab6bfa5d7940cd3e4",
+      "merchant": "BAR XAMPANYET",
+      "total": "Total:82.20",
+      "date": "09/02/2018"
+    },
+    {
+      "id": "wildreceipt-acb48a86efabfb4414dd3ae1312fecf533ead35f",
+      "img": "bench-corpus/wildreceipt/acb48a86efabfb4414dd3ae1312fecf533ead35f.jpeg",
+      "sha1": "7bb6dd424c50230e7606f6764d3f2a1450c05c37",
+      "merchant": "WAL\u2605MART",
+      "total": "5.11",
+      "date": "08/20/10"
+    },
+    {
+      "id": "cord-cord_train_0094",
+      "img": "bench-corpus/cord/cord_train_0094.png",
+      "sha1": "7be20f76af28c4df16da9fa9ff70178b5ccb67ea",
+      "merchant": null,
+      "total": "38.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0188",
+      "img": "bench-corpus/cord/cord_train_0188.png",
+      "sha1": "7c17c3afb9e9e63d26d20b491efc775ce6aefc63",
+      "merchant": null,
+      "total": "24,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-bf0dfbada8096f22970034171d29624ce6683a5f",
+      "img": "bench-corpus/wildreceipt/bf0dfbada8096f22970034171d29624ce6683a5f.jpeg",
+      "sha1": "7c30d10ce86ee85d19ab8aabb7ddec93304b864b",
+      "merchant": "PANCHOVILLA TAQUERIA",
+      "total": "$18.23",
+      "date": "06/29/2008"
+    },
+    {
+      "id": "cord-cord_train_0437",
+      "img": "bench-corpus/cord/cord_train_0437.png",
+      "sha1": "7c39a736abea3eaaa11dc70ab164bf5e709c711c",
+      "merchant": null,
+      "total": "256,000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0252",
+      "img": "bench-corpus/cord/cord_train_0252.png",
+      "sha1": "7c4be7df67fb7a0f29abf59189a76e1f7c46a3c4",
+      "merchant": null,
+      "total": "22.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-d9ec13ac633b10211619fa27148880c168dfc668",
+      "img": "bench-corpus/wildreceipt/d9ec13ac633b10211619fa27148880c168dfc668.jpeg",
+      "sha1": "7c4dc73e380ba66b24c044d479e6dd5d952ab73d",
+      "merchant": null,
+      "total": "30.77",
+      "date": "12/21/16"
+    },
+    {
+      "id": "wildreceipt-b9475fef9baad4230a19fb97b70c8621bbd966e4",
+      "img": "bench-corpus/wildreceipt/b9475fef9baad4230a19fb97b70c8621bbd966e4.jpeg",
+      "sha1": "7c96d9f0d44b1a91a8451897fb4f4b0047dd8d4e",
+      "merchant": null,
+      "total": "0.65",
+      "date": "26.03.2013"
+    },
+    {
+      "id": "wildreceipt-3600",
+      "img": "bench-corpus/wildreceipt/3600.jpeg",
+      "sha1": "7ca2ee02412591e3ef3f161dbefa0f2c9c2d76f5",
+      "merchant": "CLUB Sam's",
+      "total": "109.55",
+      "date": "10/07/13"
+    },
+    {
+      "id": "wildreceipt-3bad338981e431f3f22bc6ca99387dfca0895881",
+      "img": "bench-corpus/wildreceipt/3bad338981e431f3f22bc6ca99387dfca0895881.jpeg",
+      "sha1": "7cbaaba719ad878f4c503fa73e4a5db264b45b20",
+      "merchant": "OYAJIRESTAURANT",
+      "total": "86.26",
+      "date": "8/9/2008"
+    },
+    {
+      "id": "wildreceipt-d3759910dd539093eafd9d14ac39c6937e3c0f05",
+      "img": "bench-corpus/wildreceipt/d3759910dd539093eafd9d14ac39c6937e3c0f05.jpeg",
+      "sha1": "7d2762fee874b5876fe09b3d1b4af023f016787c",
+      "merchant": "Drips",
+      "total": "$39.90",
+      "date": "20/08/12(MON)"
+    },
+    {
+      "id": "wildreceipt-f6b51dede29603ba56f4cd97c95397c2a45a3e54",
+      "img": "bench-corpus/wildreceipt/f6b51dede29603ba56f4cd97c95397c2a45a3e54.jpeg",
+      "sha1": "7d33b07c3036f3a2a50b4cf030168e165c0c02f0",
+      "merchant": null,
+      "total": null,
+      "date": "Aug26'16"
+    },
+    {
+      "id": "wildreceipt-708c8166e7333dfb8e5e6340738542b7095769fa",
+      "img": "bench-corpus/wildreceipt/708c8166e7333dfb8e5e6340738542b7095769fa.jpeg",
+      "sha1": "7d4af73b7c5da06b72ccc49924aadeff68d82129",
+      "merchant": "SAEMAEULSETAPAK-BBQ",
+      "total": "60.00",
+      "date": "31/05/2014"
+    },
+    {
+      "id": "cord-cord_test_0096",
+      "img": "bench-corpus/cord/cord_test_0096.png",
+      "sha1": "7d552c9e7db111ada7427b2f4e7d0aed2aba19bc",
+      "merchant": null,
+      "total": "41,000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-11aec2e0340534c7e4faa50d9ce8505619a18196",
+      "img": "bench-corpus/wildreceipt/11aec2e0340534c7e4faa50d9ce8505619a18196.jpeg",
+      "sha1": "7d79d4eb634a6268d0d160075007e4280eb98488",
+      "merchant": "AROMACAFE",
+      "total": "$90.52",
+      "date": "03-12-2016"
+    },
+    {
+      "id": "cord-cord_train_0338",
+      "img": "bench-corpus/cord/cord_train_0338.png",
+      "sha1": "7da874fd16f927e115c8e9663584a0fe32117269",
+      "merchant": null,
+      "total": "22,000",
+      "date": null
+    },
+    {
+      "id": "sroie-417",
+      "img": "bench-sroie/raw/img/417.jpg",
+      "sha1": "7dde91c1c9bf652b45a49206a3ad2847c7052096",
+      "merchant": "K STATIONERY & OFFICE SUPPLIES",
+      "total": "148.00",
+      "date": "15/07/2017"
+    },
+    {
+      "id": "wildreceipt-6c1d667deb4a24526d9498e5a5edecfa7444f63a",
+      "img": "bench-corpus/wildreceipt/6c1d667deb4a24526d9498e5a5edecfa7444f63a.jpeg",
+      "sha1": "7e1f19d197d4f90011401516763aa398417ec330",
+      "merchant": "BharatCurryHouse",
+      "total": "27.05",
+      "date": "29-01-2016"
+    },
+    {
+      "id": "wildreceipt-6267af927c0a96b3b152ebaee8928d38e4e4798d",
+      "img": "bench-corpus/wildreceipt/6267af927c0a96b3b152ebaee8928d38e4e4798d.jpeg",
+      "sha1": "7e47d8b1c1a9abad3d93686ea494a971d7954111",
+      "merchant": "LIMONI's",
+      "total": "25,80\u20ac",
+      "date": "26.07.2016"
+    },
+    {
+      "id": "sroie-404",
+      "img": "bench-sroie/raw/img/404.jpg",
+      "sha1": "7e49ef3a751e0f6c8771938cd8611de091300cba",
+      "merchant": "ANEKA INTERTRADE MARKETING SDN BHD",
+      "total": "6.85",
+      "date": "19/05/16"
+    },
+    {
+      "id": "wildreceipt-2018",
+      "img": "bench-corpus/wildreceipt/2018.jpeg",
+      "sha1": "7e7667541c07dbfc678c901647a4b7afd4f313d8",
+      "merchant": "CENTRAL CIR",
+      "total": "297.00",
+      "date": "22-09-2014"
+    },
+    {
+      "id": "wildreceipt-2709",
+      "img": "bench-corpus/wildreceipt/2709.jpeg",
+      "sha1": "7e7d261dd7b619f0aa5421cbe5f8e7fdf76130d1",
+      "merchant": null,
+      "total": "95.60",
+      "date": "Dec06'15"
+    },
+    {
+      "id": "wildreceipt-49944794e9288897d52f7bdb11a082c8cfbc7d22",
+      "img": "bench-corpus/wildreceipt/49944794e9288897d52f7bdb11a082c8cfbc7d22.jpeg",
+      "sha1": "7ed77d7e1f8c1bfad09cfa3236789518962eada7",
+      "merchant": "Sainsbury's Sainsbury'sSupermarketsLtd",
+      "total": null,
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0014",
+      "img": "bench-corpus/cord/cord_train_0014.png",
+      "sha1": "7ef6e5e45a565828cb43472e825053f5886fd088",
+      "merchant": null,
+      "total": "25.000",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0249",
+      "img": "bench-corpus/cord/cord_train_0249.png",
+      "sha1": "7f029b3311cdc67718f89e7b49f356177e43b28d",
+      "merchant": null,
+      "total": "36,300",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-5c2bf8fda7d82d28b0720ce8ae31115a9ac34ef4",
+      "img": "bench-corpus/wildreceipt/5c2bf8fda7d82d28b0720ce8ae31115a9ac34ef4.jpeg",
+      "sha1": "7f0a3a99e5f63b1f07ce9eb28d5d69af2859562e",
+      "merchant": "COLUMBUSRESTAURANT",
+      "total": "206.40",
+      "date": "01-06-2018"
+    },
+    {
+      "id": "wildreceipt-bbc810979a022d73a1a62e701b06c0af32ff2d97",
+      "img": "bench-corpus/wildreceipt/bbc810979a022d73a1a62e701b06c0af32ff2d97.jpeg",
+      "sha1": "7f0eb24877001b796b370cf7b8d18e02345ed576",
+      "merchant": "FANTASTICSAMS",
+      "total": null,
+      "date": "1/13/14"
+    },
+    {
+      "id": "wildreceipt-7642925c3b423a5af8426c1d53640c1ddc7eb4b2",
+      "img": "bench-corpus/wildreceipt/7642925c3b423a5af8426c1d53640c1ddc7eb4b2.jpeg",
+      "sha1": "7f1bf225340ffa43dbc38b58f7afcd6c7b76592c",
+      "merchant": "Bernie'sBurgerBus",
+      "total": "$75.09",
+      "date": "01/12/16"
+    },
+    {
+      "id": "cord-cord_train_0056",
+      "img": "bench-corpus/cord/cord_train_0056.png",
+      "sha1": "7f22b651df0f3fe86256995938c45be74c8dd4da",
+      "merchant": null,
+      "total": "54.600",
+      "date": null
+    },
+    {
+      "id": "cord-cord_train_0572",
+      "img": "bench-corpus/cord/cord_train_0572.png",
+      "sha1": "7f5802399875f00d764c70820572794a84a15238",
+      "merchant": null,
+      "total": "15000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-7ac80d7cb36f113256c94f7ac1af8ecfc6be6f8c",
+      "img": "bench-corpus/wildreceipt/7ac80d7cb36f113256c94f7ac1af8ecfc6be6f8c.jpeg",
+      "sha1": "7f7fde71408934eb5ef5d9984dcb0766d67058ff",
+      "merchant": "Subway#2457-0phone858-668-7300",
+      "total": "5.39",
+      "date": "3/21/2016"
+    },
+    {
+      "id": "wildreceipt-b26666cadc6ca4c5f713b9791478eae6c2451c65",
+      "img": "bench-corpus/wildreceipt/b26666cadc6ca4c5f713b9791478eae6c2451c65.jpeg",
+      "sha1": "7f840928275a53fe2cc813e8a8d1a5dfc56ac425",
+      "merchant": "POPEYESEUCLTD\\GREEN",
+      "total": "6.08",
+      "date": "JUL.02'16"
+    },
+    {
+      "id": "wildreceipt-0467c231f75a4ac329d84820f3d07bad86ead465",
+      "img": "bench-corpus/wildreceipt/0467c231f75a4ac329d84820f3d07bad86ead465.jpeg",
+      "sha1": "7f8f00b5f214b4f646674b3138e1767cf3a896bb",
+      "merchant": "LOREMSHOP",
+      "total": "$34.50",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-c63803e5d7f44fad692dcbb18555fd379c776911",
+      "img": "bench-corpus/wildreceipt/c63803e5d7f44fad692dcbb18555fd379c776911.jpeg",
+      "sha1": "7faa7afd12f95260067957b616460fe4bd0b66d1",
+      "merchant": null,
+      "total": "$63.61",
+      "date": "09/02/2013"
+    },
+    {
+      "id": "wildreceipt-1dcd3ab76557e207780616c2bad8b5eaf83a2619",
+      "img": "bench-corpus/wildreceipt/1dcd3ab76557e207780616c2bad8b5eaf83a2619.jpeg",
+      "sha1": "7fb01ed933d1de9cea715e22f556163158751fe2",
+      "merchant": "Nando\u2019s",
+      "total": "60.55",
+      "date": "11/10/2015"
+    },
+    {
+      "id": "wildreceipt-16d252a777cc99f7d019f30b4124f9c9ec1e139f",
+      "img": "bench-corpus/wildreceipt/16d252a777cc99f7d019f30b4124f9c9ec1e139f.jpeg",
+      "sha1": "7fd920369a7a9f98746eb7fcbde7d35e6f06b6f6",
+      "merchant": "Super Grocery",
+      "total": "$11.11",
+      "date": "2017-07-16"
+    },
+    {
+      "id": "wildreceipt-1962",
+      "img": "bench-corpus/wildreceipt/1962.jpeg",
+      "sha1": "7fdaa111a93b4f7899600c48cdbb65ffe98ee2a7",
+      "merchant": null,
+      "total": "15.60",
+      "date": "05Dec12"
+    },
+    {
+      "id": "sroie-518",
+      "img": "bench-sroie/raw/img/518.jpg",
+      "sha1": "7fdb769e08740c00432c1a514c19bd7f91f3cdfd",
+      "merchant": "RAPID RAIL SDN BHD",
+      "total": "RM 30.00",
+      "date": "18/06/2018"
+    },
+    {
+      "id": "cord-cord_train_0523",
+      "img": "bench-corpus/cord/cord_train_0523.png",
+      "sha1": "7fff8b0fdcc230e7768803216f1d2484cf6e1592",
+      "merchant": null,
+      "total": "50.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-d44773384ca5f1cc0158a03098aa0cde38ca5dc3",
+      "img": "bench-corpus/wildreceipt/d44773384ca5f1cc0158a03098aa0cde38ca5dc3.jpeg",
+      "sha1": "8021c07b1bf2c9d8fd1e9d8538adc19ba19a6b06",
+      "merchant": "FreshFoods",
+      "total": "$4.86",
+      "date": "3/18/2014"
+    },
+    {
+      "id": "wildreceipt-3f915c4fd0e664ee1c6332d5cba5f8e737d71dc7",
+      "img": "bench-corpus/wildreceipt/3f915c4fd0e664ee1c6332d5cba5f8e737d71dc7.jpeg",
+      "sha1": "8033288927cd8f0929cb53b7848097ef2c6f40d4",
+      "merchant": "DinTaiFungRestaurant",
+      "total": "117.00",
+      "date": "2016/11/02"
+    },
+    {
+      "id": "wildreceipt-836ad1fe999063b47f0efa9cc14e9c3a65f5a085",
+      "img": "bench-corpus/wildreceipt/836ad1fe999063b47f0efa9cc14e9c3a65f5a085.jpeg",
+      "sha1": "803c4021725891e274b107bc56243ba87b894552",
+      "merchant": "THESTABLESBAR&RODBODRI STABLESBAR",
+      "total": "581.50",
+      "date": "08/06/18"
+    },
+    {
+      "id": "wildreceipt-af5da612c7f1605403dac91b23da114ae70ca1b8",
+      "img": "bench-corpus/wildreceipt/af5da612c7f1605403dac91b23da114ae70ca1b8.jpeg",
+      "sha1": "805591b7e62b5e236e0569e937ad51b4f8c1905f",
+      "merchant": "BOBSSTEAK&CHOPHOUSEONLAMAR",
+      "total": "$374.23",
+      "date": "JAN31'13"
+    },
+    {
+      "id": "cord-cord_validation_0087",
+      "img": "bench-corpus/cord/cord_validation_0087.png",
+      "sha1": "80729b778d7fcfe4fd439a2e6a0a309d24522b2e",
+      "merchant": null,
+      "total": "29,000",
+      "date": null
+    },
+    {
+      "id": "sroie-611",
+      "img": "bench-sroie/raw/img/611.jpg",
+      "sha1": "807f5495ce36be8af2fc709b15ebac84b02b67c4",
+      "merchant": "AMTECH ELECTRICAL SUPPLIES",
+      "total": "136.00",
+      "date": "27/06/18"
+    },
+    {
+      "id": "wildreceipt-102205d4b0e76859d38fb348b96f3cc3176b3dba",
+      "img": "bench-corpus/wildreceipt/102205d4b0e76859d38fb348b96f3cc3176b3dba.jpeg",
+      "sha1": "80cbee288e5bd1bf40ab666a6b6fa7f54073a873",
+      "merchant": "SakaeSushi",
+      "total": "$93.24",
+      "date": "5/1/2013"
+    },
+    {
+      "id": "wildreceipt-62afa3fa08bb415d703691a0d335001792ecbb61",
+      "img": "bench-corpus/wildreceipt/62afa3fa08bb415d703691a0d335001792ecbb61.jpeg",
+      "sha1": "80cce6e0fd58c6993fcd1a761ec20056983f26f2",
+      "merchant": "KhyenChyen",
+      "total": "Rs118.00",
+      "date": "17/04/2015"
+    },
+    {
+      "id": "cord-cord_validation_0082",
+      "img": "bench-corpus/cord/cord_validation_0082.png",
+      "sha1": "80dc9ed8d7702a07659b2e31d79371fa0e993e58",
+      "merchant": null,
+      "total": "35.000",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-b250ffe2754a3e9dff0c7ee5efe3ca6b80fcab89",
+      "img": "bench-corpus/wildreceipt/b250ffe2754a3e9dff0c7ee5efe3ca6b80fcab89.jpeg",
+      "sha1": "80dfbc092d05763b97b4818c2165377f8ee7f3b4",
+      "merchant": "Bar&Restaurant OleOleTapas",
+      "total": "\u00a348.40",
+      "date": "01/07/2014"
+    },
+    {
+      "id": "wildreceipt-2317b992b6392918afe1d85a4ad97234e607dbec",
+      "img": "bench-corpus/wildreceipt/2317b992b6392918afe1d85a4ad97234e607dbec.jpeg",
+      "sha1": "80f3a785255d23e537c8ce5ee3dee55b42d26363",
+      "merchant": "HaveliRestaurant 1900CanterburyRed",
+      "total": null,
+      "date": "July9,2016at"
+    },
+    {
+      "id": "wildreceipt-263aa47341c0ec6eec8e6872aa93bb35acb0b7ed",
+      "img": "bench-corpus/wildreceipt/263aa47341c0ec6eec8e6872aa93bb35acb0b7ed.jpeg",
+      "sha1": "80f765bd08f8e7c48f1117384b4ea0da9583b1a5",
+      "merchant": null,
+      "total": "$35.72",
+      "date": null
+    },
+    {
+      "id": "sroie-532",
+      "img": "bench-sroie/raw/img/532.jpg",
+      "sha1": "8111a647f560a1cb63e06ca38cbc6eca8fb8cbb6",
+      "merchant": "KEDAI RUNCIT ZBH",
+      "total": "RM43.40",
+      "date": "01/06/2018"
+    },
+    {
+      "id": "wildreceipt-c0ee9ec2244546731d84133b7ee06a525bc43cfa",
+      "img": "bench-corpus/wildreceipt/c0ee9ec2244546731d84133b7ee06a525bc43cfa.jpeg",
+      "sha1": "81166254d77c497f435491f8aafd35de4c572cf9",
+      "merchant": "JINCHIENGSENG",
+      "total": null,
+      "date": "02/01/2018"
+    },
+    {
+      "id": "cord-cord_validation_0006",
+      "img": "bench-corpus/cord/cord_validation_0006.png",
+      "sha1": "8152f2f7ac447eba0e698ef621a692ff4f4c7d12",
+      "merchant": null,
+      "total": "123,000",
+      "date": null
+    },
+    {
+      "id": "sroie-613",
+      "img": "bench-sroie/raw/img/613.jpg",
+      "sha1": "81684d91fa22f9c7233d0fa86d5f818a60093272",
+      "merchant": "POPULAR BOOK CO. (M) SDN BHD",
+      "total": "7.30",
+      "date": "03/04/18"
+    },
+    {
+      "id": "wildreceipt-00aaa73a6b3b5015126cd448bfb088b5891da69d",
+      "img": "bench-corpus/wildreceipt/00aaa73a6b3b5015126cd448bfb088b5891da69d.jpeg",
+      "sha1": "81ae175d22b7fce271037486f317e0e8ae7850d6",
+      "merchant": "HuckFinn's",
+      "total": "48.29",
+      "date": "May21'15"
+    },
+    {
+      "id": "wildreceipt-4dbb1f4f8227a9574659264d1cca7da2535e0db7",
+      "img": "bench-corpus/wildreceipt/4dbb1f4f8227a9574659264d1cca7da2535e0db7.jpeg",
+      "sha1": "81d1e0e75ef768d4f1588ab3d9e716f40678c841",
+      "merchant": "HARBORFREIGHTTOOLS",
+      "total": "$22.40",
+      "date": null
+    },
+    {
+      "id": "wildreceipt-c2f0c4c78fe1dd6d58b3a3f49ef1334c04477459",
+      "img": "bench-corpus/wildreceipt/c2f0c4c78fe1dd6d58b3a3f49ef1334c04477459.jpeg",
+      "sha1": "81e16e795c266694506f352aac457d6fe851e6ff",
+      "merchant": "BOULEVARDSTATION",
+      "total": "$0.00",
+      "date": "02/10/2015"
+    },
+    {
+      "id": "wildreceipt-f79779a8f5ca3cdd94f07116196a2b47ded6421f",
+      "img": "bench-corpus/wildreceipt/f79779a8f5ca3cdd94f07116196a2b47ded6421f.jpeg",
+      "sha1": "81fb8d4e869c6067860a86d2cb40149a6904bed7",
+      "merchant": null,
+      "total": "$12.28",
+      "date": "08/10/17"
+    },
+    {
+      "id": "sroie-575",
+      "img": "bench-sroie/raw/img/575.jpg",
+      "sha1": "8399d88ff387b0c2cd71e8eab656c74e949fc082",
+      "merchant": "99 SPEED MART S/B",
+      "total": "137.15",
+      "date": "05-05-18"
+    }
+  ]
+}
