@@ -1843,6 +1843,36 @@ function cloudUsable(ai) {
 function draftUsable(d) {
   return !!(d && (d.amount || (d.merchant && d.merchant.trim()) || (d.items && d.items.length)));
 }
+/* Is any OTHER modal sheet already up? All `.overlay` elements (chooser,
+   menu, upgrade, bulk, setup, photo, statement, day, export…) share this
+   class and toggle visibility via the `hidden` attribute — checked
+   generically so a scan/queue decision doesn't need to know about every
+   overlay by name, and stays correct if a new one is added later.
+   confirm-overlay is excluded: state.editing already governs that one. */
+function anyOtherOverlayOpen() {
+  const els = document.querySelectorAll(".overlay");
+  for (const el of els) {
+    if (el.id !== "confirm-overlay" && !el.hidden) return true;
+  }
+  return false;
+}
+/* Is there actually nowhere else a freshly-read receipt needs to go? Used
+   by both scan paths (handleImageRaced's race and the classic
+   handleImageLocalFirst) — painting over an already-open sheet, an active
+   Pro batch, or any other open overlay would silently replace whatever's
+   already showing with zero warning. */
+function screenFree() {
+  return !state.editing && !state.batchMode && !anyOtherOverlayOpen();
+}
+/* Open a finished draft normally if the screen is free, otherwise queue it
+   (same fallback every scan path uses) rather than silently overwriting
+   whatever's already on screen. */
+function openOrQueueDraft(draft) {
+  if (screenFree()) { openConfirmSheet(draft); return; }
+  if (state.pendingScans.length >= MAX_PENDING_SCANS) state.pendingScans.shift();
+  state.pendingScans.push(draft);
+  showNextPendingScan();
+}
 /* A blank parse skeleton so the cloud reading can stand alone when the local
    reader returned nothing at all (blurry photo the cloud can still read). */
 function emptyParsed() {
@@ -2185,7 +2215,7 @@ async function handleImage(file) {
         return; /* ad failed — nothing consumed, let them retry */
       } else {
         const thumb0 = await fileToThumb(file, 700);
-        openConfirmSheet({
+        openOrQueueDraft({
           amount: null, merchant: "", category: "Other", scope: "Personal",
           date: new Date().toISOString(), items: [], note: "",
           photo: thumb0 || undefined, fromReceipt: false
@@ -2196,7 +2226,7 @@ async function handleImage(file) {
       const thumb = await fileToThumb(file, 700);
       toastAction("Today's free scan is used — type this one in", "Go Pro",
         () => showUpgrade("Free reads " + FREE_SCANS_PER_DAY + " receipt a day. Pro reads them all — every receipt, every day."), null, 5500);
-      openConfirmSheet({
+      openOrQueueDraft({
         amount: null, merchant: "", category: "Other", scope: "Personal",
         date: new Date().toISOString(), items: [], note: "",
         photo: thumb || undefined, fromReceipt: false
@@ -2257,19 +2287,25 @@ async function handleImageLocalFirst(file) {
       toast(state.ghToken ? "Couldn't read it — save anyway, Claude will fill it in" : "That one was too blurry — try more light, or just type it in");
     }
     /* Only a read that actually produced something consumes the free daily
-       scan — a blurry failure costs the user nothing. */
-    if (usable && !isPro()) await bumpScanUsed();
+       scan — a blurry failure costs the user nothing. Re-checks
+       scanAllowed() (not just isPro()) for the same reason handleImageRaced
+       does: an overlapping scan elsewhere may already have spent today's
+       read by the time this one gets here. */
+    if (usable && !isPro() && scanAllowed()) await bumpScanUsed();
     const draft = parsedToDraft(parsed);
     draft._file = file;
     draft._source = source;
-    openConfirmSheet(draft);
+    openOrQueueDraft(draft);
   } catch (err) {
     if (state.ocrCancelled) return;
     state.scanning = false;
     hideScanPill();
     renderHome();
     toast(err.message || "Something went wrong reading the receipt");
-    openConfirmSheet(null);
+    openOrQueueDraft({
+      id: null, amount: null, merchant: "", category: "Other",
+      date: new Date().toISOString(), items: [], note: "", fromReceipt: false
+    });
   }
 }
 
@@ -2304,14 +2340,6 @@ async function handleImageRaced(file) {
      never queued or charged. Only a scan actually eclipsed by a later one is
      safe to resurrect. */
   const supersededByNewer = () => myId !== state._scanSeq;
-  /* Is there actually nowhere else this result needs to go? A scan can be
-     current (not superseded) and STILL have no free screen to paint into —
-     e.g. an earlier scan from the same overlap already painted and its
-     sheet is still open, or Pro batch mode owns the screen. Painting over
-     that would silently replace whatever's already showing with zero
-     warning — the same class of loss tryEnqueue was built to prevent, just
-     for the "current" scan instead of a superseded one. */
-  const screenFree = () => !state.editing && !state.batchMode;
   const sheetUsable = () => {
     if (!sheetOpened) return false;
     const amt = $("confirm-amount") ? $("confirm-amount").value.trim() : "";
@@ -2414,6 +2442,19 @@ async function handleImageRaced(file) {
     mergeCloudIntoSheet();   /* if cloud is already in, merge it now */
     settlePill();
   };
+  /* Best result available RIGHT NOW (cloud preferred, else local) — shared
+     by tryEnqueue (the initial decision) and refreshEnqueuedDraft (any
+     later reader completing after that). */
+  const bestAvailable = () => {
+    if (cloudDone && cloudUsable(cloudAi)) return { p: mergeAIResult(Object.assign({}, parsed || emptyParsed()), cloudAi), source: "cloud" };
+    if (localDone && usableParsed(parsed)) return { p: parsed, source: "local" };
+    return null;
+  };
+  /* Is MY draft the one actually visible right now — as opposed to
+     stillCurrent(), which tracks state._scanSeq and is permanently false
+     once superseded even after that draft has been shown via the queue. */
+  const mySheetIsOpen = () => !!state.editing && state.editing._scanId === myId;
+  let enqueuedDraft = null;
   /* Called for two distinct reasons — tryPaint routes both here:
      (a) superseded by a newer scan (rapid-fire) before this one had
          anything to show, or
@@ -2422,30 +2463,24 @@ async function handleImageRaced(file) {
      Either way: don't discard the receipt or silently overwrite what's on
      screen — queue the same-quality result (cloud preferred, else local,
      else forced-local after the timeout) for review the moment the screen
-     frees up. A cloud result that lands AFTER this point (only possible if
-     this scan forced a local-only queue before its own cloud read finished)
-     is not folded in —
-     the queued draft simply keeps its local-source value, same as the
-     pre-Phase-5 behaviour; learnFromCloud() still fires independently either
-     way so the learning signal isn't lost. */
+     frees up. A reader that finishes AFTER this point is not dropped —
+     see refreshEnqueuedDraft below, called from both completion callbacks. */
   const tryEnqueue = (force) => {
+    const best = bestAvailable();
     let p, source;
-    if (cloudDone && cloudUsable(cloudAi)) {
-      learnFromCloud();
-      p = mergeAIResult(Object.assign({}, parsed || emptyParsed()), cloudAi);
-      source = "cloud";
-    } else if (localDone && usableParsed(parsed)) {
-      p = parsed; source = "local";
-    } else if (force && localDone) {
-      p = parsed || emptyParsed(); source = "local";
-    } else {
-      return;
-    }
+    if (best) { p = best.p; source = best.source; }
+    else if (force && localDone) { p = parsed || emptyParsed(); source = "local"; }
+    else { return; }
     queued = true;
     const draft = parsedToDraft(p);
     draft._file = file;
     draft._scanId = myId;
     draft._source = source;
+    /* Fires once this draft actually renders (openConfirmSheet already ran)
+       — captures the no-clobber baseline so a still-pending reader can
+       merge in later without stomping anything the user's since edited. */
+    draft.__markShown = () => { painted = capturePaintedFields(); };
+    enqueuedDraft = draft;
     /* Re-check scanAllowed() (not just isPro()) before charging: the
        CURRENT/surviving scan from this same rapid-fire burst may already
        have spent today's one free read by the time this superseded scan
@@ -2471,6 +2506,27 @@ async function handleImageRaced(file) {
     }
     showNextPendingScan();
   };
+  /* A reader can finish AFTER tryEnqueue already ran (e.g. cloud lands after
+     a local-only queue, or vice versa) — without this, that result would be
+     silently dropped: the pushed draft is a one-time snapshot and nothing
+     else ever revisits it. Keep it live: refresh the SAME object in place
+     while it's still waiting in the queue (safe — nobody's looking at it
+     yet), or merge into the open sheet via the existing no-clobber
+     primitive if the user is already looking at it. */
+  const refreshEnqueuedDraft = () => {
+    if (!queued || !enqueuedDraft) return;
+    const best = bestAvailable();
+    if (!best) return;
+    if (mySheetIsOpen()) {
+      if (!painted) return;   /* __markShown hasn't fired yet (shouldn't happen if mySheetIsOpen(), but stay safe) */
+      try { applyCloudToOpenSheet(myId, parsedToDraft(best.p), painted); } catch (e) {}
+      return;
+    }
+    if (state.pendingScans.includes(enqueuedDraft)) {
+      const fresh = parsedToDraft(best.p);
+      Object.assign(enqueuedDraft, fresh, { _file: file, _scanId: myId, _source: best.source });
+    }
+  };
 
   /* Cloud read — fired concurrently with local below. Bounded by a generous
      hard cap (aborts a stalled socket) so the scan pill can never breathe
@@ -2481,6 +2537,7 @@ async function handleImageRaced(file) {
       learnFromCloud();
       tryPaint(false);           /* cloud may be the first usable result */
       mergeCloudIntoSheet();     /* or merge into an already-open (local-painted) sheet */
+      refreshEnqueuedDraft();    /* or fold into an already-queued/shown-via-queue draft */
       if (pillPending) settlePill();
       if (localDone) tryPaint(true);   /* both done, still nothing usable → paint what we have */
     } catch (e) {}
@@ -2498,6 +2555,7 @@ async function handleImageRaced(file) {
       learnFromCloud();
       reconcileLocalIntoCloudSheet();   /* if cloud already painted from empty, fold the real local read in */
       tryPaint(false);
+      refreshEnqueuedDraft();    /* or fold into an already-queued/shown-via-queue draft */
       if (cloudDone) tryPaint(true);
     } catch (e) {}
   })();
@@ -2833,10 +2891,15 @@ function renderCategoryChips() {
    Surface it the moment the screen is actually free — never interrupts a
    scan still in flight, an open sheet, or Pro's own batch flow. */
 function showNextPendingScan() {
-  if (state.scanning || state.editing || state.batchMode) return;
+  if (state.scanning || !screenFree()) return;
   if (!state.pendingScans || !state.pendingScans.length) return;
   const draft = state.pendingScans.shift();
   openConfirmSheet(draft);
+  /* Tell the originating scan's closure (if any — handleImageLocalFirst's
+     drafts don't set this) that it's actually on screen now, so a
+     still-pending reader can merge into it later without clobbering
+     anything the user's since edited (see refreshEnqueuedDraft). */
+  if (typeof draft.__markShown === "function") { draft.__markShown(); delete draft.__markShown; }
   /* toast()/toastAction() share one DOM slot with no queueing — every call
      site that leads here (save, delete, cancel, finishBatch) already fires
      its own toast in the same synchronous turn, in inconsistent order. Defer
