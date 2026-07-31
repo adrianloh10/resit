@@ -2873,6 +2873,7 @@ function renderPhotoBlock() {
     img.className = "receipt-thumb";
     img.src = e.photo;
     img.alt = "Receipt photo — tap to enlarge";
+    img.loading = "lazy";
     img.addEventListener("click", () => openPhoto(e.photo));
     block.appendChild(img);
   }
@@ -3897,6 +3898,7 @@ async function init() {
     if (sc) sc.value = state.country || "MY";
     if (scur) scur.value = state.currency || "RM";
     ov.dataset.step = "2";
+    ov.setAttribute("aria-labelledby", "setup-step2-title");
   });
   const scSel = $("setup-country");
   if (scSel) scSel.addEventListener("change", () => {
@@ -3912,20 +3914,30 @@ async function init() {
     const cp = $("currency-prefix");
     if (cp) cp.textContent = state.currency;
     renderSetupTypeChips();
-    $("setup-overlay").dataset.step = "3";
+    const ov3 = $("setup-overlay");
+    ov3.dataset.step = "3";
+    ov3.setAttribute("aria-labelledby", "setup-step3-title");
   });
   on("setup-types-next", async () => {
     if (!state.scopes.length) state.scopes = DEFAULT_SCOPES.slice();
     await DB.setSetting("scopes", state.scopes);
     await DB.setSetting("customScopes", state.customScopes);
-    $("setup-overlay").dataset.step = "4";
+    const ov4 = $("setup-overlay");
+    ov4.dataset.step = "4";
+    ov4.setAttribute("aria-labelledby", "setup-step4-title");
   });
   on("setup-budget-save", async () => {
     const v = parseFloat($("setup-budget").value);
     if (v > 0) { state.budget = v; await DB.setSetting("budget", v); }
-    $("setup-overlay").dataset.step = "5";
+    const ov5 = $("setup-overlay");
+    ov5.dataset.step = "5";
+    ov5.setAttribute("aria-labelledby", "setup-step5-title");
   });
-  on("setup-budget-skip", () => { $("setup-overlay").dataset.step = "5"; });
+  on("setup-budget-skip", () => {
+    const ov5s = $("setup-overlay");
+    ov5s.dataset.step = "5";
+    ov5s.setAttribute("aria-labelledby", "setup-step5-title");
+  });
   on("setup-finish", finishSetup);
   on("statement-close", () => {
     const ov = $("statement-overlay"), fr = $("statement-frame");

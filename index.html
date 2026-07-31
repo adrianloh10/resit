@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Recap</title>
 <meta name="description" content="Snap receipts, track spending. Everything stays on your phone.">
 <meta name="theme-color" content="#F4EDDE" id="meta-theme">
@@ -63,7 +63,7 @@ try {
     </div>
   </header>
   <div class="search-bar" id="search-bar" hidden>
-    <input type="search" id="search-input" placeholder="Search merchant, note or item…" autocomplete="off">
+    <input type="search" id="search-input" placeholder="Search merchant, note or item…" aria-label="Search merchant, note or item" autocomplete="off">
     <div class="chip-row filter-chips" id="filter-chips"></div>
   </div>
   <div class="backup-nudge" id="backup-nudge" hidden>
@@ -220,7 +220,7 @@ try {
         <div class="field" id="inbox-field" hidden>
           <div class="settings-divider" style="margin-bottom: 14px;"></div>
           <span class="field-label">Claude inbox (free — your receipts get checked by Claude on your PC)</span>
-          <input type="password" id="gh-token" placeholder="GitHub token (github_pat_...)">
+          <input type="password" id="gh-token" placeholder="GitHub token (github_pat_...)" aria-label="GitHub token">
           <div class="btn-pair">
             <button class="ghost-btn small" id="gh-test">Test connection</button>
             <button class="ghost-btn small" id="sync-now">Check for Claude's updates</button>
@@ -252,9 +252,9 @@ try {
 <input type="file" id="batch-input" accept="image/*" multiple hidden>
 <input type="file" id="restore-input" accept="application/json,.json" hidden>
 
-<div class="overlay sheet-overlay" id="chooser-overlay" hidden>
+<div class="overlay sheet-overlay" id="chooser-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="chooser-title">
   <div class="confirm-sheet chooser-sheet">
-    <p class="sheet-title" style="margin: 6px 0 14px;">Add expense</p>
+    <p class="sheet-title" id="chooser-title" style="margin: 6px 0 14px;">Add expense</p>
     <p class="quickadd-label" id="quickadd-label" hidden>Quick add</p>
     <div class="chip-row quickadd-row" id="quickadd-row" hidden></div>
     <button class="chooser-btn" id="choose-camera">
@@ -285,7 +285,7 @@ try {
   <button class="select-delete-btn" id="select-delete">Delete</button>
 </div>
 
-<div class="overlay sheet-overlay" id="bulk-overlay" hidden>
+<div class="overlay sheet-overlay" id="bulk-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="bulk-title">
   <div class="confirm-sheet">
     <header class="sheet-header">
       <button class="icon-btn" id="bulk-back" aria-label="Close">&#10005;</button>
@@ -300,7 +300,7 @@ try {
   </div>
 </div>
 
-<div class="overlay sheet-overlay" id="confirm-overlay" hidden>
+<div class="overlay sheet-overlay" id="confirm-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="confirm-title">
   <div class="confirm-sheet" id="confirm-sheet">
     <header class="sheet-header">
       <button class="icon-btn" id="confirm-back" aria-label="Discard">&#10005;</button>
@@ -310,9 +310,9 @@ try {
     <div class="photo-block" id="photo-block"></div>
     <div class="confirm-amount-wrap">
       <span class="rm-prefix" id="currency-prefix">RM</span>
-      <input class="confirm-amount" id="confirm-amount" inputmode="decimal" type="text" placeholder="0.00">
+      <input class="confirm-amount" id="confirm-amount" inputmode="decimal" type="text" placeholder="0.00" aria-label="Amount">
     </div>
-    <input class="confirm-merchant" id="confirm-merchant" type="text" placeholder="Merchant" list="merchant-list" autocomplete="off">
+    <input class="confirm-merchant" id="confirm-merchant" type="text" placeholder="Merchant" aria-label="Merchant" list="merchant-list" autocomplete="off">
     <datalist id="merchant-list"></datalist>
     <div class="confirm-datetime">
       <input type="date" id="confirm-date">
@@ -333,7 +333,7 @@ try {
   </div>
 </div>
 
-<div class="overlay sheet-overlay" id="setup-overlay" hidden data-step="1" data-mode="full">
+<div class="overlay sheet-overlay" id="setup-overlay" hidden data-step="1" data-mode="full" role="dialog" aria-modal="true" aria-labelledby="eula-title">
   <div class="confirm-sheet" style="text-align: center;">
     <div class="setup-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
 
@@ -346,7 +346,7 @@ try {
     </div>
 
     <div class="setup-step" data-step="2">
-      <p class="sheet-title" style="margin: 6px 0 12px;">Where are you?</p>
+      <p class="sheet-title" id="setup-step2-title" style="margin: 6px 0 12px;">Where are you?</p>
       <p class="consent-text">So dates, numbers and currency read the way you expect — set once, change anytime in Settings.</p>
       <select id="setup-country" class="setup-input">
         <option value="MY">Malaysia</option><option value="SG">Singapore</option>
@@ -366,14 +366,14 @@ try {
     </div>
 
     <div class="setup-step" data-step="3">
-      <p class="sheet-title" style="margin: 6px 0 12px;">How do you split spending?</p>
+      <p class="sheet-title" id="setup-step3-title" style="margin: 6px 0 12px;">How do you split spending?</p>
       <p class="consent-text">Tag each expense so personal and work stay apart. Pick the types you'll use — change them anytime in Settings.</p>
       <div class="chip-row" id="setup-type-chips" style="justify-content: center; margin: 10px 0;"></div>
       <button class="save-btn" id="setup-types-next" style="margin-top: 14px;">Continue</button>
     </div>
 
     <div class="setup-step" data-step="4">
-      <p class="sheet-title" style="margin: 6px 0 12px;">Give the month a target</p>
+      <p class="sheet-title" id="setup-step4-title" style="margin: 6px 0 12px;">Give the month a target</p>
       <p class="consent-text">Set a budget and the home screen tracks how much of it you've used — live, every day. Optional: tap the budget on the home screen anytime.</p>
       <input type="number" id="setup-budget" class="setup-input" inputmode="decimal" min="0" step="50" placeholder="e.g. 3000">
       <button class="save-btn" id="setup-budget-save" style="margin-top: 14px;">Save budget</button>
@@ -381,25 +381,25 @@ try {
     </div>
 
     <div class="setup-step" data-step="5">
-      <p class="sheet-title" style="margin: 6px 0 12px;">You're set</p>
+      <p class="sheet-title" id="setup-step5-title" style="margin: 6px 0 12px;">You're set</p>
       <p class="consent-text">From here it's one habit: receipt in hand, tap the orange camera — it reads and files itself in seconds. And everything you track stays on this phone.</p>
       <button class="save-btn" id="setup-finish" style="margin-top: 14px;">Start using Recap</button>
     </div>
   </div>
 </div>
 
-<div class="overlay photo-overlay" id="photo-overlay" hidden>
+<div class="overlay photo-overlay" id="photo-overlay" hidden role="dialog" aria-modal="true" aria-label="Receipt photo">
   <img id="photo-full" alt="Receipt photo">
 </div>
 
-<div class="overlay" id="statement-overlay" hidden style="align-items: stretch;">
-  <div style="position: relative; flex: 1; display: flex; flex-direction: column; background: #F4EDDE;">
+<div class="overlay" id="statement-overlay" hidden style="align-items: stretch;" role="dialog" aria-modal="true" aria-label="Monthly statement">
+  <div style="position: relative; flex: 1; display: flex; flex-direction: column; background: var(--paper);">
     <button class="icon-btn" id="statement-close" aria-label="Close" style="position: absolute; top: 10px; right: 10px; z-index: 2;">&#10005;</button>
     <iframe id="statement-frame" title="Monthly statement" style="flex: 1; width: 100%; border: none;"></iframe>
   </div>
 </div>
 
-<div class="overlay sheet-overlay" id="day-overlay" hidden>
+<div class="overlay sheet-overlay" id="day-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="day-title">
   <div class="confirm-sheet">
     <header class="sheet-header">
       <button class="icon-btn" id="day-back" aria-label="Close">&#10005;</button>
@@ -411,11 +411,11 @@ try {
   </div>
 </div>
 
-<div class="overlay sheet-overlay" id="export-overlay" hidden>
+<div class="overlay sheet-overlay" id="export-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="export-title">
   <div class="confirm-sheet">
     <header class="sheet-header">
       <button class="icon-btn" id="export-back" aria-label="Close">&#10005;</button>
-      <p class="sheet-title">Filtered export</p>
+      <p class="sheet-title" id="export-title">Filtered export</p>
       <span class="spacer"></span>
     </header>
     <div class="field" style="margin-top: 10px;">
@@ -455,9 +455,9 @@ try {
   </div>
 </div>
 
-<div class="overlay sheet-overlay" id="upgrade-overlay" hidden>
+<div class="overlay sheet-overlay" id="upgrade-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="upgrade-title">
   <div class="confirm-sheet" style="text-align: center;">
-    <p class="sheet-title" style="margin: 6px 0 4px;">Recap Pro</p>
+    <p class="sheet-title" id="upgrade-title" style="margin: 6px 0 4px;">Recap Pro</p>
     <p class="upgrade-price" id="upgrade-price">RM 6.99 / month or RM 79 / year</p>
     <p class="consent-text" id="upgrade-reason"></p>
     <ul class="upgrade-list">
@@ -472,9 +472,9 @@ try {
   </div>
 </div>
 
-<div class="overlay sheet-overlay" id="menu-overlay" hidden>
+<div class="overlay sheet-overlay" id="menu-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="menu-title">
   <div class="confirm-sheet chooser-sheet">
-    <p class="sheet-title" style="margin: 6px 0 14px;">Menu</p>
+    <p class="sheet-title" id="menu-title" style="margin: 6px 0 14px;">Menu</p>
     <button class="chooser-btn" id="menu-home">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 6h14M5 12h14M5 18h9"/></svg>
       <span>Expenses</span>
