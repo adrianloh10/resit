@@ -164,13 +164,25 @@ function cloudEndpoint() { return CLOUD_OCR_URL; }
    LEXICON's comment already excluded this exact token on the same
    reasoning); "sanyo"->Sanyu Stationery (a real, unrelated consumer-
    electronics brand name — seeding it would mislabel actual Sanyo
-   receipts). "gardenia" itself needed a manual override: SROIE's ground
-   truth has two spellings for the same shop ("...(KI )..." and
-   "...(KL)..."), which made the mining script's own ambiguity guard
-   (a brand mapping to >1 distinct truth string is auto-rejected as
-   unsafe) reject it automatically — reinstated by hand once the truth typo
-   was confirmed. See automation/bench/mined/ocr-mining-report.json for
-   the full candidate list, evidence counts and rejection reasons. */
+   receipts).
+
+   A SECOND round of candidates ("gardenia" name+hint, "makassar" hint) was
+   initially shipped, then REVERTED after /code-review caught what the
+   mining script's own collision guard couldn't: it only checks for
+   collisions WITHIN the 1545-receipt bench corpus, not against the real
+   world. "Gardenia" is an ordinary word used broadly in Malaysian business
+   naming (hotels, cafes, spas, wedding/banquet halls, condos) — not
+   exclusive to the bread company — so seeding it (with NO confidence gate
+   on the names lookup — it overwrites even an already-correct, unrelated
+   merchant guess) risked silently relabeling any of those as "Gardenia
+   Bakeries". "Makassar" carries the same class of risk (plausible as an
+   Indonesian-cuisine restaurant name in Malaysia). "afon"->AEON survived
+   review: it's not a dictionary word or a plausible business-naming
+   pattern, only arising from this specific OCR misread, so the collision
+   surface is far narrower. See automation/bench/mined/ocr-mining-report.json
+   for the full mined candidate list (evidence counts, rejection reasons)
+   and the code-review workflow's journal for the collision-risk finding
+   that caught the second-round revert. */
 const SEED_RULES = {
   names: {
     /* MR D.I.Y. — 079,081,084,085.json: OCR reads bare "MR.D.I.Y"/"MR. D.I.Y"
@@ -214,13 +226,7 @@ const SEED_RULES = {
        string since "afon" fails brandOf's own >=3-char/non-stopword test
        otherwise it wouldn't be there at all — i.e. the ENTIRE guessed name
        is just "AFON". */
-    "afon": "AEON",
-    /* Gardenia Bakeries — corpus-train sroie-340,343,348,349,364,366,...
-       (9 receipts): OCR reads the brand cleanly but the header line keeps a
-       trailing store code ("GARDENIA BAKERIES KL 139386 X") that
-       cleanMerchantLine doesn't strip (only pops short 1-2-digit/1-4-letter
-       trailing tokens, not a 6-digit code). */
-    "gardenia": "Gardenia Bakeries"
+    "afon": "AEON"
   },
   hints: {
     /* Each value is the literal keyword learnFromAI's own extraction regex
@@ -236,12 +242,7 @@ const SEED_RULES = {
     "uan": "total amt payable",           /* 073.json — "Total Amt Payable : 79.50" */
     "lan": "total amt incl. gst",         /* 075.json — "Total Amt Incl. GST 6% : 159.00" */
     "ikano": "total rm including",        /* 088.json — "Total RM Including 6% 99.80" */
-    "hon": "total inclusive gst",         /* 080.json — "Total Inclusive GST: 10.40" */
-    "gardenia": "total payable",          /* corpus-train sroie-340,343,348,349,... (5x) — "Total Payable: 48.04" */
-    "makassar": "total payable"           /* corpus-train sroie-... (4x) — same phrasing; kept despite the rejected
-                                              "makassar" NAME candidate above (that rejection was about SROIE's own
-                                              truth-company field being wrong for those receipts, not about where
-                                              this shop prints its total — the two are independent lookups). */
+    "hon": "total inclusive gst"          /* 080.json — "Total Inclusive GST: 10.40" */
   }
 };
 
