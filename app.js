@@ -1,7 +1,7 @@
 /* Recap — snap receipts, track spending. All data stays on-device. */
 
 const APP_VERSION = self.RESIT_VERSION || "v?"; /* set once in version.js; sw.js shares it */
-const TERMS_VERSION = "1.0"; /* bump when eula.html changes materially — the accept gate re-shows */
+const TERMS_VERSION = "1.1"; /* bump when eula.html changes materially — the accept gate re-shows */
 
 const $ = id => document.getElementById(id);
 /* sessionStorage can THROW when the user blocks site data — never let that
@@ -75,7 +75,7 @@ let state = {
   selectMode: false, /* multi-select for bulk delete/edit (long-press to enter) */
   selected: null,    /* Set of selected expense ids while selectMode is on */
   batchMode: false,  /* scanning a stack of receipts one after another (Pro) */
-  batchFiles: [], batchDrafts: [], batchIndex: 0, batchTotal: 0, batchSaved: 0,
+  batchFiles: [], batchDrafts: [], batchIndex: 0, batchTotal: 0, batchSaved: 0, batchCardSlipSkipped: 0,
   customScopes: [],  /* user-added expense types beyond Personal/Shared/Company */
   country: "MY",    /* profile: drives date/number locale */
   language: "en",   /* profile: UI language (English only for now) */
@@ -116,7 +116,10 @@ let state = {
   pendingScope: "Personal",
   pendingScopeTouched: false,
   /* Phase 8 (OCR-ENGINE-PLAN.md) — "Looks right?" on-demand AI re-read. */
-  aiRecheck: "yes"  /* flag, default ON — DB-backed, loaded in init() */
+  aiRecheck: "yes",  /* flag, default ON — DB-backed, loaded in init() */
+  /* Phase 9 (OCR-ENGINE-PLAN.md) — card-slip guard. "" until the chooser has
+     ever been opened once; "yes" thereafter (persisted, never reset). */
+  cardNoticeSeen: ""
 };
 
 /* ---------- Claude inbox (free — processed by Claude Code on the PC) ----------
@@ -2103,6 +2106,20 @@ function renderAiRecheckButton() {
 async function reReadWithAI() {
   const e = state.editing;
   if (!e || !aiRecheckAvailable()) return;
+  /* Phase 9 card-slip guard — defense in depth: a sheet only ever reaches
+     _source==="local" (aiRecheckAvailable()'s own gate) by having ALREADY
+     passed this exact check once, on this exact _rawText, at the original
+     scan (handleImageLocalFirst/handleImageRaced) — a pure function re-run
+     on unchanged input can't flip its answer, so this is currently
+     unreachable in practice. Kept anyway: unlike those raced flows, e._rawText
+     is already sitting here with no network round-trip needed first, so the
+     check is free, real (no race to be honest-limited about), and a cheap
+     second gate against a future code path that ever creates a "local"-
+     sourced sheet without going through the original guard. */
+  if (window.ReceiptOCR.looksLikeCardSlip(e._rawText)) {
+    toast("That looks like a payment card or ID document — Recap won't re-read it");
+    return;
+  }
   if (!isPro() && !e._charged && !scanAllowed()) { toast("Today's free reads are used up"); return; }
   const scanId = e._scanId;
   const btn = $("ai-recheck-btn");
@@ -2406,6 +2423,23 @@ function renderChooserScopeChips() {
   }
 }
 
+/* Phase 9 (OCR-ENGINE-PLAN.md) — card-slip guard. Fires once per detected
+   card-slip/ID-photo scan: no cloud send, no photo kept, no learning, the
+   day's scan not consumed (callers are responsible for skipping all of
+   that BEFORE calling this — this function is UI only). Firm message +
+   exactly the two escape hatches the spec calls for, via a native
+   confirm() (OK/Cancel) matching this file's own existing pattern for an
+   in-flow binary choice (see handleImage's ad-unlock confirm()). */
+function blockCardSlip() {
+  const enterManually = confirm(
+    "That looks like a payment card or ID document, not a receipt.\n\n" +
+    "Recap won't read, send, or save a photo of it — card and ID numbers are too sensitive to risk.\n\n" +
+    "OK — enter this expense manually\nCancel — retake with a different photo"
+  );
+  if (enterManually) openConfirmSheet(null);
+  else openChooser();
+}
+
 function openChooser() {
   state.pendingScope = state.lastScope;
   state.pendingScopeTouched = false;
@@ -2413,6 +2447,15 @@ function openChooser() {
   renderQuickAdd();
   $("chooser-overlay").hidden = false;
   warmUpScan();   /* Phase 5 speed pass: pre-warm the OCR worker + cloud edge */
+  /* One-time first-scan notice (persistent chooser hint line covers every
+     later open) — fires the first time ANYONE opens the chooser, whether
+     they end up scanning a card slip or not, so the limit is known before
+     it's ever hit. */
+  if (state.cardNoticeSeen !== "yes") {
+    state.cardNoticeSeen = "yes";
+    DB.setSetting("cardNoticeSeen", "yes");
+    toastAction("Tip: don't photograph payment cards or ID documents — Recap blocks what it can detect, but skip these to be safe", "Got it", () => {}, null, 6000);
+  }
 }
 
 async function handleImage(file) {
@@ -2510,6 +2553,21 @@ async function handleImageLocalFirst(file, preScope, preScopeTouched) {
   try {
     const parsed = await window.ReceiptOCR.scanReceipt(file, msg => { if (stillCurrent()) showScanPill(msg); });
     if (cancelled()) return;
+    /* Phase 9 card-slip guard: checked BEFORE anything else touches this
+       read — before the cloud fallback below can fire, before the raw text
+       is cached (DB.setSetting("lastScan", ...) two lines down), before
+       learning, before a photo thumbnail ever gets generated. Sequential
+       path (classic/cloudFirst-off): local OCR has already fully finished
+       by this point, so this is a REAL, guaranteed block — no network
+       request for this photo has happened yet. */
+    if (window.ReceiptOCR.looksLikeCardSlip(parsed.rawText)) {
+      if (cancelled()) return;
+      state.scanning = false;
+      hideScanPill();
+      renderHome();
+      blockCardSlip();
+      return;
+    }
     DB.setSetting("lastScan", parsed.rawText || "");
     applyLearnedTotalHint(parsed);
     let source = "local";
@@ -2588,6 +2646,37 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
   let parsed = null, cloudAi = null, painted = null;
   let localDone = false, cloudDone = false;
   let learned = false, sheetOpened = false, mergedIntoSheet = false, counted = false, painting = false, pillPending = false, paintedWithoutLocal = false;
+  /* Phase 9 card-slip guard. Card-slip detection can ONLY run off local's
+     own rawText (cloud returns a structured {merchant,total,...} result,
+     never raw OCR text to pattern-match) — so unlike handleImageLocalFirst's
+     fully sequential flow, this racing flow may already have fired the
+     cloud request, or even painted a sheet from cloud's own answer, before
+     local's check ever runs. This flag guards every downstream paint/
+     merge/learn/charge function (each checks it first) so nothing further
+     happens for this scan the instant it's known, however that happens to
+     land; handleCardSlipDetected() also retroactively undoes a paint/queue
+     that already happened. HONEST LIMIT (documented in the privacy notice
+     too): if cloud's response ALREADY painted+charged before local's check
+     completed, that one charge is not refunded — decrementing the shared
+     scanCount counter here could just as easily reverse a DIFFERENT,
+     legitimate overlapping scan's charge (it's a single counter, not a
+     per-scan ledger) — a wrong "fix" worse than the rare case it targets. */
+  let cardSlip = false;
+  const handleCardSlipDetected = () => {
+    if (cardSlip) return;
+    cardSlip = true;
+    if (queued && enqueuedDraft) {
+      const idx = state.pendingScans.indexOf(enqueuedDraft);
+      if (idx >= 0) state.pendingScans.splice(idx, 1);
+      enqueuedDraft = null;
+    }
+    if (!stillCurrent()) return;   /* a newer scan owns the screen now — nothing to show here */
+    if (sheetOpened && state.editing && state.editing._scanId === myId) closeConfirmSheet(true);
+    state.scanning = false;
+    hideScanPill();
+    renderHome();
+    blockCardSlip();
+  };
 
   /* Is this still the scan on screen? (not cancelled, not superseded by a newer
      scan). UI-mutating steps require it; learnFromAI does not — it's
@@ -2613,6 +2702,7 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
      sibling scan sharing this same burst may already have spent today's read
      by the time this one gets here — see the matching guard in tryEnqueue. */
   const countIfUsable = () => {
+    if (cardSlip) return;
     if (!counted && !isPro() && sheetUsable() && scanAllowed()) { counted = true; bumpScanUsed(); }
     /* Phase 8 quota rule needs to know, per open sheet, whether THIS scan
        already spent the day's read — countIfUsable() is the only place that
@@ -2665,6 +2755,7 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
      nothing — leave the sheet and its _source="local" tag untouched so Phase
      8's "Re-read with AI" affordance still applies to it. */
   const mergeCloudIntoSheet = () => {
+    if (cardSlip) return;
     if (mergedIntoSheet || !cloudDone || !sheetOpened || !stillCurrent()) return;
     if (!cloudAi || !cloudUsable(cloudAi)) { mergedIntoSheet = true; return; }
     mergedIntoSheet = true;
@@ -2682,6 +2773,7 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
      WITHOUT clobbering cloud's values or the user's edits (applyCloudToOpenSheet's
      painted-baseline checks handle both). */
   const reconcileLocalIntoCloudSheet = () => {
+    if (cardSlip) return;
     if (!paintedWithoutLocal || !parsed || !painted || !stillCurrent()) return;
     if (!state.editing || state.editing._scanId !== myId) return;
     if (!state.editing._rawText) state.editing._rawText = parsed.rawText || "";
@@ -2694,6 +2786,7 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
      merge when it lands. */
   let queued = false;
   const tryPaint = (force) => {
+    if (cardSlip) return;
     if (painting || sheetOpened || queued) return;
     if (!stillCurrent()) {
       /* Cancelled by the user → true dead end, same as pre-Phase-5: no
@@ -2754,6 +2847,7 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
      frees up. A reader that finishes AFTER this point is not dropped —
      see refreshEnqueuedDraft below, called from both completion callbacks. */
   const tryEnqueue = (force) => {
+    if (cardSlip) return;
     const best = bestAvailable();
     let p, source;
     if (best) { p = best.p; source = best.source; }
@@ -2804,6 +2898,7 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
      yet), or merge into the open sheet via the existing no-clobber
      primitive if the user is already looking at it. */
   const refreshEnqueuedDraft = () => {
+    if (cardSlip) return;
     if (!queued || !enqueuedDraft) return;
     const best = bestAvailable();
     if (!best) return;
@@ -2841,6 +2936,7 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
      hard cap (aborts a stalled socket) so the scan pill can never breathe
      forever; cloudReadTimed resolves null (never rejects) on error/timeout. */
   cloudReadTimed(file, CLOUD_HARD_CAP_MS).then(a => {
+    if (cardSlip) return;   /* already blocked by local's check — see handleCardSlipDetected's HONEST LIMIT note above about a charge that may already have landed before this point */
     cloudAi = a; cloudDone = true;
     /* Phase 8: this scan's automatic cloud leg just settled (however it
        came out) — the "Re-read with AI" button was held back by
@@ -2866,6 +2962,17 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
     catch (e) { p = null; }
     localDone = true;
     try {
+      /* Phase 9 card-slip guard — the ONLY point in this raced flow that can
+         ever know: cloud returns a structured result, never raw OCR text to
+         check. Discard p entirely (parsed stays null) BEFORE any of it can
+         reach a paint/merge/learn/charge path; handleCardSlipDetected()
+         retroactively tears down anything cloud already did first (see its
+         own comment for the one thing it can't undo — a charge already
+         landed via cloud's own race). */
+      if (p && window.ReceiptOCR.looksLikeCardSlip(p.rawText)) {
+        handleCardSlipDetected();
+        return;
+      }
       if (p) { DB.setSetting("lastScan", p.rawText || ""); applyLearnedTotalHint(p); p._source = "local"; }
       parsed = p;
       learnFromCloud();
@@ -2895,6 +3002,7 @@ async function startBatch(fileList) {
   state.batchDrafts = [];
   state.batchIndex = 0;
   state.batchSaved = 0;
+  state.batchCardSlipSkipped = 0;
   state.batchTotal = state.batchFiles.length;
   state.batchMode = true;
   switchView("home");
@@ -2937,6 +3045,20 @@ async function scanAllInBatch(preScope, preScopeTouched) {
       parsed = await window.ReceiptOCR.scanReceipt(file, msg => showScanPill(msg + " (" + pos + ")"));
     } catch (err) { parsed = null; }
     if (!state.batchMode || state.ocrCancelled) break;
+    /* Phase 9 card-slip guard. Batch's own cloud reads (cloudOn path) are
+       ALL fired up front via files.map() before this loop even starts —
+       same HONEST LIMIT as the single-scan raced flow: this receipt's own
+       cloud request may already be in flight by the time this check runs.
+       What IS fully within reach: never await/use cloudReads[i]'s result
+       (so nothing from it merges, gets learned from, or is shown), no
+       photo, no draft pushed for review — skip straight to the next file.
+       No mid-batch confirm() interruption (batch reads everything up front,
+       before the user reviews anything) — summarized once at finishBatch()
+       instead. */
+    if (parsed && window.ReceiptOCR.looksLikeCardSlip(parsed.rawText)) {
+      state.batchCardSlipSkipped++;
+      continue;
+    }
     if (parsed) applyLearnedTotalHint(parsed);
 
     let source = "local";
@@ -2988,13 +3110,22 @@ function processNextInBatch() {
 }
 
 function finishBatch() {
-  const saved = state.batchSaved, total = state.batchTotal;
+  const saved = state.batchSaved, total = state.batchTotal, cardSlipSkipped = state.batchCardSlipSkipped;
   state.batchMode = false;
-  state.batchFiles = []; state.batchDrafts = []; state.batchIndex = 0; state.batchTotal = 0; state.batchSaved = 0;
+  state.batchFiles = []; state.batchDrafts = []; state.batchIndex = 0; state.batchTotal = 0; state.batchSaved = 0; state.batchCardSlipSkipped = 0;
   hideScanPill();
   switchView("home");
   renderHome();
-  if (saved > 0) toast("Added " + saved + " receipt" + (saved > 1 ? "s" : "") + (saved < total ? " of " + total : ""));
+  /* Phase 9 card-slip guard: batch skips these silently mid-scan (no
+     mid-batch confirm() interruption — see scanAllInBatch's comment), so
+     this is the first and only place the user learns why the count is
+     short. */
+  if (cardSlipSkipped > 0) {
+    toast((saved > 0 ? "Added " + saved + " receipt" + (saved > 1 ? "s" : "") + " — " : "") +
+      "skipped " + cardSlipSkipped + " that looked like payment cards or ID documents");
+  } else if (saved > 0) {
+    toast("Added " + saved + " receipt" + (saved > 1 ? "s" : "") + (saved < total ? " of " + total : ""));
+  }
   showNextPendingScan();
 }
 
@@ -3705,6 +3836,7 @@ async function init() {
     state.aiRecheck = await DB.getSetting("aiRecheck", "yes");
     state.lastScope = await DB.getSetting("lastScope", "Personal");
     state.pendingScope = state.lastScope;
+    state.cardNoticeSeen = await DB.getSetting("cardNoticeSeen", "");
     state.deviceId = await DB.getSetting("deviceId", "");
     if (!state.deviceId) {
       state.deviceId = Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
