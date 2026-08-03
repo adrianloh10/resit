@@ -104,7 +104,19 @@ let state = {
   filterCat: "",
   scopeFilter: "",  /* "", "Personal", "Shared", "Company" */
   syncStatus: "",   /* "", "syncing", "ok", "auth", "offline" */
-  lastSyncAt: null
+  lastSyncAt: null,
+  /* Phase 7 (OCR-ENGINE-PLAN.md) — type-first snap. lastScope: persisted
+     "type I used last" (DB-backed). pendingScope/pendingScopeTouched:
+     transient (never persisted directly) — set fresh each time the Add
+     chooser opens, carried into whichever entry point (camera/gallery/
+     batch/manual) the user picks next via parsedToDraft()/the manual
+     skeleton, then naturally stale until the next chooser-open resets them. */
+  preScanType: "yes",  /* flag, default ON — DB-backed, loaded in init() */
+  lastScope: "Personal",
+  pendingScope: "Personal",
+  pendingScopeTouched: false,
+  /* Phase 8 (OCR-ENGINE-PLAN.md) — "Looks right?" on-demand AI re-read. */
+  aiRecheck: "yes"  /* flag, default ON — DB-backed, loaded in init() */
 };
 
 /* ---------- Claude inbox (free — processed by Claude Code on the PC) ----------
@@ -2274,7 +2286,40 @@ function renderQuickAdd() {
   }
 }
 
+/* Phase 7 — "For:" chip row in the Add chooser: sets the TYPE the next
+   receipt/manual entry will default to, before the user even picks how to
+   capture it. Re-initialized fresh every openChooser() from state.lastScope
+   (never carries a stale pick from a previous, already-finished scan). A
+   real tap both updates the transient pendingScope (this scan) AND persists
+   lastScope (future opens default to it too) — matching how "last used"
+   pickers work elsewhere in the app (e.g. currency). */
+function renderChooserScopeChips() {
+  const label = $("chooser-scope-label");
+  const row = $("chooser-scope-chips");
+  if (!label || !row) return;
+  if (state.preScanType !== "yes") { label.hidden = true; row.hidden = true; return; }
+  label.hidden = false; row.hidden = false;
+  row.innerHTML = "";
+  for (const s of allScopes()) {
+    const b = document.createElement("button");
+    const sel = s === state.pendingScope;
+    b.className = "chip scope-opt " + scopeClass(s) + (sel ? " selected" : "");
+    b.textContent = s;
+    b.addEventListener("click", () => {
+      state.pendingScope = s;
+      state.pendingScopeTouched = true;
+      state.lastScope = s;
+      DB.setSetting("lastScope", s);
+      renderChooserScopeChips();
+    });
+    row.appendChild(b);
+  }
+}
+
 function openChooser() {
+  state.pendingScope = state.lastScope;
+  state.pendingScopeTouched = false;
+  renderChooserScopeChips();
   renderQuickAdd();
   $("chooser-overlay").hidden = false;
   warmUpScan();   /* Phase 5 speed pass: pre-warm the OCR worker + cloud edge */
@@ -2282,6 +2327,14 @@ function openChooser() {
 
 async function handleImage(file) {
   if (!file) return;
+  /* Phase 7 — capture the "For:" chooser pick BEFORE any await below. JS run-
+     to-completion means this happens before a second, overlapping chooser
+     interaction (rapid-fire scan B) could change state.pendingScope out from
+     under this scan — the exact class of race Phase 5's rapid-fire fixes
+     already guard elsewhere in this file. Threaded through as params, never
+     re-read from live state later in either handler. */
+  const preScope = state.preScanType === "yes" ? state.pendingScope : "Personal";
+  const preScopeTouched = state.preScanType === "yes" && state.pendingScopeTouched;
   /* EVERY install — including the owner's — takes the instant path now:
      on-device read, cloud AI for the hard ones, result in seconds. The Claude
      inbox no longer fronts scanning; it only fills receipts deliberately
@@ -2300,7 +2353,7 @@ async function handleImage(file) {
       } else {
         const thumb0 = await fileToThumb(file, 700);
         openOrQueueDraft({
-          amount: null, merchant: "", category: "Other", scope: "Personal",
+          amount: null, merchant: "", category: "Other", scope: preScope, userPickedScope: preScopeTouched,
           date: new Date().toISOString(), items: [], note: "",
           photo: thumb0 || undefined, fromReceipt: false
         });
@@ -2311,7 +2364,7 @@ async function handleImage(file) {
       toastAction("Today's free scan is used — type this one in", "Go Pro",
         () => showUpgrade("Free reads " + FREE_SCANS_PER_DAY + " receipt a day. Pro reads them all — every receipt, every day."), null, 5500);
       openOrQueueDraft({
-        amount: null, merchant: "", category: "Other", scope: "Personal",
+        amount: null, merchant: "", category: "Other", scope: preScope, userPickedScope: preScopeTouched,
         date: new Date().toISOString(), items: [], note: "",
         photo: thumb || undefined, fromReceipt: false
       });
@@ -2321,14 +2374,15 @@ async function handleImage(file) {
   /* Cloud-first (default): race the local and cloud readers; the first usable
      result paints, the cloud result then merges authoritative. Off / offline /
      consent-off / no endpoint → the classic local-first path (resilience floor). */
-  if (await cloudFirstActive()) return handleImageRaced(file);
-  return handleImageLocalFirst(file);
+  if (await cloudFirstActive()) return handleImageRaced(file, preScope, preScopeTouched);
+  return handleImageLocalFirst(file, preScope, preScopeTouched);
 }
 
 /* Classic local-first read (unchanged behaviour): on-device first, cloud only
    when the on-device result is weak/empty. Runs when cloudFirst is off, the
-   device is offline, or cloud reading is switched off. */
-async function handleImageLocalFirst(file) {
+   device is offline, or cloud reading is switched off. `preScope`/
+   `preScopeTouched`: Phase 7's chooser-time capture, see handleImage(). */
+async function handleImageLocalFirst(file, preScope, preScopeTouched) {
   /* Per-scan id, same monotonic counter handleImageRaced uses. Needed
      because this function has no supersede/queue awareness of its own —
      two overlapping calls (e.g. cloud off, user scans twice quickly) run
@@ -2410,6 +2464,8 @@ async function handleImageLocalFirst(file) {
     draft._file = file;
     draft._source = source;
     draft._charged = charged;
+    draft.scope = preScope;
+    draft.userPickedScope = preScopeTouched;
     openOrQueueDraft(draft);
   } catch (err) {
     if (cancelled()) return;
@@ -2418,7 +2474,7 @@ async function handleImageLocalFirst(file) {
     renderHome();
     toast(err.message || "Something went wrong reading the receipt");
     openOrQueueDraft({
-      id: null, amount: null, merchant: "", category: "Other",
+      id: null, amount: null, merchant: "", category: "Other", scope: preScope, userPickedScope: preScopeTouched,
       date: new Date().toISOString(), items: [], note: "", fromReceipt: false
     });
   }
@@ -2432,7 +2488,7 @@ async function handleImageLocalFirst(file) {
    on every raced scan. A monotonic scanId (state._scanSeq) guarantees a
    cancelled or superseded scan's late cloud result can never touch the wrong
    sheet (no duplicate-sheet / lost-scan / cross-scan clobber). */
-async function handleImageRaced(file) {
+async function handleImageRaced(file, preScope, preScopeTouched) {
   const myId = ++state._scanSeq;
   state.scanning = true;
   switchView("home");
@@ -2472,6 +2528,8 @@ async function handleImageRaced(file) {
     draft._file = file;
     draft._scanId = myId;
     draft._source = source;
+    draft.scope = preScope;
+    draft.userPickedScope = preScopeTouched;
     openConfirmSheet(draft);
     painted = capturePaintedFields();
     sheetOpened = true;
@@ -2596,6 +2654,8 @@ async function handleImageRaced(file) {
     draft._file = file;
     draft._scanId = myId;
     draft._source = source;
+    draft.scope = preScope;
+    draft.userPickedScope = preScopeTouched;
     /* Fires once this draft actually renders (openConfirmSheet already ran)
        — captures the no-clobber baseline so a still-pending reader can
        merge in later without stomping anything the user's since edited. */
@@ -2720,7 +2780,12 @@ async function startBatch(fileList) {
   state.batchTotal = state.batchFiles.length;
   state.batchMode = true;
   switchView("home");
-  await scanAllInBatch();
+  /* Phase 7 — "Batch: stack default": the ONE chooser-time "For:" pick
+     applies to every receipt in this batch (captured here, before the file
+     picker's native dialog even opens — see handleImage()'s matching note). */
+  const preScope = state.preScanType === "yes" ? state.pendingScope : "Personal";
+  const preScopeTouched = state.preScanType === "yes" && state.pendingScopeTouched;
+  await scanAllInBatch(preScope, preScopeTouched);
   processNextInBatch();
 }
 
@@ -2733,7 +2798,7 @@ async function startBatch(fileList) {
    and learnFromAI fires on every raced receipt. cloudFirst off / offline /
    consent-off → each receipt keeps the classic local-first, cloud-when-weak
    behaviour. */
-async function scanAllInBatch() {
+async function scanAllInBatch(preScope, preScopeTouched) {
   state.ocrCancelled = false;
   const files = state.batchFiles;
   const cloudOn = await cloudFirstActive();
@@ -2784,11 +2849,13 @@ async function scanAllInBatch() {
       const draft = parsedToDraft(parsed);
       draft._file = file;
       draft._source = source;
+      draft.scope = preScope;
+      draft.userPickedScope = preScopeTouched;
       state.batchDrafts.push(draft);
     } else {
       /* Unreadable by both — still queue it so the user can type it in and keep going. */
       state.batchDrafts.push({
-        amount: null, merchant: "", category: "Other", scope: "Personal",
+        amount: null, merchant: "", category: "Other", scope: preScope, userPickedScope: preScopeTouched,
         date: new Date().toISOString(), items: [], note: "", fromReceipt: true, _file: file, _source: "local"
       });
     }
@@ -2840,6 +2907,8 @@ function parsedToDraft(parsed) {
 function openConfirmSheet(expense) {
   state.editing = expense ? { ...expense, items: (expense.items || []).map(i => ({ ...i })) } : {
     id: null, amount: null, merchant: "", category: "Other",
+    scope: state.preScanType === "yes" ? state.pendingScope : "Personal",
+    userPickedScope: state.preScanType === "yes" && state.pendingScopeTouched,
     date: new Date().toISOString(), items: [], note: "", fromReceipt: false
   };
   const e = state.editing;
@@ -3511,6 +3580,12 @@ async function init() {
     /* Cloud reading is ON by default (1.10.0, informed default disclosed at
        setup); a user who turns it off in Settings persists "no". */
     state.cloudConsent = await DB.getSetting("cloudConsent", "yes");
+    /* Phase 7/8 (OCR-ENGINE-PLAN.md) — both default ON, no Settings UI (same
+       dark/silent-flag convention as cloudFirst). */
+    state.preScanType = await DB.getSetting("preScanType", "yes");
+    state.aiRecheck = await DB.getSetting("aiRecheck", "yes");
+    state.lastScope = await DB.getSetting("lastScope", "Personal");
+    state.pendingScope = state.lastScope;
     state.deviceId = await DB.getSetting("deviceId", "");
     if (!state.deviceId) {
       state.deviceId = Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
