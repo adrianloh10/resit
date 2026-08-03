@@ -142,7 +142,35 @@ function cloudEndpoint() { return CLOUD_OCR_URL; }
    Malaysian company suffix and would mislabel almost any other business.
    Same reasoning excluded "perniagaan" (Malay for "business", equally
    generic) and Popular Book Co. (its merchant guess collapsed to "Company
-   No. ..." / the mall name "Sunway Velocity", not the shop). */
+   No. ..." / the mall name "Sunway Velocity", not the shop).
+
+   v2, 3 Aug 2026 (Phase 15b — corpus mining). Entries below this note were
+   mined from corpus-train's sroie-overflow slice (real tesseract.js OCR via
+   automation/bench/corpus-ocr-capture.js, brandOf() token vs SROIE ground
+   truth) instead of the my100 bench photos, same brandOf() derivation
+   either way. MANY more candidates were found and REJECTED on manual review
+   before shipping any of these — the mining is honest but naive (plain
+   truth-diff, no notion of "OCR already got it right, don't overwrite with
+   a worse legal-entity name" or "this brand token is too generic to be
+   safe"), so every candidate needed a human sanity pass exactly like this
+   file's v1 entries got. Rejected, for the record: "makassar"->Gardenia
+   Bakeries (SROIE's OWN truth field is wrong for those receipts — the OCR
+   guess "MAKASSAR FRESH MARKET" was already correct, already in
+   MERCHANT_LEXICON); "familymart"->Haxincone Resources (OCR read the real
+   storefront name correctly; truth is the franchise legal entity — same
+   trap as this file's existing Unihakka/Bar Wang Rice case); "three",
+   "enterprise" (brand tokens too generic/collision-prone to key a global
+   rule on); "kuchai" (a MR DIY branch qualifier, not a brand — MERCHANT_
+   LEXICON's comment already excluded this exact token on the same
+   reasoning); "sanyo"->Sanyu Stationery (a real, unrelated consumer-
+   electronics brand name — seeding it would mislabel actual Sanyo
+   receipts). "gardenia" itself needed a manual override: SROIE's ground
+   truth has two spellings for the same shop ("...(KI )..." and
+   "...(KL)..."), which made the mining script's own ambiguity guard
+   (a brand mapping to >1 distinct truth string is auto-rejected as
+   unsafe) reject it automatically — reinstated by hand once the truth typo
+   was confirmed. See automation/bench/mined/ocr-mining-report.json for
+   the full candidate list, evidence counts and rejection reasons. */
 const SEED_RULES = {
   names: {
     /* MR D.I.Y. — 079,081,084,085.json: OCR reads bare "MR.D.I.Y"/"MR. D.I.Y"
@@ -180,7 +208,19 @@ const SEED_RULES = {
        as "HOWE" for this store's receipt font. */
     "howe": "Home Master Hardware",
     /* Hon Hwa Hardware Trading — 080,082.json: consistently "hon". */
-    "hon": "Hon Hwa Hardware"
+    "hon": "Hon Hwa Hardware",
+    /* AEON — corpus-train sroie-311,449: OCR consistently misreads "AEON"
+       as "AFON" (E->F) on these receipts' font, collapsing to the whole
+       string since "afon" fails brandOf's own >=3-char/non-stopword test
+       otherwise it wouldn't be there at all — i.e. the ENTIRE guessed name
+       is just "AFON". */
+    "afon": "AEON",
+    /* Gardenia Bakeries — corpus-train sroie-340,343,348,349,364,366,...
+       (9 receipts): OCR reads the brand cleanly but the header line keeps a
+       trailing store code ("GARDENIA BAKERIES KL 139386 X") that
+       cleanMerchantLine doesn't strip (only pops short 1-2-digit/1-4-letter
+       trailing tokens, not a 6-digit code). */
+    "gardenia": "Gardenia Bakeries"
   },
   hints: {
     /* Each value is the literal keyword learnFromAI's own extraction regex
@@ -196,7 +236,12 @@ const SEED_RULES = {
     "uan": "total amt payable",           /* 073.json — "Total Amt Payable : 79.50" */
     "lan": "total amt incl. gst",         /* 075.json — "Total Amt Incl. GST 6% : 159.00" */
     "ikano": "total rm including",        /* 088.json — "Total RM Including 6% 99.80" */
-    "hon": "total inclusive gst"          /* 080.json — "Total Inclusive GST: 10.40" */
+    "hon": "total inclusive gst",         /* 080.json — "Total Inclusive GST: 10.40" */
+    "gardenia": "total payable",          /* corpus-train sroie-340,343,348,349,... (5x) — "Total Payable: 48.04" */
+    "makassar": "total payable"           /* corpus-train sroie-... (4x) — same phrasing; kept despite the rejected
+                                              "makassar" NAME candidate above (that rejection was about SROIE's own
+                                              truth-company field being wrong for those receipts, not about where
+                                              this shop prints its total — the two are independent lookups). */
   }
 };
 

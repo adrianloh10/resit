@@ -1512,7 +1512,11 @@ function totalLineScore(line) {
   if (/\b(gst|sst)\b.*inclu/i.test(line) && !/^\s*total/i.test(line)) return 0;
   if (/\btotal\s*(gst|sst|tax|cukai)\b/i.test(line)) return 0;
   if (/\btotal\s*qty\b|\bqty\b[^a-z]*\btotal\b/i.test(line)) return 0;
-  if (/\b(total|jumlah|jum\.?)\b/i.test(line) || /\bamount\s*(due|payable)\b/i.test(line)) {
+  /* "finaltotal" (OCR-glued, no space -- \btotal\b alone needs a boundary
+     right before "total" and a glued run like "FinalTotal" never has one)
+     -- OCR-ENGINE-PLAN.md Phase 15b, mined from corpus-train (2 sroie-overflow
+     receipts, ids 485/497, e.g. "FinalTotal 12.00"). */
+  if (/\b(total|jumlah|jum\.?|finaltotal)\b/i.test(line) || /\bamount\s*(due|payable)\b/i.test(line)) {
     if (/exclu/i.test(line)) return 3;
     if (/payable|due|\bincl/i.test(line) || /round|grand|net|bersih|keseluruhan|total\s*amount/i.test(line)) return 12;
     return 10;
