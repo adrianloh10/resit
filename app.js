@@ -2053,6 +2053,96 @@ function applyCloudToOpenSheet(scanId, cloudDraft, painted) {
   }
   e._source = "cloud";
   if (changed && !hadEdits) state._sheetSnapshot = sheetFingerprint();
+  renderAiRecheckButton();   /* Phase 8: _source just flipped to "cloud" — hide the re-read button */
+}
+
+/* Phase 8 — "Looks right?" on-demand AI re-read. Only for a sheet that's
+   still local-only (a successful automatic/raced cloud merge already covers
+   this — Phase 5's own interplay note, see handleImageRaced's header
+   comment); needs the original file to re-upload; the endpoint/consent gate
+   every other cloud call site uses; and the flag. `_cloudPending` (set/synced
+   by handleImageRaced, see there) additionally holds the button back while
+   THIS scan's own automatic race still has a cloud read in flight — /code-
+   review (this phase) found that without it, a manual re-read could run
+   concurrently with the automatic one for the same scan: two independent
+   capturePaintedFields() baselines racing the SAME no-clobber primitive,
+   each blind to the other's writes, silently dropping whichever merge
+   landed second (and, via countIfUsable's charge-sync, could even revert a
+   manual quota charge back to uncharged). Simplest fix is to not let the
+   two ever overlap in the first place, rather than trying to reconcile two
+   baselines after the fact. */
+function aiRecheckAvailable() {
+  const e = state.editing;
+  return !!(e && e._source === "local" && !e._cloudPending && e._file && cloudEndpoint() && state.cloudConsent !== "no" && state.aiRecheck === "yes");
+}
+function renderAiRecheckButton() {
+  const btn = $("ai-recheck-btn");
+  if (!btn) return;
+  btn.hidden = !aiRecheckAvailable();
+  btn.disabled = false;
+  btn.textContent = "Not right? Re-read with AI";
+}
+
+/* On tap: cloudRead -> mergeAIResult -> update the open sheet WITHOUT
+   clobbering user-edited fields (reuses applyCloudToOpenSheet's no-clobber
+   primitive verbatim) -> learnFromAI -> _source="cloud". The merge base is
+   the sheet's OWN current fields (not emptyParsed()) so a field the AI
+   doesn't answer keeps its already-displayed value — including base.time,
+   derived from e.date's own hour/minute (NOT hardcoded null: /code-review
+   found that parsedToDraft's date/time defaulting is written for a FRESH
+   OCR parse, where a truthy date + falsy time means "resolve time to now" —
+   exactly the wrong rule here, where a falsy time should mean "keep this
+   sheet's already-correct time," so it must go in already populated).
+   Quota rule (decided): a re-read on a scan that already consumed today's
+   free read (e._charged) is free; a re-read on one that never consumed it
+   (local came up empty/weak enough that handleImage never charged) counts
+   as today's read on success — gated BEFORE the network call fires (not
+   just before the charge), so a sibling scan that spent the day's only
+   free slot in the background while this sheet sat open can't let an
+   uncharged bonus read slip through. */
+async function reReadWithAI() {
+  const e = state.editing;
+  if (!e || !aiRecheckAvailable()) return;
+  if (!isPro() && !e._charged && !scanAllowed()) { toast("Today's free reads are used up"); return; }
+  const scanId = e._scanId;
+  const btn = $("ai-recheck-btn");
+  btn.disabled = true;
+  btn.textContent = "Reading with AI…";
+  const painted = capturePaintedFields();
+  let ai = null;
+  try { ai = await cloudReadTimed(e._file, CLOUD_HARD_CAP_MS); } catch (err) { ai = null; }
+  /* The user may have closed this sheet, saved it, or opened a different one
+     while the request was in flight — bail rather than touch the wrong
+     sheet. Object identity (`state.editing === e`), not just `_scanId`:
+     batch drafts (scanAllInBatch) never get a _scanId at all (undefined),
+     so comparing undefined-to-undefined would silently pass this guard for
+     a DIFFERENT batch receipt the user has since advanced to — the exact
+     scenario "works in batch confirms" needs protected against. `state.
+     _saving` too: saveExpense sets it synchronously but doesn't clear
+     state.editing until after its own awaits (fileToThumb, DB writes), so
+     without this a Save that started mid-re-read could let the charge below
+     fire for an AI answer applyCloudToOpenSheet's OWN _saving guard already
+     silently discarded. Checked again here (not just relying on
+     applyCloudToOpenSheet's guard) so the quota/learn side-effects don't
+     fire against a stale or mid-save scan either. */
+  if (state.editing !== e || state._saving || $("confirm-overlay").hidden) return;
+  if (!cloudUsable(ai)) {
+    btn.disabled = false;
+    btn.textContent = "Not right? Re-read with AI";
+    toast("Couldn't read it any better — try fixing it by hand");
+    return;
+  }
+  const origDate = e.date ? new Date(e.date) : null;
+  const base = {
+    rawText: e._rawText || "", total: e.amount, totalConf: 0,
+    merchant: e.merchant, category: e.category,
+    date: origDate, time: origDate ? { h: origDate.getHours(), min: origDate.getMinutes() } : null,
+    items: e.items || []
+  };
+  try { learnFromAI(base.rawText, ai, base.total, base.merchant); } catch (err) {}
+  const merged = mergeAIResult(base, ai);
+  applyCloudToOpenSheet(scanId, parsedToDraft(merged), painted);
+  if (!isPro() && !e._charged && scanAllowed()) { await bumpScanUsed(); e._charged = true; }
 }
 
 /* Speed pass: the instant the Add chooser opens, start warming the two things a
@@ -2522,7 +2612,21 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
      can type). Re-checks scanAllowed() (not just isPro()): a rapid-fire
      sibling scan sharing this same burst may already have spent today's read
      by the time this one gets here — see the matching guard in tryEnqueue. */
-  const countIfUsable = () => { if (!counted && !isPro() && sheetUsable() && scanAllowed()) { counted = true; bumpScanUsed(); } };
+  const countIfUsable = () => {
+    if (!counted && !isPro() && sheetUsable() && scanAllowed()) { counted = true; bumpScanUsed(); }
+    /* Phase 8 quota rule needs to know, per open sheet, whether THIS scan
+       already spent the day's read — countIfUsable() is the only place that
+       decision is made on the direct-paint path (tryEnqueue/
+       refreshEnqueuedDraft already stamp their own draft/state.editing
+       elsewhere). `counted` (this closure's own charge) OR whatever's
+       already there (not a blind overwrite): `counted` only tracks THIS
+       scan's own automatic race, but reReadWithAI can independently set
+       state.editing._charged = true first (a manual re-read firing while
+       this scan's own automatic race is, in some path this diff doesn't
+       fully rule out, still settling) — a bare `= counted` would revert
+       that back to false the next time this runs. */
+    if (state.editing && state.editing._scanId === myId) state.editing._charged = counted || state.editing._charged;
+  };
   const openSheet = (p, source) => {
     const draft = parsedToDraft(p);
     draft._file = file;
@@ -2530,6 +2634,12 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
     draft._source = source;
     draft.scope = preScope;
     draft.userPickedScope = preScopeTouched;
+    /* Phase 8: this scan's OWN automatic cloud leg may still be in flight
+       (e.g. local painted first) — hold the "Re-read with AI" button back
+       until it settles (synced to false at the cloud .then() below),
+       so an automatic and a manual re-read for the SAME scan can never
+       overlap. Trivially false already for a cloud-sourced paint. */
+    draft._cloudPending = !cloudDone;
     openConfirmSheet(draft);
     painted = capturePaintedFields();
     sheetOpened = true;
@@ -2656,6 +2766,7 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
     draft._source = source;
     draft.scope = preScope;
     draft.userPickedScope = preScopeTouched;
+    draft._cloudPending = !cloudDone;   /* Phase 8, see openSheet's matching comment */
     /* Fires once this draft actually renders (openConfirmSheet already ran)
        — captures the no-clobber baseline so a still-pending reader can
        merge in later without stomping anything the user's since edited. */
@@ -2731,6 +2842,13 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
      forever; cloudReadTimed resolves null (never rejects) on error/timeout. */
   cloudReadTimed(file, CLOUD_HARD_CAP_MS).then(a => {
     cloudAi = a; cloudDone = true;
+    /* Phase 8: this scan's automatic cloud leg just settled (however it
+       came out) — the "Re-read with AI" button was held back by
+       _cloudPending while it was outstanding (openSheet/tryEnqueue),
+       release it now regardless of whether mergeCloudIntoSheet below
+       actually changes anything (an unusable/failed automatic read still
+       means it's now safe for a manual one to run without overlapping it). */
+    if (state.editing && state.editing._scanId === myId) state.editing._cloudPending = false;
     try {
       learnFromCloud();
       tryPaint(false);           /* cloud may be the first usable result */
@@ -2957,6 +3075,7 @@ function openConfirmSheet(expense) {
   renderCategoryChips();
   renderPhotoBlock();
   renderItemsEditor();
+  renderAiRecheckButton();
 
   let del = $("delete-btn");
   if (del) del.remove();
@@ -3960,6 +4079,7 @@ async function init() {
   $("confirm-back").addEventListener("click", () => closeConfirmSheet());
   $("confirm-overlay").addEventListener("click", ev => { if (ev.target === $("confirm-overlay")) closeConfirmSheet(); });
   $("save-btn").addEventListener("click", saveExpense);
+  $("ai-recheck-btn").addEventListener("click", reReadWithAI);
   $("batch-skip").addEventListener("click", () => {
     if (!state.batchMode) return;
     state.batchIndex++;
