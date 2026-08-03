@@ -1732,6 +1732,78 @@ function amountFromLine(line) {
   return a.length ? Math.max(...a) : null;
 }
 
+/* ---------- Card-slip guard (OCR-ENGINE-PLAN.md Phase 9) ----------
+
+   Detects text that looks like a payment card slip or terminal receipt
+   (an unmasked card number, or the printed labels a card terminal uses),
+   so the app can refuse to send it to the cloud reader, keep no photo of
+   it, and not learn from it. Two independent signals, either is enough:
+
+   PRIMARY: an unmasked, CARD-GROUPED 13-19-digit run that passes the Luhn
+   checksum. "Card-grouped" is deliberately narrower than "any digit run":
+   an earlier version matched any 13-19 digit sequence with spaces/dashes
+   stripped, benched against my100+sroie200 (300 real Malaysian receipts,
+   cached raw OCR text), and found 23 real false positives — every one of
+   them EAN-13 barcodes, GST/invoice reference numbers, or (the case that
+   forced this redesign) a "Shell Loyalty Card" number printed as one bare
+   16-digit block that happens to satisfy Luhn (loyalty/membership schemes
+   commonly use Luhn deliberately too — it's a generic check-digit
+   algorithm, not exclusive to payment cards). A real card slip prints the
+   number in one of a handful of universal POS/EDC groupings (4-4-4-N,
+   Amex's 4-6-5, or the older 4-4-5) — a bare ungrouped block, the exact
+   shape that produced every false positive here, is now REQUIRED to also
+   carry a SECONDARY keyword hit to trigger (see below) rather than
+   tripping PRIMARY on Luhn alone. Re-benched at 0/300 after this change.
+   A masked number (****1234, XXXX-XXXX-XXXX-1234) never forms a matching
+   run at all — the mask characters break any grouping — so masking
+   correctly, and automatically, defeats PRIMARY without special-case code.
+
+   SECONDARY (for a real card number the OCR garbled past Luhn or grouping,
+   an ungrouped-but-real card number, or a masked slip PRIMARY can never
+   see the number on): 2+ of the printed labels a card-terminal receipt
+   actually carries — CARDHOLDER, MERCHANT/CUSTOMER COPY, APPR(OVAL) CODE,
+   SIGNATURE, MID/TID (merchant/terminal id). One alone is too common a
+   false-positive risk (e.g. a receipt that happens to say "signature" for
+   an unrelated reason); two together are specific enough to real
+   card-terminal printouts. */
+const CARD_GROUPED_RE = /(?<!\d)(\d{4}[ -]\d{4}[ -]\d{4}[ -]\d{1,7}|\d{4}[ -]\d{6}[ -]\d{5}|\d{4}[ -]\d{4}[ -]\d{5})(?!\d)/g;
+const CARD_BARE_RUN_RE = /(?<!\d)(\d{13,19})(?!\d)/g;
+const CARD_SLIP_KEYWORD_RES = [
+  /\bcard\s*holder\b/i,
+  /\b(merchant|customer)\s*copy\b/i,
+  /\bappr(?:oval)?\.?\s*code\b/i,
+  /\bsignature\b/i,
+  /\b(mid|tid)\b/i
+];
+function luhnValid(digits) {
+  let sum = 0, alt = false;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let d = digits.charCodeAt(i) - 48;
+    if (alt) { d *= 2; if (d > 9) d -= 9; }
+    sum += d;
+    alt = !alt;
+  }
+  return sum % 10 === 0;
+}
+function looksLikeCardSlip(rawText) {
+  const text = String(rawText || "");
+  if (!text) return false;
+  let groupedLuhn = false;
+  for (const m of text.matchAll(CARD_GROUPED_RE)) {
+    const digits = m[1].replace(/[ \-]/g, "");
+    if (digits.length >= 13 && digits.length <= 19 && luhnValid(digits)) { groupedLuhn = true; break; }
+  }
+  if (groupedLuhn) return true;
+  let bareLuhn = false;
+  for (const m of text.matchAll(CARD_BARE_RUN_RE)) {
+    if (luhnValid(m[1])) { bareLuhn = true; break; }
+  }
+  let hits = 0;
+  for (const re of CARD_SLIP_KEYWORD_RES) { if (re.test(text)) hits++; }
+  if (bareLuhn && hits >= 1) return true;   /* ungrouped block alone isn't enough (loyalty/membership cards use Luhn too) -- needs at least one corroborating label */
+  return hits >= 2;
+}
+
 /* Bench-sweep hooks (harmless in prod): force the prepV2 master on/off and
    toggle individual sub-steps without touching the DB flag, so score.js can
    sweep combos in one session. `master`: true/false forces, "db"/null reverts
@@ -1748,4 +1820,4 @@ function getPrep() {
   return { master: prepMasterOverride, config: { ...PREP_CONFIG } };
 }
 
-window.ReceiptOCR = { ocrImage, scanReceipt, warmUp, parseReceiptText, guessCategory, amountFromLine, CATEGORIES, setPrep, getPrep, setSniper, getSniper, setNative, getNative };
+window.ReceiptOCR = { ocrImage, scanReceipt, warmUp, parseReceiptText, guessCategory, amountFromLine, CATEGORIES, setPrep, getPrep, setSniper, getSniper, setNative, getNative, looksLikeCardSlip };
