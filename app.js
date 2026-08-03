@@ -2670,12 +2670,28 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
       if (idx >= 0) state.pendingScans.splice(idx, 1);
       enqueuedDraft = null;
     }
-    if (!stillCurrent()) return;   /* a newer scan owns the screen now — nothing to show here */
-    if (sheetOpened && state.editing && state.editing._scanId === myId) closeConfirmSheet(true);
-    state.scanning = false;
-    hideScanPill();
-    renderHome();
-    blockCardSlip();
+    if (state.cancelledScanIds.has(myId)) return;   /* user explicitly cancelled — nothing to show */
+    /* mySheetIsOpen(), NOT stillCurrent(): stillCurrent() tracks "am I the
+       LATEST scan" and goes permanently false the moment any newer scan
+       starts — even one that's merely queued behind THIS scan's still-open
+       sheet. Gating the teardown on it left a stale card-slip sheet open
+       and fully save-able with no warning shown (found in review). Ask the
+       right question instead: is OUR sheet the one actually on screen. */
+    const mySheetOpen = mySheetIsOpen();
+    if (mySheetOpen) closeConfirmSheet(true);
+    if (stillCurrent()) { state.scanning = false; hideScanPill(); renderHome(); }
+    /* Closing our own sheet just above can surface a DIFFERENT, newer
+       scan's queued draft (closeConfirmSheet -> showNextPendingScan, which
+       fires its own deferred "also caught" toast). A confirm() dialog here
+       would then interrupt that unrelated sheet, or — if "Enter manually"
+       is tapped — destructively replace it before the user ever saw it.
+       Only safe to show once the screen has genuinely ended up free;
+       otherwise stay quiet rather than race the other scan's own toast for
+       the single shared toast slot (same race finishBatch's fix avoids).
+       The safety guarantee (no photo saved/learned/charged beyond what
+       already landed) holds either way — this only affects whether the
+       user is told about it. */
+    if (!state.editing) blockCardSlip();
   };
 
   /* Is this still the scan on screen? (not cancelled, not superseded by a newer
@@ -2730,6 +2746,14 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
        so an automatic and a manual re-read for the SAME scan can never
        overlap. Trivially false already for a cloud-sourced paint. */
     draft._cloudPending = !cloudDone;
+    /* Phase 9 (review fix): a cloud-painted sheet is fully save-able the
+       instant it opens, but the card-slip check can only run once local's
+       rawText is in — nothing was stopping a fast Save tap from persisting
+       the photo (and learning from it) in that window. saveExpense() blocks
+       while this is true; the local IIFE below clears it once the check
+       actually resolves either way. Never true for a local-sourced paint —
+       that source can't exist yet without already having passed the check. */
+    draft._cardSlipPending = source === "cloud" && !localDone;
     openConfirmSheet(draft);
     painted = capturePaintedFields();
     sheetOpened = true;
@@ -2861,6 +2885,7 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
     draft.scope = preScope;
     draft.userPickedScope = preScopeTouched;
     draft._cloudPending = !cloudDone;   /* Phase 8, see openSheet's matching comment */
+    draft._cardSlipPending = source === "cloud" && !localDone;   /* Phase 9 (review fix), see openSheet's matching comment */
     /* Fires once this draft actually renders (openConfirmSheet already ran)
        — captures the no-clobber baseline so a still-pending reader can
        merge in later without stomping anything the user's since edited. */
@@ -2973,6 +2998,14 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
         handleCardSlipDetected();
         return;
       }
+      /* Cleared the check — release the Save gate openSheet/tryEnqueue may
+         have set on a cloud-painted sheet/draft while this was still
+         pending (see openSheet's matching comment). Set directly on
+         whichever object is live right now, same pattern as _cloudPending
+         just above; refreshEnqueuedDraft's Object.assign calls never touch
+         this field, so it isn't at risk of being clobbered back on afterward. */
+      if (state.editing && state.editing._scanId === myId) state.editing._cardSlipPending = false;
+      if (enqueuedDraft && enqueuedDraft._scanId === myId) enqueuedDraft._cardSlipPending = false;
       if (p) { DB.setSetting("lastScan", p.rawText || ""); applyLearnedTotalHint(p); p._source = "local"; }
       parsed = p;
       learnFromCloud();
@@ -3119,14 +3152,21 @@ function finishBatch() {
   /* Phase 9 card-slip guard: batch skips these silently mid-scan (no
      mid-batch confirm() interruption — see scanAllInBatch's comment), so
      this is the first and only place the user learns why the count is
-     short. */
+     short. A leftover state.pendingScans entry (from the independent
+     single-scan racing flow — batch doesn't clear it) makes
+     showNextPendingScan() below fire its own deferred toast that would
+     otherwise silently clobber this one (see its own "reliably lands last
+     and wins" comment) — so the card-slip message is threaded through as
+     that call's priority message instead of raced against it. */
+  let msg = null;
   if (cardSlipSkipped > 0) {
-    toast((saved > 0 ? "Added " + saved + " receipt" + (saved > 1 ? "s" : "") + " — " : "") +
-      "skipped " + cardSlipSkipped + " that looked like payment cards or ID documents");
+    msg = (saved > 0 ? "Added " + saved + " receipt" + (saved > 1 ? "s" : "") + " — " : "") +
+      "skipped " + cardSlipSkipped + " that looked like payment cards or ID documents";
   } else if (saved > 0) {
-    toast("Added " + saved + " receipt" + (saved > 1 ? "s" : "") + (saved < total ? " of " + total : ""));
+    msg = "Added " + saved + " receipt" + (saved > 1 ? "s" : "") + (saved < total ? " of " + total : "");
   }
-  showNextPendingScan();
+  if (msg) toast(msg);
+  showNextPendingScan(cardSlipSkipped > 0 ? msg : null);
 }
 
 function parsedToDraft(parsed) {
@@ -3348,7 +3388,7 @@ function renderCategoryChips() {
    handleImageRaced) sits in state.pendingScans instead of being discarded.
    Surface it the moment the screen is actually free — never interrupts a
    scan still in flight, an open sheet, or Pro's own batch flow. */
-function showNextPendingScan() {
+function showNextPendingScan(priorityMsg) {
   if (state.scanning || !screenFree()) return;
   if (!state.pendingScans || !state.pendingScans.length) return;
   const draft = state.pendingScans.shift();
@@ -3363,10 +3403,13 @@ function showNextPendingScan() {
      its own toast in the same synchronous turn, in inconsistent order. Defer
      by a tick so this one — the only thing explaining why the sheet just
      changed under the user — reliably lands last and wins, instead of a coin
-     flip on call-site ordering. */
-  const msg = draftUsable(draft)
+     flip on call-site ordering. A caller with something more important to say
+     than the generic "also caught" line (finishBatch's card-slip-skip count,
+     which explains why the batch total came up short) passes it as
+     priorityMsg so it wins this slot instead of being silently overwritten. */
+  const msg = priorityMsg || (draftUsable(draft)
     ? "Also caught this receipt — check & save"
-    : "Also caught a receipt, but couldn't read it — check & save it manually";
+    : "Also caught a receipt, but couldn't read it — check & save it manually");
   setTimeout(() => toast(msg), 300);
 }
 
@@ -3388,6 +3431,16 @@ function closeConfirmSheet(force) {
 async function saveExpense() {
   const e = state.editing;
   if (!e) return;
+  /* Phase 9 (review fix): a cloud-painted sheet from handleImageRaced opens
+     fully save-able before the on-device card-slip check (which can only
+     run once local's own rawText is in) has had a chance to resolve —
+     without this gate, a fast Save tap in that window would persist a
+     payment-card photo and learn from it, the exact thing the guard exists
+     to prevent. Self-clears within ~1-2s once local's check lands either
+     way (openSheet/tryEnqueue stamp it, the local IIFE in handleImageRaced
+     clears it — see their matching comments); if it turns out to actually
+     be a card slip the sheet gets torn down out from under this anyway. */
+  if (e._cardSlipPending) { toast("Still checking this photo — try again in a moment"); return; }
   const amount = parseFloat(($("confirm-amount").value || "").replace(/[^\d.]/g, ""));
   /* With the Claude inbox configured, a scanned receipt may be saved without
      an amount — Claude fills it in later. */
