@@ -5,8 +5,8 @@
   --paper-raised: #FCF8EE;
   --ink: #2C2318;
   --ink-soft: #5C4C3A;
-  --muted: #7E6C55;
-  --faint: #AC9B80;
+  --muted: #6E5D48; /* PROPOSED P2-8 (2026-08 accessibility audit) — was #7E6C55, 4.33:1 vs paper (failed AA at actual use sizes) → 5.42:1 */
+  --faint: #786650;  /* PROPOSED P2-8 — was #AC9B80, 2.32:1 vs paper (failed AA badly) → 4.72:1 */
   --divider: #E2D7C0;
   --divider-soft: #D3C5A9;
   --sienna: #7A4526;
@@ -17,11 +17,7 @@
   --terracotta: #B4572F;
   --terracotta-deep: #8F3F1E;
   --fab: #D6944B; /* light warm orange — camera FAB */
-  --ochre: #A8823B;
   --sage: #2E6B58;
-  --clay: #7A4526;
-  --moss: #A8823B;
-  --rust: #99341F;
   --sand: #A89368;
   --stone: #7D7466;
   --nav-cream: #EAD9BE;
@@ -34,8 +30,8 @@ html[data-theme="dark"] {
   --paper-raised: #2C2418;
   --ink: #F0E6D2;
   --ink-soft: #D4C5AC;
-  --muted: #A09070;
-  --faint: #6E6250;
+  --muted: #A09070; /* unchanged — already 5.45:1 vs paper, passes AA */
+  --faint: #9B8D74;  /* PROPOSED P2-8 — was #6E6250, 2.86:1 vs paper → 5.23:1 */
   --divider: #3A3122;
   --divider-soft: #4A3E2B;
   --sienna: #C08A5E;
@@ -46,11 +42,7 @@ html[data-theme="dark"] {
   --terracotta: #C9714A;
   --terracotta-deep: #A34F28;
   --fab: #D89A57; /* light warm orange — camera FAB */
-  --ochre: #CBA45C;
   --sage: #6FA893;
-  --clay: #C08A5E;
-  --moss: #CBA45C;
-  --rust: #D06A4E;
   --sand: #B9A375;
   --stone: #95897A;
   --nav-cream: #E7D5B8;
@@ -98,8 +90,11 @@ html, body {
   color: var(--ink); text-align: center; min-width: 110px;
 }
 .icon-btn {
+  /* PROPOSED P2-7 (2026-08 a11y audit) — 40x40 measured live, below the 44px
+     minimum tap target. Glyph size (font-size) intentionally untouched. */
   background: none; border: none; color: var(--sienna); font-size: 26px;
-  width: 40px; height: 40px; line-height: 1; cursor: pointer; border-radius: 50%;
+  width: 44px; height: 44px; line-height: 1; cursor: pointer; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .icon-btn:active { background: var(--divider); }
 
@@ -122,7 +117,7 @@ html, body {
 .hero-col b { display: block; font-family: var(--mono); font-size: 15px; font-weight: 600; letter-spacing: 0; margin-top: 3px; }
 .hero-col.teal b { color: var(--teal); }
 .hero-col.sienna b { color: var(--sienna); }
-.hero-col.teal.neg b { color: var(--rust); }
+.hero-col.teal.neg b { color: var(--sienna-red); }
 
 /* Sleek progress bar with the status written inside it. */
 .budget-track {
@@ -130,7 +125,7 @@ html, body {
   border-radius: 13px; margin: 14px 8px 0; overflow: hidden;
 }
 .budget-fill { height: 100%; background: var(--terracotta); border-radius: 13px; width: 0; transition: width .4s ease; }
-.budget-fill.over { background: var(--rust); }
+.budget-fill.over { background: var(--sienna-red); }
 .track-status {
   /* Own dark chip (not the fill's own colour) so the text stays legible at
      ANY fill level in either theme — the old inset:0-over-the-track text
@@ -385,7 +380,9 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 
 .chip-row { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; margin-top: 18px; }
 .chip {
-  font-size: 12.5px; padding: 6px 14px; border-radius: 999px;
+  /* PROPOSED P2-7 — padding was 6px 14px (~30px tall, measured live), below
+     the 44px tap-target minimum. */
+  font-size: 12.5px; padding: 13px 16px; border-radius: 999px;
   border: 1px solid var(--divider-soft); background: none; color: var(--ink-soft);
   cursor: pointer; font-family: var(--sans);
 }
@@ -414,7 +411,7 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 .save-btn:active { transform: scale(0.985); }
 .delete-btn {
   display: block; width: 100%; margin-top: 10px;
-  background: none; border: none; color: var(--rust);
+  background: none; border: none; color: var(--sienna-red);
   font-size: 13.5px; font-family: var(--sans); padding: 8px; cursor: pointer;
 }
 .edit-hint { text-align: center; font-size: 11.5px; color: var(--faint); margin-top: 10px; }
@@ -447,7 +444,7 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
   background: none; border: 1px solid var(--divider-soft); border-radius: 999px;
   padding: 12px; font-size: 14px; color: var(--ink-soft); font-family: var(--sans); cursor: pointer;
 }
-.ghost-btn.danger { color: var(--rust); border-color: var(--rust); }
+.ghost-btn.danger { color: var(--sienna-red); border-color: var(--sienna-red); }
 .ghost-btn.small { padding: 8px 18px; font-size: 12.5px; margin-top: 16px; }
 .settings-note { font-size: 12px; color: var(--muted); line-height: 1.6; text-align: center; margin-top: 10px; }
 .settings-link {
@@ -506,11 +503,18 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
   color: var(--ink);
 }
 .filter-chips { justify-content: flex-start; margin-top: 10px; }
-.chip.small-chip { font-size: 11.5px; padding: 4px 11px; }
+/* PROPOSED P2-7 — small-chip stays visually compact (a dense filter row
+   would break under the full .chip padding); the TAP AREA still reaches
+   44px via an invisible ::before hit-zone instead of growing the chip. */
+.chip.small-chip { position: relative; font-size: 11.5px; padding: 4px 11px; }
+.chip.small-chip::before {
+  content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: max(100%, 44px); height: 44px;
+}
 
 /* ---------- Pending / duplicate / photo flags ---------- */
 .entry-amount.waiting { color: var(--faint); font-style: italic; font-size: 12.5px; }
-.dup-flag { color: var(--rust); }
+.dup-flag { color: var(--sienna-red); }
 .has-photo { color: var(--faint); font-size: 11px; flex-shrink: 0; }
 
 /* ---------- Receipt thumbnail + lightbox ---------- */
@@ -534,9 +538,17 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
   border-radius: 9px; padding: 8px 10px; font-size: 13px; font-family: var(--mono); color: var(--ink);
   text-align: right;
 }
+/* PROPOSED P2-7 — 30x30 measured live; the item-edit row is too dense to
+   grow the button itself, so the TAP AREA reaches 44px via an invisible
+   ::before hit-zone instead. */
 .item-del {
+  position: relative;
   background: none; border: none; color: var(--faint); font-size: 15px; cursor: pointer;
   width: 30px; height: 30px; flex-shrink: 0;
+}
+.item-del::before {
+  content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 44px; height: 44px;
 }
 .add-item-btn {
   margin-top: 10px; background: none; border: 1px dashed var(--divider-soft); border-radius: 999px;
@@ -547,7 +559,7 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 .btn-pair { display: flex; gap: 8px; margin-top: 8px; }
 .btn-pair .ghost-btn { flex: 1; margin: 0; }
 .sync-status { font-size: 12px; color: var(--muted); margin-top: 8px; text-align: center; }
-.sync-status.bad { color: var(--rust); }
+.sync-status.bad { color: var(--sienna-red); }
 .adv-details > summary {
   font-size: 12.5px; color: var(--muted); cursor: pointer; padding: 6px 0; list-style: none;
 }
@@ -566,7 +578,7 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 /* ---------- Insights trend ---------- */
 .ins-trend-row { display: flex; justify-content: space-between; align-items: baseline; margin: -14px 0 18px; }
 .trend { font-size: 12.5px; }
-.trend.up { color: var(--rust); }
+.trend.up { color: var(--sienna-red); }
 .trend.down { color: var(--sage); }
 .trend.flat { color: var(--muted); }
 .ytd { font-size: 12.5px; color: var(--muted); }
@@ -577,8 +589,8 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 .trend-bar.cur { background: var(--terracotta); }
 .trend-lbl { font-size: 10.5px; color: var(--muted); margin-top: 5px; }
 .cat-budget { font-size: 10.5px; color: var(--sage); }
-.cat-budget.over { color: var(--rust); }
-.cat-budget.pace { color: var(--ochre); }
+.cat-budget.over { color: var(--sienna-red); }
+.cat-budget.pace { color: var(--gold); }
 
 /* ---------- Settings structure ---------- */
 .settings-group-title {
@@ -631,7 +643,7 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 .cur-prefix { font-size: 18px; color: var(--muted); letter-spacing: 0; }
 
 /* ---------- Recurring + rules ---------- */
-.recur-up { font-size: 10.5px; color: var(--rust); }
+.recur-up { font-size: 10.5px; color: var(--sienna-red); }
 .rules-list { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
 .rule-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 0.5px solid var(--divider); }
 .rule-row span { font-size: 12.5px; color: var(--ink-soft); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -652,7 +664,7 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
   font-size: 9.5px; padding: 1px 6px; border-radius: 999px;
   border: 0.5px solid currentColor; white-space: nowrap;
 }
-.claim-pill.to { color: var(--ochre); }
+.claim-pill.to { color: var(--gold); }
 .claim-pill.done { color: var(--sage); }
 .claim-line {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -660,7 +672,7 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
   background: var(--paper-raised); border: 0.5px solid var(--divider-soft);
   border-radius: 12px; font-size: 12.5px; color: var(--ink-soft);
 }
-.claim-line span { font-family: var(--mono); color: var(--ochre); }
+.claim-line span { font-family: var(--mono); color: var(--gold); }
 .claim-line-btn {
   background: none; border: none; color: var(--ink-soft); font-family: var(--sans);
   font-size: 12px; cursor: pointer; text-decoration: underline; white-space: nowrap; padding: 2px;
@@ -690,7 +702,7 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 
 /* ---------- Toast action + backup nudge ---------- */
 .toast-action {
-  background: none; border: none; color: var(--ochre); font-family: var(--sans);
+  background: none; border: none; color: var(--gold); font-family: var(--sans);
   font-size: 13px; font-weight: 600; padding: 0 2px 0 10px; cursor: pointer;
 }
 .backup-nudge {
@@ -718,9 +730,13 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 /* Home filter row — clean rounded pills; selected sits on dark terracotta. */
 .scope-filter { display: flex; gap: 8px; margin: 18px 0 0; }
 .scope-chip {
+  /* PROPOSED P2-7 — vertical padding was 9px (~31px tall, measured live),
+     below the 44px tap-target minimum. Horizontal padding kept tight —
+     these 4 chips already share the row via flex:1, and the label
+     truncates with an ellipsis. */
   flex: 1 1 0; min-width: 0; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
-  padding: 9px 6px; border-radius: 999px;
+  padding: 15px 6px; border-radius: 999px;
   border: 1px solid var(--sienna); background: none;
   cursor: pointer; font-family: var(--sans);
 }
@@ -742,3 +758,33 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 .chip.scope-opt.selected.scope-personal { background: var(--teal); border-color: var(--teal); color: #FDF6E9; }
 .chip.scope-opt.selected.scope-shared { background: var(--gold); border-color: var(--gold); color: #FDF6E9; }
 .chip.scope-opt.selected.scope-company { background: var(--sienna-red); border-color: var(--sienna-red); color: #FDF6E9; }
+
+/* ---------- Utilities (PROPOSED P3-b, 2026-08 a11y audit) ----------
+   Replaces the ~35 inline style="..." attributes index.html had
+   accumulated — almost all one of: a margin bump, text-align, or the
+   borderless "skip/dismiss" ghost-button variant. !important is
+   deliberate: several pairings are compound classes (e.g. .ghost-btn.small
+   already sets its own margin-top: 16px) with HIGHER specificity than a
+   lone utility class — without it the utility would silently lose. A few
+   genuinely one-off inline styles (unique structural layout, e.g. the
+   statement-overlay iframe sizing) are left as inline — they aren't the
+   repeated pattern this finding was about. */
+.mt-2  { margin-top: 2px  !important; }
+.mt-4  { margin-top: 4px  !important; }
+.mt-xs { margin-top: 6px  !important; }
+.mt-sm { margin-top: 8px  !important; }
+.mt-md { margin-top: 10px !important; }
+.mt-lg { margin-top: 12px !important; }
+.mt-xl { margin-top: 14px !important; }
+.mt-0  { margin-top: 0    !important; }
+.mb-md { margin-bottom: 10px !important; }
+.mb-lg { margin-bottom: 14px !important; }
+/* The near-universal sheet-intro-title spacing (was margin: 6px 0 12px/14px
+   inline on ~7 sheet titles) — the 12px/14px variants are visually
+   negligible, consolidated to one value per the spacing-scale proposal. */
+.sheet-title--lead { margin: 6px 0 12px !important; }
+.sheet-title--tight { margin: 6px 0 4px !important; } /* upgrade-title's own smaller variant */
+.text-center { text-align: center !important; }
+.text-left { text-align: left !important; }
+.row--start { justify-content: flex-start !important; }
+.ghost-btn--plain { border: none !important; } /* the "skip/dismiss" ghost variant */

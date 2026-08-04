@@ -43,7 +43,7 @@ try {
   <header class="home-header">
     <div class="month-row">
       <button class="icon-btn" id="month-prev" aria-label="Previous month">&#8249;</button>
-      <p class="month-label" id="month-label" title="Tap to jump to this month">June</p>
+      <h1 class="month-label" id="month-label" title="Tap to jump to this month">June</h1>
       <button class="icon-btn" id="month-next" aria-label="Next month">&#8250;</button>
     </div>
     <p class="big-amount" id="month-total" title="See this month's summary">0<span class="cents">.00</span></p>
@@ -79,7 +79,7 @@ try {
   <header class="home-header">
     <div class="month-row">
       <button class="icon-btn" id="ins-month-prev" aria-label="Previous month">&#8249;</button>
-      <p class="month-label" id="ins-month-label" title="Tap to jump to this month">June</p>
+      <h1 class="month-label" id="ins-month-label" title="Tap to jump to this month">June</h1>
       <button class="icon-btn" id="ins-month-next" aria-label="Next month">&#8250;</button>
     </div>
     <div class="scope-filter" id="ins-scope-filter"></div>
@@ -90,7 +90,7 @@ try {
 <main id="view-settings" class="view" hidden>
   <header class="sheet-header">
     <button class="icon-btn" id="settings-back" aria-label="Back">&#8249;</button>
-    <p class="sheet-title">Settings</p>
+    <h1 class="sheet-title">Settings</h1>
     <span class="spacer"></span>
   </header>
   <section class="settings-body">
@@ -135,7 +135,7 @@ try {
       <div class="settings-card">
         <div class="field">
           <span class="field-label">Appearance</span>
-          <div class="chip-row" style="justify-content: flex-start; margin-top: 4px;" id="theme-chips"></div>
+          <div class="chip-row row--start mt-4" id="theme-chips"></div>
         </div>
         <div class="settings-divider"></div>
         <label class="field">
@@ -153,8 +153,8 @@ try {
       <p class="settings-group-title">Plan</p>
       <div class="settings-card">
         <div class="field">
-          <p class="sync-status" id="plan-status" style="text-align:left;margin-top:2px;"></p>
-          <button class="ghost-btn small" id="plan-btn" style="margin-top:8px;">Upgrade to Pro</button>
+          <p class="sync-status text-left mt-2" id="plan-status"></p>
+          <button class="ghost-btn small mt-sm" id="plan-btn">Upgrade to Pro</button>
         </div>
       </div>
     </div>
@@ -162,14 +162,14 @@ try {
     <div class="settings-group">
       <p class="settings-group-title">Monthly expenses</p>
       <div class="settings-card">
-        <p class="settings-sub" style="margin-top: 0;">The bills that never forget you — rent, Netflix, insurance. Recap adds them automatically on their day. Set one up below, or tick "Repeats every month" when saving an expense.</p>
+        <p class="settings-sub mt-0">The bills that never forget you — rent, Netflix, insurance. Recap adds them automatically on their day. Set one up below, or tick "Repeats every month" when saving an expense.</p>
         <div class="field" id="recurring-add">
           <input type="text" id="rec-name" placeholder="Name (e.g. Rent, Netflix)" autocomplete="off">
-          <div class="btn-pair" style="margin-top: 8px;">
+          <div class="btn-pair mt-sm">
             <input type="number" id="rec-amount" inputmode="decimal" min="0" step="0.01" placeholder="Amount">
             <input type="number" id="rec-day" inputmode="numeric" min="1" max="31" placeholder="Day (1–31)">
           </div>
-          <div class="btn-pair" style="margin-top: 8px;">
+          <div class="btn-pair mt-sm">
             <select id="rec-freq">
               <option value="1">Every month</option>
               <option value="2">Every 2 months</option>
@@ -179,7 +179,7 @@ try {
             </select>
             <select id="rec-cat"></select>
           </div>
-          <button class="ghost-btn small" id="rec-add" style="margin-top: 10px;">Add monthly expense</button>
+          <button class="ghost-btn small mt-md" id="rec-add">Add monthly expense</button>
         </div>
         <div class="settings-divider"></div>
         <div class="rules-list" id="recurring-list"></div>
@@ -198,7 +198,7 @@ try {
           <button class="ghost-btn small" id="export-xls">Export Excel</button>
         </div>
         <button class="ghost-btn small" id="export-filtered">Filtered export / claim report…</button>
-        <p class="sync-status" id="backup-status" style="margin-top: 2px;"></p>
+        <p class="sync-status mt-2" id="backup-status"></p>
         <div class="settings-divider"></div>
         <div class="field" id="cloud-field" hidden>
           <span class="field-label">Smarter receipt reading (cloud)</span>
@@ -218,7 +218,7 @@ try {
           <p class="sync-status" id="share-status"></p>
         </div>
         <div class="field" id="inbox-field" hidden>
-          <div class="settings-divider" style="margin-bottom: 14px;"></div>
+          <div class="settings-divider mb-lg"></div>
           <span class="field-label">Claude inbox (free — your receipts get checked by Claude on your PC)</span>
           <input type="password" id="gh-token" placeholder="GitHub token (github_pat_...)" aria-label="GitHub token">
           <div class="btn-pair">
@@ -254,12 +254,12 @@ try {
 
 <div class="overlay sheet-overlay" id="chooser-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="chooser-title">
   <div class="confirm-sheet chooser-sheet">
-    <p class="sheet-title" id="chooser-title" style="margin: 6px 0 14px;">Add expense</p>
+    <h2 class="sheet-title sheet-title--lead" id="chooser-title">Add expense</h2>
     <p class="quickadd-label" id="quickadd-label" hidden>Quick add</p>
     <div class="chip-row quickadd-row" id="quickadd-row" hidden></div>
     <p class="chip-group-label" id="chooser-scope-label" hidden>For</p>
     <div class="chip-row" id="chooser-scope-chips" hidden></div>
-    <p class="edit-hint" style="margin: 0 0 10px;">Don't photograph payment cards or ID documents</p>
+    <p class="edit-hint mt-0 mb-md">Don't photograph payment cards or ID documents</p>
     <button class="chooser-btn" id="choose-camera">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h2l1.5-2h7L17 7h2a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.2"/></svg>
       <span>Snap receipt with camera</span>
@@ -292,14 +292,14 @@ try {
   <div class="confirm-sheet">
     <header class="sheet-header">
       <button class="icon-btn" id="bulk-back" aria-label="Close">&#10005;</button>
-      <p class="sheet-title" id="bulk-title">Bulk update</p>
+      <h2 class="sheet-title" id="bulk-title">Bulk update</h2>
       <span class="spacer"></span>
     </header>
     <p class="chip-group-label">Category — tap to set for all selected; tap again to leave unchanged</p>
     <div class="chip-row" id="bulk-cat-chips"></div>
     <p class="chip-group-label">Type</p>
     <div class="chip-row" id="bulk-scope-chips"></div>
-    <button class="save-btn" id="bulk-apply" style="margin-top: 14px;">Apply</button>
+    <button class="save-btn mt-xl" id="bulk-apply">Apply</button>
   </div>
 </div>
 
@@ -307,8 +307,8 @@ try {
   <div class="confirm-sheet" id="confirm-sheet">
     <header class="sheet-header">
       <button class="icon-btn" id="confirm-back" aria-label="Discard">&#10005;</button>
-      <p class="sheet-title" id="confirm-title">Check &amp; save</p>
-      <span class="spacer" style="text-align: right;"><span class="batch-badge" id="batch-badge" hidden></span></span>
+      <h2 class="sheet-title" id="confirm-title">Check &amp; save</h2>
+      <span class="spacer"><span class="batch-badge" id="batch-badge" hidden></span></span>
     </header>
     <div class="photo-block" id="photo-block"></div>
     <div class="confirm-amount-wrap">
@@ -331,26 +331,26 @@ try {
     <textarea class="confirm-note" id="confirm-note" rows="1" placeholder="Note (optional)"></textarea>
     <label class="repeat-row" id="repeat-row"><input type="checkbox" id="confirm-repeat"><span>Repeats every month</span></label>
     <button class="save-btn" id="save-btn">Save</button>
-    <button class="ghost-btn" id="ai-recheck-btn" hidden style="margin-top: 10px;">Not right? Re-read with AI</button>
-    <button class="ghost-btn" id="batch-skip" hidden style="margin-top: 10px;">Skip this receipt</button>
+    <button class="ghost-btn mt-md" id="ai-recheck-btn" hidden>Not right? Re-read with AI</button>
+    <button class="ghost-btn mt-md" id="batch-skip" hidden>Skip this receipt</button>
     <p class="edit-hint">Tap anything to edit</p>
   </div>
 </div>
 
 <div class="overlay sheet-overlay" id="setup-overlay" hidden data-step="1" data-mode="full" role="dialog" aria-modal="true" aria-labelledby="eula-title">
-  <div class="confirm-sheet" style="text-align: center;">
+  <div class="confirm-sheet text-center">
     <div class="setup-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
 
     <div class="setup-step" data-step="1">
-      <p class="sheet-title" id="eula-title" style="margin: 6px 0 12px;">Welcome to Recap</p>
+      <h2 class="sheet-title sheet-title--lead" id="eula-title">Welcome to Recap</h2>
       <p class="consent-text">The fastest way to know where your money goes: snap a receipt and Recap reads it, files it, and keeps every record on this phone. To read tricky receipts it can send just that photo to a secure cloud AI — this is on by default and you can switch it off anytime in Settings. One quick look at the terms and you're in.</p>
-      <p class="consent-text" style="margin-top: 10px;"><a href="eula.html" target="_blank" rel="noopener">Terms of Use</a> &nbsp;·&nbsp; <a href="privacy.html" target="_blank" rel="noopener">Privacy Notice</a></p>
-      <button class="save-btn" id="eula-accept" style="margin-top: 14px;">I agree — continue</button>
+      <p class="consent-text mt-md"><a href="eula.html" target="_blank" rel="noopener">Terms of Use</a> &nbsp;·&nbsp; <a href="privacy.html" target="_blank" rel="noopener">Privacy Notice</a></p>
+      <button class="save-btn mt-xl" id="eula-accept">I agree — continue</button>
       <p class="edit-hint">By continuing you confirm you're at least 13 (or have a parent's consent), accept the Terms of Use, and acknowledge the Privacy Notice.</p>
     </div>
 
     <div class="setup-step" data-step="2">
-      <p class="sheet-title" id="setup-step2-title" style="margin: 6px 0 12px;">Where are you?</p>
+      <h2 class="sheet-title sheet-title--lead" id="setup-step2-title">Where are you?</h2>
       <p class="consent-text">So dates, numbers and currency read the way you expect — set once, change anytime in Settings.</p>
       <select id="setup-country" class="setup-input">
         <option value="MY">Malaysia</option><option value="SG">Singapore</option>
@@ -366,28 +366,28 @@ try {
         <option>PHP</option><option>VND</option><option>INR</option><option>JPY</option>
         <option>KRW</option><option>TWD</option><option>HKD</option><option>CNY</option><option>BND</option>
       </select>
-      <button class="save-btn" id="setup-country-next" style="margin-top: 14px;">Continue</button>
+      <button class="save-btn mt-xl" id="setup-country-next">Continue</button>
     </div>
 
     <div class="setup-step" data-step="3">
-      <p class="sheet-title" id="setup-step3-title" style="margin: 6px 0 12px;">How do you split spending?</p>
+      <h2 class="sheet-title sheet-title--lead" id="setup-step3-title">How do you split spending?</h2>
       <p class="consent-text">Tag each expense so personal and work stay apart. Pick the types you'll use — change them anytime in Settings.</p>
-      <div class="chip-row" id="setup-type-chips" style="justify-content: center; margin: 10px 0;"></div>
-      <button class="save-btn" id="setup-types-next" style="margin-top: 14px;">Continue</button>
+      <div class="chip-row mt-md" id="setup-type-chips"></div>
+      <button class="save-btn mt-xl" id="setup-types-next">Continue</button>
     </div>
 
     <div class="setup-step" data-step="4">
-      <p class="sheet-title" id="setup-step4-title" style="margin: 6px 0 12px;">Give the month a target</p>
+      <h2 class="sheet-title sheet-title--lead" id="setup-step4-title">Give the month a target</h2>
       <p class="consent-text">Set a budget and the home screen tracks how much of it you've used — live, every day. Optional: tap the budget on the home screen anytime.</p>
       <input type="number" id="setup-budget" class="setup-input" inputmode="decimal" min="0" step="50" placeholder="e.g. 3000">
-      <button class="save-btn" id="setup-budget-save" style="margin-top: 14px;">Save budget</button>
-      <button class="ghost-btn" id="setup-budget-skip" style="margin-top: 10px; border: none;">Skip for now</button>
+      <button class="save-btn mt-xl" id="setup-budget-save">Save budget</button>
+      <button class="ghost-btn mt-md ghost-btn--plain" id="setup-budget-skip">Skip for now</button>
     </div>
 
     <div class="setup-step" data-step="5">
-      <p class="sheet-title" id="setup-step5-title" style="margin: 6px 0 12px;">You're set</p>
+      <h2 class="sheet-title sheet-title--lead" id="setup-step5-title">You're set</h2>
       <p class="consent-text">From here it's one habit: receipt in hand, tap the orange camera — it reads and files itself in seconds. And everything you track stays on this phone.</p>
-      <button class="save-btn" id="setup-finish" style="margin-top: 14px;">Start using Recap</button>
+      <button class="save-btn mt-xl" id="setup-finish">Start using Recap</button>
     </div>
   </div>
 </div>
@@ -407,7 +407,7 @@ try {
   <div class="confirm-sheet">
     <header class="sheet-header">
       <button class="icon-btn" id="day-back" aria-label="Close">&#10005;</button>
-      <p class="sheet-title" id="day-title">Day</p>
+      <h2 class="sheet-title" id="day-title">Day</h2>
       <span class="spacer"></span>
     </header>
     <p class="big-amount" id="day-total" style="text-align:center;font-size:30px;margin:6px 0 14px"></p>
@@ -419,10 +419,10 @@ try {
   <div class="confirm-sheet">
     <header class="sheet-header">
       <button class="icon-btn" id="export-back" aria-label="Close">&#10005;</button>
-      <p class="sheet-title" id="export-title">Filtered export</p>
+      <h2 class="sheet-title" id="export-title">Filtered export</h2>
       <span class="spacer"></span>
     </header>
-    <div class="field" style="margin-top: 10px;">
+    <div class="field mt-md">
       <span class="field-label">From / to (leave empty for everything)</span>
       <div class="export-dates">
         <input type="date" id="exp-from">
@@ -450,8 +450,8 @@ try {
         <option value="claimed">Claimed</option>
       </select>
     </div>
-    <button class="save-btn" id="exp-claim-preset" style="margin-top: 14px;">Claim report (Excel)</button>
-    <div class="btn-pair" style="margin-top: 10px;">
+    <button class="save-btn mt-xl" id="exp-claim-preset">Claim report (Excel)</button>
+    <div class="btn-pair mt-md">
       <button class="ghost-btn small" id="exp-csv">Export CSV</button>
       <button class="ghost-btn small" id="exp-xls">Export Excel</button>
     </div>
@@ -460,8 +460,8 @@ try {
 </div>
 
 <div class="overlay sheet-overlay" id="upgrade-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="upgrade-title">
-  <div class="confirm-sheet" style="text-align: center;">
-    <p class="sheet-title" id="upgrade-title" style="margin: 6px 0 4px;">Recap Pro</p>
+  <div class="confirm-sheet text-center">
+    <h2 class="sheet-title sheet-title--tight" id="upgrade-title">Recap Pro</h2>
     <p class="upgrade-price" id="upgrade-price">RM 6.99 / month or RM 79 / year</p>
     <p class="consent-text" id="upgrade-reason"></p>
     <ul class="upgrade-list">
@@ -471,14 +471,14 @@ try {
       <li>And still no accounts, no analytics, no profiling</li>
     </ul>
     <button class="save-btn" id="upgrade-buy">Go Pro</button>
-    <button class="ghost-btn" id="upgrade-code" style="margin-top: 10px;">I have an unlock code</button>
-    <button class="ghost-btn" id="upgrade-close" style="margin-top: 10px; border: none;">Maybe later</button>
+    <button class="ghost-btn mt-md" id="upgrade-code">I have an unlock code</button>
+    <button class="ghost-btn mt-md ghost-btn--plain" id="upgrade-close">Maybe later</button>
   </div>
 </div>
 
 <div class="overlay sheet-overlay" id="menu-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="menu-title">
   <div class="confirm-sheet chooser-sheet">
-    <p class="sheet-title" id="menu-title" style="margin: 6px 0 14px;">Menu</p>
+    <h2 class="sheet-title sheet-title--lead" id="menu-title">Menu</h2>
     <button class="chooser-btn" id="menu-home">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 6h14M5 12h14M5 18h9"/></svg>
       <span>Expenses</span>

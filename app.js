@@ -1575,7 +1575,7 @@ function renderInsights() {
           <span class="cat-bar-name">${escapeHtml(cat)} ${budgetNote}</span>
           <span class="cat-bar-amt">${fmtRM(amt)} · ${pct}%</span>
         </div>
-        <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${pct}%;background:${over ? "var(--rust)" : (CAT_COLOR[cat] || CAT_COLOR.Other)}"></div></div>
+        <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${pct}%;background:${over ? "var(--sienna-red)" : (CAT_COLOR[cat] || CAT_COLOR.Other)}"></div></div>
       </div>`;
   }
 
@@ -4129,6 +4129,44 @@ async function init() {
     if (state.selectMode) { exitSelectMode(); return; }
     const co = $("confirm-overlay");
     if (co && !co.hidden) closeConfirmSheet();
+  });
+
+  /* Focus trap (PROPOSED, 2026-08 a11y audit — Phase 10 design →
+     Phase 11 implementation) for every role="dialog" overlay: remember the
+     element that opened it, move focus inside on open, keep Tab/Shift+Tab
+     cycling within it while open, restore focus to the opener on close.
+     Esc + backdrop-click close already existed (above / per-overlay click
+     handlers). A MutationObserver per dialog reacts to its `hidden`
+     attribute however it gets toggled, rather than needing to touch the
+     ~30 scattered open/close call sites individually — far less likely to
+     miss one than threading trap logic through every site by hand. */
+  const dialogOpeners = new WeakMap();
+  const focusableIn = container => [...container.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )].filter(el => el.offsetParent !== null);
+  document.querySelectorAll('.overlay[role="dialog"]').forEach(ov => {
+    new MutationObserver(() => {
+      if (!ov.hidden) {
+        dialogOpeners.set(ov, document.activeElement);
+        const first = focusableIn(ov)[0];
+        if (first) first.focus(); else { ov.setAttribute("tabindex", "-1"); ov.focus(); }
+      } else {
+        const opener = dialogOpeners.get(ov);
+        dialogOpeners.delete(ov);
+        if (opener && document.body.contains(opener) && typeof opener.focus === "function") opener.focus();
+      }
+    }).observe(ov, { attributes: true, attributeFilter: ["hidden"] });
+  });
+  document.addEventListener("keydown", ev => {
+    if (ev.key !== "Tab") return;
+    const open = document.querySelector('.overlay[role="dialog"]:not([hidden])');
+    if (!open) return;
+    const focusables = focusableIn(open);
+    if (!focusables.length) { ev.preventDefault(); return; }
+    const first = focusables[0], last = focusables[focusables.length - 1];
+    if (!open.contains(document.activeElement)) { ev.preventDefault(); first.focus(); }
+    else if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+    else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
   });
 
   /* Hero shortcuts: the big total jumps to the spending summary; the
