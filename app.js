@@ -97,6 +97,7 @@ let state = {
   cloudConsent: "",  /* "", "yes", "no" — explicit opt-in for cloud reading */
   pro: false,        /* Pro entitlement (unlimited cloud reads) */
   ghProven: false,   /* ghToken verified against the private inbox repo */
+  playEntitled: false, /* Play Billing entitlement via RevenueCat (Phase 18) — device-local, never exported */
   skipResults: [],   /* deleted-while-pending expenses whose results to discard */
   shareQueue: [],    /* outbox: AI-derived {garbled,clean,hint} rules staged for the weekly pool upload */
   shareRules: "",    /* "" | "yes" = share (default on when cloud consent is on), "no" = never share */
@@ -281,6 +282,18 @@ const FREE_SCANS_PER_DAY = 1;
 const AD_SCANS_PER_DAY = 4;   /* scans 2-5, one rewarded ad each */
 const PAY_URL = "";
 const PRICE_LABEL = "RM 6.99 / month or RM 79 / year";
+/* Play Billing (Android, via RevenueCat — Phase 18). REVENUECAT_ANDROID_API_KEY
+   is the PUBLIC SDK key from the RevenueCat dashboard (Project settings > API
+   keys > Google Play Store) — safe to embed client-side; it can only start a
+   purchase, never grant entitlement by itself (RevenueCat verifies every
+   purchase server-side against Google Play). REVENUECAT_ENTITLEMENT_ID must
+   match the entitlement identifier configured in that same dashboard. Both
+   stay empty/default until Adrian finishes the RevenueCat + Play Console
+   setup — billingConfigured() keeps every native billing call inert
+   until then, same convention as PAY_URL above. */
+const REVENUECAT_ANDROID_API_KEY = "";
+const REVENUECAT_ENTITLEMENT_ID = "pro";
+function billingConfigured() { return isNative() && !!REVENUECAT_ANDROID_API_KEY; }
 /* LOCAL date/time strings — never toISOString() (UTC), which would flip the
    day near midnight MYT (UTC+8). Shared by every place that needs a
    YYYY-MM-DD / HH:MM string built from a Date: the daily quota key, an
@@ -295,7 +308,7 @@ function todayKey() {
    after the token successfully reads the owner's PRIVATE inbox repo (a random
    string gets 401, a stranger's own PAT gets 404), so pasting text into the
    token field cannot unlock Pro. */
-function isPro() { return !!state.pro || !!state.ghProven; }
+function isPro() { return !!state.pro || !!state.ghProven || !!state.playEntitled; }
 function scansToday() { return state.scanDay === todayKey() ? (state.scanCount || 0) : 0; }
 function scanAllowed() { return isPro() || scansToday() < FREE_SCANS_PER_DAY; }
 /* Charge-site check (as opposed to scanAllowed(), which gates whether a NEW
@@ -338,6 +351,22 @@ function showUpgrade(reason) {
   if (!ov) return;
   const r = $("upgrade-reason"); if (r) r.textContent = reason || "";
   const p = $("upgrade-price"); if (p) p.textContent = PRICE_LABEL;
+  /* Android with Play Billing configured: primary CTA starts the native
+     purchase (monthly), a secondary link offers yearly, and a restore link
+     appears. Everywhere else (web PWA, or native but not yet configured):
+     unchanged — the primary CTA points at the Android app once billing
+     isn't available here, matching the phase's own "web points to the
+     Android app" instruction rather than a silent no-op. */
+  const buy = $("upgrade-buy"), buyYearly = $("upgrade-buy-yearly"), restore = $("upgrade-restore");
+  if (billingReady()) {
+    if (buy) buy.textContent = "Try Pro free for 3 days";
+    if (buyYearly) buyYearly.hidden = false;
+    if (restore) restore.hidden = false;
+  } else {
+    if (buy) buy.textContent = isNative() ? "Go Pro" : "Get Pro in the Android app";
+    if (buyYearly) buyYearly.hidden = true;
+    if (restore) restore.hidden = true;
+  }
   ov.hidden = false;
 }
 
@@ -367,6 +396,74 @@ async function unlockPro() {
       toast("That code didn't work");
     }
   } catch (e) { toast("Couldn't verify the code"); }
+}
+
+/* Play Billing via RevenueCat (Phase 18, Android only — the web PWA keeps
+   the PAY_URL/license-key paths above; Play policy requires in-app digital
+   goods sold inside an Android app to go through Play Billing). isPro()
+   ORs this in. window.Capacitor.Plugins.Purchases is the RevenueCat
+   Capacitor plugin's real native registration name (verified against its
+   source: @CapacitorPlugin(name = "Purchases")) — same window.Capacitor.
+   Plugins.X pattern as this file's existing Camera/Filesystem/Share calls,
+   not an ES import (this app has no bundler to resolve one). */
+function billingReady() {
+  return billingConfigured() && !!(window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases);
+}
+let _billingConfigured = false;
+async function initBilling() {
+  if (!billingReady() || _billingConfigured) return;
+  try {
+    await window.Capacitor.Plugins.Purchases.configure({ apiKey: REVENUECAT_ANDROID_API_KEY });
+    _billingConfigured = true;
+    await refreshPlayEntitlement();
+  } catch (e) { /* offline or misconfigured — falls back to the last-persisted entitlement */ }
+}
+/* Re-checks the Play entitlement against RevenueCat's customer info (served
+   from its local cache, synced in the background). Called on launch, after
+   a purchase, and after restore — never assume state.playEntitled is
+   current without calling this first. */
+async function refreshPlayEntitlement() {
+  if (!billingReady()) return;
+  try {
+    const { customerInfo } = await window.Capacitor.Plugins.Purchases.getCustomerInfo();
+    const ent = customerInfo && customerInfo.entitlements && customerInfo.entitlements.active &&
+      customerInfo.entitlements.active[REVENUECAT_ENTITLEMENT_ID];
+    const active = !!(ent && ent.isActive);
+    if (active !== state.playEntitled) {
+      state.playEntitled = active;
+      await DB.setSetting("playEntitled", active);
+      renderPlan();
+    }
+  } catch (e) { /* network hiccup — keep the last-known value rather than downgrade a real subscriber */ }
+}
+/* plan: "monthly" | "annual" — matches the package types RevenueCat exposes
+   on the current offering (offerings.current.monthly / .annual). The 3-day
+   free trial itself is configured in Play Console, not here — the app
+   honors whatever entitlement Play/RevenueCat report, trial or paid. */
+async function purchasePro(plan) {
+  if (!billingReady()) { toast("Play Billing isn't set up yet"); return; }
+  try {
+    const offerings = await window.Capacitor.Plugins.Purchases.getOfferings();
+    const pkg = offerings && offerings.current && offerings.current[plan];
+    if (!pkg) { toast("That plan isn't available right now"); return; }
+    await window.Capacitor.Plugins.Purchases.purchasePackage({ aPackage: pkg });
+    await refreshPlayEntitlement();
+    if (isPro()) {
+      const ov = $("upgrade-overlay"); if (ov) ov.hidden = true;
+      toast("Welcome to Pro — everything's unlocked");
+    }
+  } catch (e) {
+    if (e && e.userCancelled) return; /* silent — the user just closed the Play purchase sheet */
+    toast("Purchase didn't go through — try again");
+  }
+}
+async function restorePlayPurchases() {
+  if (!billingReady()) return;
+  try {
+    await window.Capacitor.Plugins.Purchases.restorePurchases();
+    await refreshPlayEntitlement();
+    toast(isPro() ? "Pro restored" : "No previous purchase found on this account");
+  } catch (e) { toast("Couldn't check for previous purchases"); }
 }
 
 function renderPlan() {
@@ -3738,7 +3835,7 @@ async function exportBackup() {
   const settingsAll = await DB.getAllSettings();
   /* Never export: secrets, the Pro entitlement (a shared backup file must not
      grant Pro), this device's identity, or transient counters. */
-  const SKIP = new Set(["ghToken", "aiSecret", "lastScan", "pro", "deviceId", "lastBackupAt", "backupNudgeSnooze", "licenseKey", "lastKeyCheck", "ghProven", "skipResults"]);
+  const SKIP = new Set(["ghToken", "aiSecret", "lastScan", "pro", "playEntitled", "deviceId", "lastBackupAt", "backupNudgeSnooze", "licenseKey", "lastKeyCheck", "ghProven", "skipResults"]);
   const settings = settingsAll.filter(s => s && s.key && !SKIP.has(s.key));
   const expenses = state.expenses.map(({ photo, ...rest }) => rest);
   const backup = { app: "recap", type: "backup", version: 1, exportedAt: new Date().toISOString(), expenses, settings };
@@ -3855,8 +3952,11 @@ async function importBackup(file) {
          able to plant a photo-exfil endpoint or silently pre-approve cloud
          reading (security review, 1.9.0). Also reject the device-local
          bookkeeping fields SKIP already keeps out of every legitimate
-         export, so a crafted file can't inject fake ones either. */
-      const REJECT = new Set(["pro", "deviceId", "ghToken", "aiSecret", "aiUrl", "cloudConsent", "licenseKey", "lastKeyCheck", "ghProven", "skipResults", "shareQueue", "shareRules", "lastRuleUpload", "lastBackupAt", "backupNudgeSnooze"]);
+         export, so a crafted file can't inject fake ones either — and
+         playEntitled (Phase 18), a shared backup file must not be able to
+         grant Play-billing Pro any more than the license-key/ghProven
+         fields above it. */
+      const REJECT = new Set(["pro", "playEntitled", "deviceId", "ghToken", "aiSecret", "aiUrl", "cloudConsent", "licenseKey", "lastKeyCheck", "ghProven", "skipResults", "shareQueue", "shareRules", "lastRuleUpload", "lastBackupAt", "backupNudgeSnooze"]);
       for (const s of data.settings) { if (s && s.key && !REJECT.has(s.key)) await DB.setSetting(s.key, s.value); }
       /* cloudConsent/shareRules are rejected above so a crafted backup can
          never silently switch them ON — but that also means a user's OWN
@@ -3989,6 +4089,7 @@ async function init() {
       await DB.setSetting("deviceId", state.deviceId);
     }
     state.pro = await DB.getSetting("pro", false);
+    state.playEntitled = await DB.getSetting("playEntitled", false);
     state.scanDay = await DB.getSetting("scanDay", "");
     state.scanCount = await DB.getSetting("scanCount", 0);
     state.quotaNoticeDay = await DB.getSetting("quotaNoticeDay", "");
@@ -4037,6 +4138,7 @@ async function init() {
   darkMedia.addEventListener("change", () => { if (state.theme === "auto") applyTheme(); });
   renderHome();
   materializeRecurring(); /* add any monthly expenses that came due */
+  initBilling();          /* Play Billing entitlement re-check (Phase 18) — fire-and-forget, inert on web/unconfigured */
 
   /* Startup fade (quiet fade): the boot overlay in index.html has been
      playing while we loaded — keep it up ~0.9s total so the mark reads,
@@ -4664,7 +4766,13 @@ async function init() {
     toast(state.shareRules === "no" ? "Sharing off — nothing leaves your phone" : "Thanks — sharing anonymous reading tips");
   });
   on("plan-btn", () => showUpgrade(""));
-  on("upgrade-buy", () => { if (PAY_URL) window.open(PAY_URL, "_blank", "noopener"); else toast("Online checkout is coming soon"); });
+  on("upgrade-buy", () => {
+    if (billingReady()) { purchasePro("monthly"); return; }
+    if (PAY_URL) { window.open(PAY_URL, "_blank", "noopener"); return; }
+    toast(isNative() ? "Online checkout is coming soon" : "Get Pro in the Android app — 3 days free");
+  });
+  on("upgrade-buy-yearly", () => purchasePro("annual"));
+  on("upgrade-restore", restorePlayPurchases);
   on("upgrade-code", unlockPro);
   on("upgrade-close", () => { const ov = $("upgrade-overlay"); if (ov) ov.hidden = true; });
   on("upgrade-overlay", ev => { if (ev.target === $("upgrade-overlay")) $("upgrade-overlay").hidden = true; });
