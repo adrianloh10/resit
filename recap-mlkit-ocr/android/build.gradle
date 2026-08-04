@@ -5,11 +5,11 @@
 //    generated `android/` Gradle build (via capacitor.settings.gradle), so it
 //    inherits the root project's Android Gradle Plugin off the root buildscript
 //    classpath — exactly as android/app/build.gradle does. That keeps us
-//    forward-compatible with whatever AGP Capacitor 7.x pins, with no version
+//    forward-compatible with whatever AGP Capacitor pins, with no version
 //    to hand-sync.
 //  - SDK levels read from the root project's ext (set in android/variables.gradle
-//    by `cap add android`), with Capacitor-7 fallbacks so the module also builds
-//    standalone.
+//    by `cap add android`), with fallbacks (matching Capacitor 8's defaults) so
+//    the module also builds standalone.
 //
 // ML Kit Text Recognition v2 is pulled in UNBUNDLED, via Google Play services
 // (`play-services-mlkit-text-recognition`, ~+260KB): the model is downloaded by
@@ -26,10 +26,10 @@ apply plugin: 'com.android.library'
 
 android {
     namespace "com.promaxdigita.recap.mlkit"
-    compileSdk project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 35
+    compileSdk project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
     defaultConfig {
-        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 23
-        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 35
+        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 24
+        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 36
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"

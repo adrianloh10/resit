@@ -18,8 +18,8 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 30
     environment:
-      node: 20
-      java: 21 # Capacitor 7's Android library compiles against Java 21
+      node: 22 # Capacitor 8 requires Node 20.15+/22+; 22 is the current LTS
+      java: 21 # Capacitor 8's Android library compiles against Java 21
     scripts:
       - name: Assemble web app into www/
         script: |
@@ -75,7 +75,7 @@ workflows:
     environment:
       android_signing:
         - resit_upload # keystore reference created once in the Codemagic UI
-      node: 20
+      node: 22
       java: 21
     scripts:
       - name: Assemble web app into www/
