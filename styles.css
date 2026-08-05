@@ -496,12 +496,16 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 @media (prefers-reduced-motion: reduce) { .boot { display: none; } }
 
 /* ---------- Search & filter ---------- */
-.search-bar { margin-top: 14px; }
+.search-bar { margin-top: 14px; position: relative; }
 .search-bar input {
   width: 100%; background: var(--paper-raised); border: 0.5px solid var(--divider-soft);
-  border-radius: 12px; padding: 10px 14px; font-size: 15px; font-family: var(--sans);
+  border-radius: 12px; padding: 10px 46px 10px 14px; font-size: 15px; font-family: var(--sans);
   color: var(--ink);
 }
+/* Was wired in app.js with no matching element — the search bar, once
+   opened, could never be closed again. Absolutely positioned over the
+   input's reserved right-padding so it doesn't shift layout. */
+.search-bar .icon-btn { position: absolute; top: 0; right: 0; font-size: 18px; }
 .filter-chips { justify-content: flex-start; margin-top: 10px; }
 /* PROPOSED P2-7 — small-chip stays visually compact (a dense filter row
    would break under the full .chip padding); the TAP AREA still reaches

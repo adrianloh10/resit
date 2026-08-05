@@ -1129,6 +1129,10 @@ function parseAmount(str) {
   return parseFloat(str.replace(/[,\s]/g, ""));
 }
 
+function daysInMonth(y, mo) {
+  return new Date(y, mo + 1, 0).getDate();
+}
+
 function validDate(d, mo, y) {
   /* OCR fixes: "2618" is 2018 with 0 read as 6; month "61" is "01" with a
      phantom tens digit. */
@@ -1136,7 +1140,10 @@ function validDate(d, mo, y) {
   if (mo > 11 && (mo % 10) >= 0 && (mo % 10) <= 11 && mo >= 12) {
     if ((mo + 1) % 10 >= 1) mo = ((mo + 1) % 10) - 1;
   }
-  if (y >= 2015 && y <= 2100 && mo >= 0 && mo <= 11 && d >= 1 && d <= 31) {
+  /* Range-check against the REAL day count for that month — otherwise an
+     impossible date like 31 Apr silently rolls over to 1 May instead of
+     being rejected (new Date(y,mo,d) auto-normalizes overflow). */
+  if (y >= 2015 && y <= 2100 && mo >= 0 && mo <= 11 && d >= 1 && d <= daysInMonth(y, mo)) {
     const date = new Date(y, mo, d);
     if (date <= new Date()) return date;
   }

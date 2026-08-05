@@ -287,6 +287,14 @@ function todayKey() {
 function isPro() { return !!state.pro || !!state.ghProven; }
 function scansToday() { return state.scanDay === todayKey() ? (state.scanCount || 0) : 0; }
 function scanAllowed() { return isPro() || scansToday() < FREE_SCANS_PER_DAY; }
+/* Charge-site check (as opposed to scanAllowed(), which gates whether a NEW
+   scan may start without first offering an ad): is there still room in
+   TODAY's full allowance — free + any ad-unlocked scans — for this read to
+   count against? scanAllowed() alone is only bound to the free scan, so an
+   ad-unlocked scan (2-5) would never actually increment the counter and the
+   5-scan/day ceiling would never be reached; this still protects against an
+   overlapping scan double-charging once the full daily allowance is spent. */
+function scanChargeAllowed() { return isPro() || scansToday() < FREE_SCANS_PER_DAY + AD_SCANS_PER_DAY; }
 /* Rewarded-ad unlock: available only where the native shell provides ads and
    the user is inside the ad-unlockable band (scans 2-5). */
 function adsAvailable() {
@@ -824,6 +832,28 @@ function fmtRM(n, _withSign) {
   return state.currency + " " + s;
 }
 
+/* Budget comparisons involve summed user-entered money values that can carry
+   IEEE-754 drift (e.g. 9.90+2.20 !== 12.10 by ~1e-15) — spend that exactly
+   equals the budget must never read as "over". A tenth-of-a-cent epsilon
+   absorbs that drift without masking any real difference (amounts only ever
+   carry 2 decimal places). */
+const MONEY_EPS = 0.001;
+function moneyGT(a, b) { return a > b + MONEY_EPS; }
+
+/* Parses a user-typed amount respecting the active locale's decimal
+   separator. id-ID/vi-VN/ms-BN (and others) use "," as the decimal point
+   and "." as a thousands separator — the opposite of en-*. fmtRM already
+   DISPLAYS every amount in that convention for those locales, so a blind
+   "keep only digits and the literal '.'" strip on the way back in would
+   delete a typed "45,50" down to "4550" — a silent ~100x error. */
+function parseAmountInput(raw) {
+  let s = (raw || "").trim();
+  if (!s) return NaN;
+  const commaIsDecimal = (1.1).toLocaleString(appLocale()).indexOf(",") > -1;
+  s = commaIsDecimal ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+  return parseFloat(s.replace(/[^\d.\-]/g, ""));
+}
+
 /* Timezone-safe "YYYY-MM" for a LOCAL date (toISOString would shift near midnight). */
 function monthKeyOf(d) {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
@@ -977,8 +1007,16 @@ function renderHome() {
      the headline total. "" = All. */
   const scoped = state.scopeFilter ? allExps.filter(e => scopeOf(e) === state.scopeFilter) : allExps;
   const total = scoped.reduce((s, e) => s + e.amount, 0);
-  const bare = fmtRM(total).slice(state.currency.length + 1);
-  const [whole, cents] = bare.split(".");
+  /* Split into whole/cents from the raw NUMBER, not by slicing fmtRM's
+     locale-formatted string on "." — id-ID/vi-VN/ms-BN use "," as the
+     decimal separator (and "." as a thousands separator), so a text split
+     on "." either finds no "." at all (→ "undefined" rendered on screen)
+     or splits on the thousands separator instead. */
+  const totalRounded = Math.round(total * 100) / 100;
+  const totalWhole = Math.trunc(Math.abs(totalRounded));
+  const totalCents = Math.round((Math.abs(totalRounded) - totalWhole) * 100);
+  const whole = (totalRounded < 0 ? "-" : "") + totalWhole.toLocaleString(appLocale());
+  const cents = String(totalCents).padStart(2, "0");
   $("month-total").innerHTML = `<span class="cur-prefix">${escapeHtml(state.currency)}</span> ${whole}<span class="cents">.${cents}</span>`;
 
   /* Hero: REMAINING | TOTAL BUDGET columns + a status bar with the budget
@@ -1000,17 +1038,22 @@ function renderHome() {
   } else {
     fill.style.background = "";
     if (state.budget > 0) {
+      /* moneyGT (epsilon-tolerant) — a raw total>budget check falsely reads
+         as "over" when total/budget sum to the same amount but drift by a
+         float ULP (e.g. 9.90+2.20 !== 12.10). Shared by the remaining-column
+         text/class below and the budget-bar fill class further down. */
+      const heroOver = moneyGT(total, state.budget);
       if (cols) {
         cols.hidden = false;
         const left = state.budget - total;
-        $("hero-remaining").textContent = left >= 0 ? fmtRM(left) : "−" + fmtRM(-left);
-        $("hero-remaining-col").classList.toggle("neg", left < 0);
-        $("hero-budget").textContent = state.currency + " " + state.budget.toLocaleString(appLocale());
+        $("hero-remaining").textContent = heroOver ? "−" + fmtRM(total - state.budget) : fmtRM(Math.max(0, left));
+        $("hero-remaining-col").classList.toggle("neg", heroOver);
+        $("hero-budget").textContent = fmtRM(state.budget);
       }
       if (track) track.hidden = false;
       const pct = Math.min(100, (total / state.budget) * 100);
       fill.style.width = pct + "%";
-      fill.classList.toggle("over", total > state.budget);
+      fill.classList.toggle("over", heroOver);
       if (status) {
         /* Plain percentage of budget used (can pass 100%); finished months
            read past-tense and future months get a neutral label. */
@@ -1560,7 +1603,7 @@ function renderInsights() {
   for (const [cat, amt] of cats) {
     const pct = Math.round((amt / total) * 100);
     const cb = state.catBudgets[cat];
-    const over = cb > 0 && amt > cb;
+    const over = cb > 0 && moneyGT(amt, cb);
     /* Current-month pace check: flag a category heading past its budget. */
     let paceOver = false;
     const isCurMonth = m.getFullYear() === now.getFullYear() && m.getMonth() === now.getMonth();
@@ -1694,7 +1737,7 @@ function openStatement(m) {
   }
   const catRows = Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([c, a]) => {
     const cb = state.catBudgets[c];
-    return `<tr><td>${escapeHtml(c)}</td><td class="num">${fmtRM(a)}</td><td class="num">${cb > 0 ? fmtRM(cb) : "—"}</td><td class="num">${cb > 0 ? (a > cb ? "+" + fmtRM(a - cb) : fmtRM(a - cb)) : ""}</td></tr>`;
+    return `<tr><td>${escapeHtml(c)}</td><td class="num">${fmtRM(a)}</td><td class="num">${cb > 0 ? fmtRM(cb) : "—"}</td><td class="num">${cb > 0 ? (moneyGT(a, cb) ? "+" + fmtRM(a - cb) : fmtRM(a - cb)) : ""}</td></tr>`;
   }).join("");
   const merRows = Object.entries(byMer).sort((a, b) => b[1].amt - a[1].amt).slice(0, 10).map(([n, v]) =>
     `<tr><td>${escapeHtml(n)}</td><td class="num">${v.n}×</td><td class="num">${fmtRM(v.amt)}</td></tr>`).join("");
@@ -2562,8 +2605,10 @@ async function handleImageLocalFirst(file, preScope, preScopeTouched) {
        request for this photo has happened yet. */
     if (window.ReceiptOCR.looksLikeCardSlip(parsed.rawText)) {
       if (cancelled()) return;
-      state.scanning = false;
-      hideScanPill();
+      /* Only touch the shared pill/scanning flag if THIS is still the
+         current scan — a newer, still-running scan owns them otherwise
+         (same discipline as handleImageRaced's stillCurrent() guards). */
+      if (stillCurrent()) { state.scanning = false; hideScanPill(); }
       renderHome();
       blockCardSlip();
       return;
@@ -2592,22 +2637,22 @@ async function handleImageLocalFirst(file, preScope, preScopeTouched) {
       }
     }
     if (cancelled()) return;
-    state.scanning = false;
+    if (stillCurrent()) state.scanning = false;
     renderHome();
     const usable = !!(parsed.total || parsed.merchant || (parsed.items && parsed.items.length));
     if (usable) {
-      completeScanPill("Scan complete ✓");
+      if (stillCurrent()) completeScanPill("Scan complete ✓");
     } else {
-      hideScanPill();
+      if (stillCurrent()) hideScanPill();
       toast(state.ghToken ? "Couldn't read it — save anyway, Claude will fill it in" : "That one was too blurry — try more light, or just type it in");
     }
     /* Only a read that actually produced something consumes the free daily
        scan — a blurry failure costs the user nothing. Re-checks
-       scanAllowed() (not just isPro()) for the same reason handleImageRaced
-       does: an overlapping scan elsewhere may already have spent today's
-       read by the time this one gets here. */
+       scanChargeAllowed() (not just isPro()) for the same reason
+       handleImageRaced does: an overlapping scan elsewhere may already have
+       spent today's full allowance by the time this one gets here. */
     let charged = false;
-    if (usable && !isPro() && scanAllowed()) { await bumpScanUsed(); charged = true; }
+    if (usable && !isPro() && scanChargeAllowed()) { await bumpScanUsed(); charged = true; }
     const draft = parsedToDraft(parsed);
     draft._file = file;
     draft._source = source;
@@ -2617,8 +2662,7 @@ async function handleImageLocalFirst(file, preScope, preScopeTouched) {
     openOrQueueDraft(draft);
   } catch (err) {
     if (cancelled()) return;
-    state.scanning = false;
-    hideScanPill();
+    if (stillCurrent()) { state.scanning = false; hideScanPill(); }
     renderHome();
     toast(err.message || "Something went wrong reading the receipt");
     openOrQueueDraft({
@@ -2714,12 +2758,13 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
   };
   /* A read that produced something consumes the free daily scan; a blurry
      failure costs nothing. Counted once, from machine output (before the user
-     can type). Re-checks scanAllowed() (not just isPro()): a rapid-fire
-     sibling scan sharing this same burst may already have spent today's read
-     by the time this one gets here — see the matching guard in tryEnqueue. */
+     can type). Re-checks scanChargeAllowed() (not just isPro()): a rapid-fire
+     sibling scan sharing this same burst may already have spent today's full
+     allowance by the time this one gets here — see the matching guard in
+     tryEnqueue. */
   const countIfUsable = () => {
     if (cardSlip) return;
-    if (!counted && !isPro() && sheetUsable() && scanAllowed()) { counted = true; bumpScanUsed(); }
+    if (!counted && !isPro() && sheetUsable() && scanChargeAllowed()) { counted = true; bumpScanUsed(); }
     /* Phase 8 quota rule needs to know, per open sheet, whether THIS scan
        already spent the day's read — countIfUsable() is the only place that
        decision is made on the direct-paint path (tryEnqueue/
@@ -2891,15 +2936,15 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
        merge in later without stomping anything the user's since edited. */
     draft.__markShown = () => { painted = capturePaintedFields(); };
     enqueuedDraft = draft;
-    /* Re-check scanAllowed() (not just isPro()) before charging: the
+    /* Re-check scanChargeAllowed() (not just isPro()) before charging: the
        CURRENT/surviving scan from this same rapid-fire burst may already
-       have spent today's one free read by the time this superseded scan
+       have spent today's full allowance by the time this superseded scan
        gets here. Without this, two overlapping scans can both slip past
        handleImage()'s (racy, one-shot) entry gate and each bump the
        counter, letting a quick double-tap burn more than a day's
        allowance. The read already happened either way — not charging a
        second time here just avoids double-billing the user for it. */
-    if (!isPro() && draftUsable(draft) && scanAllowed()) { bumpScanUsed(); charged = true; }
+    if (!isPro() && draftUsable(draft) && scanChargeAllowed()) { bumpScanUsed(); charged = true; }
     draft._charged = charged;
     evictOldestUnchargedIfFull(state.pendingScans);
     state.pendingScans.push(draft);
@@ -2942,7 +2987,7 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
        if THIS reader now makes it usable, charge now. Same "a read that
        produced something" rule the live path enforces via countIfUsable(),
        just applied on the delayed path instead of at paint time. */
-    if (!charged && !isPro() && draftUsable(fresh) && scanAllowed()) { bumpScanUsed(); charged = true; }
+    if (!charged && !isPro() && draftUsable(fresh) && scanChargeAllowed()) { bumpScanUsed(); charged = true; }
     if (sheetOpen) {
       if (!painted) return;   /* __markShown hasn't fired yet (shouldn't happen if mySheetIsOpen(), but stay safe) */
       /* applyCloudToOpenSheet only touches the DOM-bound fields (amount/
@@ -3027,10 +3072,13 @@ async function handleImageRaced(file, preScope, preScopeTouched) {
    read drafts instantly, confirming the TYPE (Personal/Company/Family) on
    each before it saves. ---- */
 async function startBatch(fileList) {
-  const files = Array.from(fileList || []).filter(f => f && f.type && f.type.indexOf("image/") === 0);
-  if (!files.length) return;
+  const all = Array.from(fileList || []);
+  const files = all.filter(f => f && f.type && f.type.indexOf("image/") === 0);
+  const droppedNonImage = all.length - files.length;
+  if (!files.length) { toast(all.length ? "Those weren't image files" : "No files selected"); return; }
   const MAX = 20;
   if (files.length > MAX) toast("Up to " + MAX + " at once — reading the first " + MAX);
+  else if (droppedNonImage > 0) toast(droppedNonImage + " file" + (droppedNonImage > 1 ? "s" : "") + " skipped (not an image)");
   state.batchFiles = files.slice(0, MAX);
   state.batchDrafts = [];
   state.batchIndex = 0;
@@ -3346,7 +3394,7 @@ function renderItemsEditor() {
     price.inputMode = "decimal";
     price.value = it.price != null && it.price !== 0 ? Number(it.price).toFixed(2) : "";
     price.placeholder = "0.00";
-    price.addEventListener("input", () => { e.items[idx].price = parseFloat(price.value.replace(/[^\d.]/g, "")) || 0; });
+    price.addEventListener("input", () => { e.items[idx].price = parseAmountInput(price.value) || 0; });
     const del = document.createElement("button");
     del.className = "item-del";
     del.type = "button";
@@ -3441,7 +3489,7 @@ async function saveExpense() {
      clears it — see their matching comments); if it turns out to actually
      be a card slip the sheet gets torn down out from under this anyway. */
   if (e._cardSlipPending) { toast("Still checking this photo — try again in a moment"); return; }
-  const amount = parseFloat(($("confirm-amount").value || "").replace(/[^\d.]/g, ""));
+  const amount = parseAmountInput($("confirm-amount").value);
   /* With the Claude inbox configured, a scanned receipt may be saved without
      an amount — Claude fills it in later. */
   const canPend = !!(!e.id && e.fromReceipt && e._file && state.ghToken);
@@ -3725,7 +3773,10 @@ function sanitizeRestoredExpense(e, fallbackId) {
     amount: Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0,
     merchant: e.merchant ? String(e.merchant).slice(0, 80) : "Expense",
     category: isRealCategory(e.category) ? e.category : "Other",
-    scope: allScopes().includes(e.scope) ? e.scope : "Personal",
+    /* "Shared" is kept recognised even when it isn't in the CURRENT
+       state.scopes (e.g. a fresh/erased device) — see the comment near
+       DEFAULT_SCOPES: pre-1.10 data must never collapse to Personal. */
+    scope: (allScopes().includes(e.scope) || e.scope === "Shared") ? e.scope : "Personal",
     claimStatus: e.claimStatus === "to-claim" || e.claimStatus === "claimed" ? e.claimStatus : "",
     date: dateOk ? new Date(e.date).toISOString() : new Date().toISOString(),
     items,
@@ -3772,9 +3823,20 @@ async function importBackup(file) {
          device's identity into this install (old backups may contain them). */
       /* aiUrl + cloudConsent are rejected too: a crafted backup must not be
          able to plant a photo-exfil endpoint or silently pre-approve cloud
-         reading (security review, 1.9.0). */
-      const REJECT = new Set(["pro", "deviceId", "ghToken", "aiSecret", "aiUrl", "cloudConsent", "licenseKey", "lastKeyCheck", "ghProven", "skipResults", "shareQueue", "shareRules", "lastRuleUpload"]);
+         reading (security review, 1.9.0). Also reject the device-local
+         bookkeeping fields SKIP already keeps out of every legitimate
+         export, so a crafted file can't inject fake ones either. */
+      const REJECT = new Set(["pro", "deviceId", "ghToken", "aiSecret", "aiUrl", "cloudConsent", "licenseKey", "lastKeyCheck", "ghProven", "skipResults", "shareQueue", "shareRules", "lastRuleUpload", "lastBackupAt", "backupNudgeSnooze"]);
       for (const s of data.settings) { if (s && s.key && !REJECT.has(s.key)) await DB.setSetting(s.key, s.value); }
+      /* cloudConsent/shareRules are rejected above so a crafted backup can
+         never silently switch them ON — but that also means a user's OWN
+         legitimate opt-OUT is lost on erase+restore, quietly reverting to
+         the enabled default. Restoring an explicit "no" only ever makes
+         things MORE private, so it's safe in both directions — allow it. */
+      const cc = data.settings.find(s => s && s.key === "cloudConsent");
+      if (cc && cc.value === "no") await DB.setSetting("cloudConsent", "no");
+      const sr = data.settings.find(s => s && s.key === "shareRules");
+      if (sr && sr.value === "no") await DB.setSetting("shareRules", "no");
     }
   } catch (err) {
     /* IndexedDB rolls the transaction back on error, so current data is intact. */
@@ -3799,6 +3861,7 @@ async function importBackup(file) {
   state.customScopes = Array.isArray(rcsc) ? rcsc.filter(s => typeof s === "string" && s && s.length <= 14) : [];
   /* Cloud reading is on by default (1.10.0); a restore keeps the on-device setting. */
   state.cloudConsent = await DB.getSetting("cloudConsent", "yes");
+  state.shareRules = await DB.getSetting("shareRules", "");
   state.theme = await DB.getSetting("theme", "light");
   applyTheme();
   switchView("home");
@@ -3904,6 +3967,23 @@ async function init() {
     state.licenseKey = await DB.getSetting("licenseKey", "");
     state.lastKeyCheck = await DB.getSetting("lastKeyCheck", "");
     state.eulaAccepted = await DB.getSetting("eulaAccepted", "");
+    state.setupDone = await DB.getSetting("setupDone", false);
+    if (!state.setupDone && state.eulaAccepted) {
+      /* Migration for installs from before setupDone existed. eulaAccepted
+         truthy alone can't tell a genuinely-completed install apart from a
+         genuinely-interrupted one — both look identical the very first time
+         this code runs — so infer completion from a persisted "country"
+         setting instead: it's the very next thing the wizard saves after
+         terms (setup-country-next), so its presence means step 1 was
+         actually cleared at some point. Without this, a real interruption
+         happening AFTER this fix ships would grandfather itself away on its
+         own next boot, silently defeating the whole point of the fix. */
+      const pastStep1 = (await DB.getSetting("country", null)) !== null;
+      if (pastStep1) {
+        state.setupDone = true;
+        try { await DB.setSetting("setupDone", true); } catch (e) {}
+      }
+    }
     /* Shared learning loop: outbox + share preference + weekly-upload clock. */
     state.shareQueue = await DB.getSetting("shareQueue", []);
     if (!Array.isArray(state.shareQueue)) state.shareQueue = [];
@@ -3945,13 +4025,27 @@ async function init() {
      → done). A returning user after a TERMS_VERSION bump only re-accepts
      the terms card. No backdrop-close, no cancel — Agree is the only way
      in. (If storage failed above, eulaAccepted reads "" — showing the gate
-     again is the safe direction.) */
-  if ((state.eulaAccepted || "").split("|")[0] !== TERMS_VERSION) {
+     again is the safe direction.) A user who accepted terms but never
+     finished the rest of the wizard (app closed mid-setup) resumes at
+     step 2 instead of being silently dropped onto the home screen with
+     unconfirmed defaults — setupDone only becomes true at genuine finish. */
+  const termsStale = (state.eulaAccepted || "").split("|")[0] !== TERMS_VERSION;
+  if (termsStale || !state.setupDone) {
     const ov = $("setup-overlay");
     if (ov) {
-      ov.dataset.mode = state.eulaAccepted ? "terms" : "full";
-      ov.dataset.step = "1";
-      if (state.eulaAccepted) {
+      const resuming = !termsStale && !state.setupDone;
+      /* mode="terms" only for the genuine "already fully finished, terms
+         just changed" case (setupDone true) — NOT keyed off eulaAccepted
+         alone, which is also truthy for a resuming (interrupted) user and
+         would otherwise show the terms-only card instead of resuming the
+         full wizard. */
+      ov.dataset.mode = state.setupDone ? "terms" : "full";
+      ov.dataset.step = resuming ? "2" : "1";
+      if (resuming) {
+        const sc = $("setup-country"), scur = $("setup-currency");
+        if (sc) sc.value = state.country || "MY";
+        if (scur) scur.value = state.currency || "RM";
+      } else if (state.eulaAccepted) {
         const t = $("eula-title");
         if (t) t.textContent = "We've updated the terms";
       }
@@ -3959,7 +4053,7 @@ async function init() {
       /* The veil only blocks pointers — make everything else inert so
          keyboard / screen-reader users can't operate the app beneath it. */
       for (const el of document.querySelectorAll("body > *:not(#setup-overlay):not(script)")) el.inert = true;
-      const btn = $("eula-accept");
+      const btn = resuming ? $("setup-country-next") : $("eula-accept");
       if (btn) btn.focus();
     }
   }
@@ -4266,7 +4360,12 @@ async function init() {
   /* Tapping the breathing scan pill cancels the read (the ✓ state doesn't). */
   on("scan-pill", () => {
     const p = $("scan-pill");
-    if (!state.scanning || (p && p.classList.contains("done"))) return;
+    /* state.scanning only covers the single-scan paths — during a batch's
+       up-front read (scanAllInBatch) it's never set, which used to make
+       this tap a silent no-op with no way to abort a mid-batch read.
+       state.batchMode also covers the later per-receipt confirm-sheet
+       review phase, but the pill is hidden (unclickable) by then anyway. */
+    if (!(state.scanning || state.batchMode) || (p && p.classList.contains("done"))) return;
     state.ocrCancelled = true;         /* stops an in-progress batch read (scanAllInBatch) */
     state.cancelledScanIds.add(state._scanSeq);  /* stops specifically the scan currently on the pill (handleImageRaced/handleImageLocalFirst) */
     state.scanning = false;
@@ -4333,26 +4432,37 @@ async function init() {
   const recCat = $("rec-cat");
   if (recCat) for (const c of CATS) { const o = document.createElement("option"); o.value = c.name; o.textContent = c.name; recCat.appendChild(o); }
   on("rec-add", async () => {
+    /* Async — a fast double-tap must not push two duplicate templates
+       (each of which would then materialize its own duplicate expense). */
+    if (state._addingRecurring) return;
     const name = ($("rec-name").value || "").trim();
     const amount = parseFloat($("rec-amount").value);
     const day = Math.min(31, Math.max(1, parseInt($("rec-day").value, 10) || 1));
     const every = parseInt($("rec-freq").value, 10) || 1;
     if (!name) { toast("Give it a name"); $("rec-name").focus(); return; }
     if (!(amount > 0)) { toast("Enter an amount"); $("rec-amount").focus(); return; }
-    const now = new Date();
-    /* Backdate lastMonth by one interval so the first entry lands in the
-       CURRENT month (dated its day) as soon as materializeRecurring runs. */
-    const start = new Date(now.getFullYear(), now.getMonth() - every, 1);
-    state.recurring.push({
-      merchant: name.slice(0, 40), amount: Math.round(amount * 100) / 100,
-      category: (recCat && recCat.value) || "Bills", scope: "Personal",
-      day, every, note: "", lastMonth: monthKeyOf(start)
-    });
-    await DB.setSetting("recurringTemplates", state.recurring);
-    $("rec-name").value = ""; $("rec-amount").value = ""; $("rec-day").value = "";
-    renderRecurringList();
-    await materializeRecurring();
-    toast("Added — Recap takes it from here");
+    state._addingRecurring = true;
+    const recAddBtn = $("rec-add");
+    if (recAddBtn) recAddBtn.disabled = true;
+    try {
+      const now = new Date();
+      /* Backdate lastMonth by one interval so the first entry lands in the
+         CURRENT month (dated its day) as soon as materializeRecurring runs. */
+      const start = new Date(now.getFullYear(), now.getMonth() - every, 1);
+      state.recurring.push({
+        merchant: name.slice(0, 40), amount: Math.round(amount * 100) / 100,
+        category: (recCat && recCat.value) || "Bills", scope: "Personal",
+        day, every, note: "", lastMonth: monthKeyOf(start)
+      });
+      await DB.setSetting("recurringTemplates", state.recurring);
+      $("rec-name").value = ""; $("rec-amount").value = ""; $("rec-day").value = "";
+      renderRecurringList();
+      await materializeRecurring();
+      toast("Added — Recap takes it from here");
+    } finally {
+      state._addingRecurring = false;
+      if (recAddBtn) recAddBtn.disabled = false;
+    }
   });
 
   const csel = $("currency-select");
@@ -4379,6 +4489,10 @@ async function init() {
     const ov = $("setup-overlay");
     if (ov) ov.hidden = true;
     for (const el of document.querySelectorAll("body > [inert]")) el.inert = false;
+    if (!state.setupDone) {
+      state.setupDone = true;
+      DB.setSetting("setupDone", true).catch(() => {});
+    }
     renderHome();
   };
   const COUNTRY_CURRENCY = { MY: "RM", SG: "SGD", ID: "IDR", TH: "THB", PH: "PHP", VN: "VND", BN: "BND", IN: "INR", AU: "AUD", GB: "GBP", US: "USD", OT: "RM" };
@@ -4578,6 +4692,14 @@ async function init() {
   syncInbox().finally(cleanupPhotos);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") syncInbox();
+  });
+  /* A recurring expense whose due day arrives while the app is sitting open
+     (not reloaded) would otherwise never materialize until next launch —
+     re-check on foreground too, same idiom as syncInbox above. Idempotent
+     (materializeRecurring only ever adds what's still due), so re-firing
+     costs nothing. */
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") materializeRecurring();
   });
   /* While a receipt is waiting and the app is open, check for Claude's
      results every minute — no pull-to-refresh needed. */
