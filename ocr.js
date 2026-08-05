@@ -1087,7 +1087,18 @@ const CATEGORY_KEYWORDS = {
    silently returning a wrong, smaller value (found live: a real RM3859.00
    invoice read as RM859 with no error, discovered testing the learned-hint
    path, where a hint-confirmed total skips the cloud safety net entirely). */
-const AMOUNT_RE = /(?<!\d)(\d{1,3}(?:[,\s]\d{3})*\.\d{2})(?!\d)/g;
+/* [,\s] used to treat a bare space exactly like a thousands-comma, which
+   silently merged an ordinary "qty price" column pair into one inflated
+   number whenever the price's integer part was exactly 3 digits ("2
+   100.00" -> 2100 instead of qty 2 / price 100.00 — common after OCR
+   collapses a column gap to one space). Comma-grouping stays unrestricted
+   (it's unambiguous), but space-grouping now requires 2+ repeated 3-digit
+   groups — only a genuinely large space-grouped number ("1 234 567.89")
+   has that shape; a qty/price pair never does. Trade-off accepted: a
+   4-figure total OCR'd with its comma dropped to a SINGLE space ("1
+   234.56") no longer merges either — rarer than the qty/price collision
+   this fixes, and still has the weak-read/cloud-fallback safety net. */
+const AMOUNT_RE = /(?<!\d)(\d{1,3}(?:,\d{3})*\.\d{2}|\d{1,3}(?:\s\d{3}){2,}\.\d{2})(?!\d)/g;
 /* OCR often reads a decimal point as a comma or adds stray spaces
    ("100,20", "43 . 50"). Only trusted on lines that already talk about
    totals/cash/change. Same (?<!\d) reasoning as AMOUNT_RE — otherwise a
@@ -1119,10 +1130,14 @@ const DATE_PATTERNS = [
   { re: /(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{4})/, order: "dmy" },
   { re: /(\d{4})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})/, order: "ymd" },
   { re: /(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2})(?!\d)/, order: "dmy2" },
-  { re: /(\d{1,2})[\s\-.,]*(jan|feb|ma[rx]|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\-.,]*(\d{4})/i, order: "dMonY" },
-  { re: /(\d{1,2})[\s\-.,]*(jan|feb|ma[rx]|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\-.,]*(\d{2})(?!\d)/i, order: "dMonY2" }
+  { re: /(\d{1,2})[\s\-.,]*(jan|feb|ma[rc]|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\-.,]*(\d{4})/i, order: "dMonY" },
+  { re: /(\d{1,2})[\s\-.,]*(jan|feb|ma[rc]|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\-.,]*(\d{2})(?!\d)/i, order: "dMonY2" }
 ];
-const MONTHS = { jan: 0, feb: 1, mar: 2, max: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+/* "mac" = Bahasa Malaysia's standard abbreviation for March, common on
+   Malaysian till receipts — was missing (DATE_PATTERNS' month regex only
+   matched the English "mar" or a typo'd "max", which the regex fix above
+   replaces with real "mac" support). */
+const MONTHS = { jan: 0, feb: 1, mar: 2, mac: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
 const TIME_RE = /(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)?/i;
 
 function parseAmount(str) {
@@ -1478,17 +1493,17 @@ function guessMerchant(lines, sniperV2) {
 }
 
 function kwHits(lower, words) {
+  /* Word-boundary matching applies to every keyword length, not just
+     short ones — a bare indexOf() on a longer keyword that happens to be
+     a literal prefix of a different category's keyword ("steam" inside
+     "steamboat", "grab" inside "grabfood") produced an identical match
+     index for both, silently breaking the documented earliest-occurrence
+     tie-break (ties then fell back to object-declaration order instead). */
   let hits = 0, first = Infinity;
   for (const w of words) {
-    let idx = -1;
-    if (w.length <= 3) {
-      const re = new RegExp("\\b" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i");
-      const m = re.exec(lower);
-      if (m) idx = m.index;
-    } else {
-      idx = lower.indexOf(w);
-    }
-    if (idx >= 0) { hits++; if (idx < first) first = idx; }
+    const re = new RegExp("\\b" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i");
+    const m = re.exec(lower);
+    if (m) { hits++; if (m.index < first) first = m.index; }
   }
   return { hits, first };
 }

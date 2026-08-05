@@ -20,6 +20,14 @@ const CAT_COLOR = Object.fromEntries(CATS.map(c => [c.name, c.color]));
    functions off Object.prototype through bare object lookups. */
 const hasOwn = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
 const isRealCategory = c => typeof c === "string" && hasOwn(CAT_COLOR, c);
+/* Same guard, generalised: a bare obj[key] lookup on a plain {} silently
+   falls through to an inherited Object.prototype member (constructor,
+   toString, hasOwnProperty, ...) when key happens to collide with one —
+   e.g. a receipt/cloud-AI merchant name whose first word is "constructor".
+   Used for every plain-object lookup keyed by OCR/cloud text, a restored
+   backup value, or free-typed user input (learned-merchant stores, scope
+   styling tables, locale tables). */
+const safeGet = (obj, k) => (obj && typeof k === "string" && hasOwn(obj, k)) ? obj[k] : undefined;
 
 /* A second classification axis, independent of category: who the spend is for.
    Each gets its own earth-tone accent. Default for new/old expenses: Personal. */
@@ -34,9 +42,9 @@ const CLAIMABLE = new Set(["Company", "Shared"]); /* types that can be "to claim
 /* state.scopes = the user's active built-ins (chosen at setup); customScopes =
    Pro-added types. allScopes() is what the sheet/filters offer. */
 const allScopes = () => (state.scopes && state.scopes.length ? state.scopes : DEFAULT_SCOPES).concat(state.customScopes || []);
-const scopeClass = s => SCOPE_CLASS[s] || "scope-custom";
-const scopeFill = s => SCOPE_FILL[s] || "var(--terracotta)";
-const scopeTag = s => SCOPE_TAG[s] || "t-custom";
+const scopeClass = s => safeGet(SCOPE_CLASS, s) || "scope-custom";
+const scopeFill = s => safeGet(SCOPE_FILL, s) || "var(--terracotta)";
+const scopeTag = s => safeGet(SCOPE_TAG, s) || "t-custom";
 /* Trust a stored scope string so legacy data (e.g. "Shared") or a
    deselected type never silently becomes Personal; only empty is defaulted. */
 const scopeOf = e => (e && typeof e.scope === "string" && e.scope.trim()) ? e.scope : "Personal";
@@ -130,11 +138,9 @@ let state = {
 
 const GH_REPO = "adrianloh10/resit-inbox";
 
-/* Public cloud receipt reader (Cloudflare Worker). Empty until deployed — when
-   empty, the app simply uses on-device OCR only (nothing changes). After deploy
-   (see resit/cloud/DEPLOY.md) paste the Worker URL here. A user-set "advanced"
-   override URL in Settings takes precedence, so it can be tested before baking
-   the URL in. */
+/* Public cloud receipt reader (Cloudflare Worker) — see resit/cloud/DEPLOY.md.
+   HARD-PINNED below (cloudEndpoint()); there is no Settings override for this
+   anymore — see that function's own comment for why. */
 const CLOUD_OCR_URL = "https://resit.adrianloh10.workers.dev";
 /* The cloud endpoint is HARD-PINNED to our Worker — never a stored override.
    (A restored backup could otherwise plant an arbitrary aiUrl and exfiltrate
@@ -275,10 +281,15 @@ const FREE_SCANS_PER_DAY = 1;
 const AD_SCANS_PER_DAY = 4;   /* scans 2-5, one rewarded ad each */
 const PAY_URL = "";
 const PRICE_LABEL = "RM 6.99 / month or RM 79 / year";
-/* Local-time day key (toISOString would flip the day near midnight UTC+8). */
+/* LOCAL date/time strings — never toISOString() (UTC), which would flip the
+   day near midnight MYT (UTC+8). Shared by every place that needs a
+   YYYY-MM-DD / HH:MM string built from a Date: the daily quota key, an
+   incoming cloud-merge date, and the confirm sheet's date/time fields all
+   used to hand-roll this same formula independently. */
+function localDateStr(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function localTimeStr(d) { return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
 function todayKey() {
-  const d = new Date();
-  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  return localDateStr(new Date());
 }
 /* Pro: paid entitlement — or a PROVEN owner install. ghProven is only set
    after the token successfully reads the owner's PRIVATE inbox repo (a random
@@ -562,7 +573,7 @@ async function applyClaudeResult(data) {
   }
   if (data.merchant && String(data.merchant).length >= 2) {
     const b = brandOf(normMerchant(data.merchant));
-    const preferred = state.merchantNames[b] || SEED_RULES.names[b];
+    const preferred = safeGet(state.merchantNames, b) || safeGet(SEED_RULES.names, b);
     e.merchant = preferred || String(data.merchant).slice(0, 60);
   }
   if (isRealCategory(data.category)) e.category = data.category;
@@ -667,7 +678,8 @@ function brandOf(norm) {
 function learnedCategory(merchant) {
   const n = normMerchant(merchant);
   if (!n) return null;
-  if (state.merchantCats[n]) return state.merchantCats[n];
+  const known = safeGet(state.merchantCats, n);
+  if (known) return known;
   const brand = brandOf(n);
   for (const [k, v] of Object.entries(state.merchantCats)) {
     if (k.length >= 4 && (n.includes(k) || k.includes(n))) return v;
@@ -689,13 +701,13 @@ function rememberMerchantCategory(merchant, category) {
 function rememberMerchantScope(merchant, scope) {
   const b = brandOf(normMerchant(merchant));
   if (!b || b.length < 3 || !allScopes().includes(scope)) return;
-  const cur = state.merchantScopes[b];
+  const cur = safeGet(state.merchantScopes, b);
   state.merchantScopes[b] = cur && cur.scope === scope ? { scope, n: cur.n + 1 } : { scope, n: 1 };
   DB.setSetting("merchantScopes", state.merchantScopes);
 }
 
 function scopeRuleFor(merchant) {
-  const rule = state.merchantScopes[brandOf(normMerchant(merchant || ""))];
+  const rule = safeGet(state.merchantScopes, brandOf(normMerchant(merchant || "")));
   return rule && rule.n >= 2 && allScopes().includes(rule.scope) ? rule.scope : null;
 }
 
@@ -708,6 +720,23 @@ function scopeRuleFor(merchant) {
    - the name you prefer for this shop
    - which line of this shop's receipts carries the real total */
 
+/* Shared by learnFromCorrections (a user-confirmed total) and learnFromAI
+   (a cloud-confirmed total): find the receipt line carrying this amount
+   and pull a keyword out of it, to remember where THIS shop prints its
+   total. Returns null if no matching line, or the keyword's too short. */
+function extractHintKeyword(rawText, amount) {
+  if (!rawText || !(amount > 0)) return null;
+  const f = amount.toFixed(2);
+  const variants = [f, f.replace(".", " "), f.replace(".", ","), f.replace(/\.00$/, "")];
+  let hintLine = null;
+  for (const line of rawText.split("\n")) {
+    if (variants.some(v => v && line.includes(v))) { hintLine = line; break; }
+  }
+  if (!hintLine) return null;
+  const kw = (hintLine.match(/[A-Za-z][A-Za-z .]{3,24}/) || [""])[0].trim().toLowerCase();
+  return kw.length >= 4 ? kw : null;
+}
+
 function learnFromCorrections(e, record) {
   if (!e.fromReceipt) return;
   const parsedBrand = brandOf(normMerchant(e._parsedMerchant || ""));
@@ -716,26 +745,18 @@ function learnFromCorrections(e, record) {
     DB.setSetting("merchantNames", state.merchantNames);
   }
   if (e._rawText && record.amount > 0 && Math.abs((e._parsedTotal || 0) - record.amount) > 0.005) {
-    const f = record.amount.toFixed(2);
-    const variants = [f, f.replace(".", " "), f.replace(".", ","), f.replace(/\.00$/, "")];
-    let hintLine = null;
-    for (const line of e._rawText.split("\n")) {
-      if (variants.some(v => v && line.includes(v))) { hintLine = line; break; }
-    }
-    if (hintLine && parsedBrand.length >= 3) {
-      const kw = (hintLine.match(/[A-Za-z][A-Za-z .]{3,24}/) || [""])[0].trim().toLowerCase();
-      if (kw.length >= 4) {
-        state.totalHints[parsedBrand] = kw;
-        DB.setSetting("totalHints", state.totalHints);
-        toast("Noted — Recap now knows where " + (record.merchant || "this shop") + " prints its total");
-      }
+    const kw = extractHintKeyword(e._rawText, record.amount);
+    if (kw && parsedBrand.length >= 3) {
+      state.totalHints[parsedBrand] = kw;
+      DB.setSetting("totalHints", state.totalHints);
+      toast("Noted — Recap now knows where " + (record.merchant || "this shop") + " prints its total");
     }
   }
 }
 
 function applyLearnedTotalHint(parsed) {
   const brand = brandOf(normMerchant(parsed.merchant || ""));
-  const hint = state.totalHints[brand] || SEED_RULES.hints[brand];
+  const hint = safeGet(state.totalHints, brand) || safeGet(SEED_RULES.hints, brand);
   if (!hint || !parsed.rawText) return;
   const line = parsed.rawText.split("\n").find(l => l.toLowerCase().includes(hint));
   if (!line) return;
@@ -758,7 +779,7 @@ function learnFromAI(rawText, ai, localTotal, localMerchant) {
   const localBrand = brandOf(normMerchant(localMerchant || ""));
   const aiBrand = brandOf(normMerchant(ai.merchant || ""));
   /* 1. The OCR's garbled shop name now maps to the AI's clean one. */
-  if (localBrand.length >= 3 && ai.merchant && ai.merchant.length >= 2 && !state.merchantNames[localBrand]) {
+  if (localBrand.length >= 3 && ai.merchant && ai.merchant.length >= 2 && !safeGet(state.merchantNames, localBrand)) {
     state.merchantNames[localBrand] = ai.merchant;
     DB.setSetting("merchantNames", state.merchantNames);
     /* Stage this AI-derived name mapping for the shared pool. clean is ALWAYS
@@ -767,8 +788,8 @@ function learnFromAI(rawText, ai, localTotal, localMerchant) {
     queueSharedRule(localBrand, ai.merchant, "");
   }
   /* 2. Category rule for the shop (a later user correction overwrites it). */
-  if (ai.merchant && ai.category && CATS.some(c => c.name === ai.category) &&
-      !state.merchantCats[normMerchant(ai.merchant)]) {
+  if (ai.merchant && isRealCategory(ai.category) &&
+      !safeGet(state.merchantCats, normMerchant(ai.merchant))) {
     rememberMerchantCategory(ai.merchant, ai.category);
   }
   /* 3. The core lesson: find the OCR line carrying the AI's total and keep
@@ -777,18 +798,11 @@ function learnFromAI(rawText, ai, localTotal, localMerchant) {
      OCR's (possibly garbled) name. */
   if (!(ai.total > 0)) return;
   if (localTotal !== null && Math.abs(localTotal - ai.total) <= 0.005) return; /* on-device already had it */
-  const f = ai.total.toFixed(2);
-  const variants = [f, f.replace(".", " "), f.replace(".", ","), f.replace(/\.00$/, "")];
-  let hintLine = null;
-  for (const line of rawText.split("\n")) {
-    if (variants.some(v => v && line.includes(v))) { hintLine = line; break; }
-  }
-  if (!hintLine) return;
-  const kw = (hintLine.match(/[A-Za-z][A-Za-z .]{3,24}/) || [""])[0].trim().toLowerCase();
-  if (kw.length < 4) return;
+  const kw = extractHintKeyword(rawText, ai.total);
+  if (!kw) return;
   let saved = false;
   for (const b of new Set([aiBrand, localBrand])) {
-    if (b.length >= 3 && !state.totalHints[b]) { state.totalHints[b] = kw; saved = true; }
+    if (b.length >= 3 && !safeGet(state.totalHints, b)) { state.totalHints[b] = kw; saved = true; }
   }
   if (saved) DB.setSetting("totalHints", state.totalHints);
   /* Stage the AI-derived total-line keyword for the pool, keyed by the OCR
@@ -825,7 +839,7 @@ function viewedMonth() {
    sites; it no longer changes anything). */
 /* Profile country -> the locale used for every date/number format. */
 const COUNTRY_LOCALES = { MY: "en-MY", SG: "en-SG", ID: "id-ID", TH: "th-TH", PH: "en-PH", VN: "vi-VN", BN: "ms-BN", IN: "en-IN", AU: "en-AU", GB: "en-GB", US: "en-US", OT: "en-MY" };
-function appLocale() { return COUNTRY_LOCALES[state.country] || "en-MY"; }
+function appLocale() { return safeGet(COUNTRY_LOCALES, state.country) || "en-MY"; }
 
 function fmtRM(n, _withSign) {
   const s = (Math.round(n * 100) / 100).toLocaleString(appLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1493,7 +1507,7 @@ function renderInsights() {
     const g = byBrand[b] = byBrand[b] || { amt: 0, n: 0, name: e.merchant || "Unnamed", last: 0 };
     g.amt += e.amount; g.n++;
     const t = new Date(e.date).getTime();
-    if (t >= g.last) { g.last = t; g.name = state.merchantNames[b] || SEED_RULES.names[b] || e.merchant || "Unnamed"; }
+    if (t >= g.last) { g.last = t; g.name = safeGet(state.merchantNames, b) || safeGet(SEED_RULES.names, b) || e.merchant || "Unnamed"; }
   }
   const merchants = Object.values(byBrand).sort((a, b) => b.amt - a.amt).slice(0, 5);
 
@@ -2084,8 +2098,8 @@ function applyCloudToOpenSheet(scanId, cloudDraft, painted) {
   if (dEl && tEl && dEl.value === painted.date && tEl.value === painted.time && cloudDraft.date) {
     const cd = new Date(cloudDraft.date);
     if (!isNaN(cd)) {
-      const ds = cd.getFullYear() + "-" + String(cd.getMonth() + 1).padStart(2, "0") + "-" + String(cd.getDate()).padStart(2, "0");
-      const ts = String(cd.getHours()).padStart(2, "0") + ":" + String(cd.getMinutes()).padStart(2, "0");
+      const ds = localDateStr(cd);
+      const ts = localTimeStr(cd);
       if (dEl.value !== ds || tEl.value !== ts) { dEl.value = ds; tEl.value = ts; changed = true; }
       e.date = cloudDraft.date;
       painted.date = dEl.value; painted.time = tEl.value;
@@ -2315,7 +2329,7 @@ function mergeAIResult(parsed, ai) {
     parsed.totalConf = 3;
   }
   if (ai.merchant && ai.merchant.length >= 2) parsed.merchant = ai.merchant;
-  if (ai.category && CATS.some(c => c.name === ai.category)) parsed.category = ai.category;
+  if (isRealCategory(ai.category)) parsed.category = ai.category;
   if (ai.date) {
     const m = String(ai.date).match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (m) {
@@ -2639,7 +2653,13 @@ async function handleImageLocalFirst(file, preScope, preScopeTouched) {
     if (cancelled()) return;
     if (stillCurrent()) state.scanning = false;
     renderHome();
-    const usable = !!(parsed.total || parsed.merchant || (parsed.items && parsed.items.length));
+    /* usableParsed() (also used by the raced/cloudFirst path) trims merchant
+       before checking it — this used to reimplement the same bar without
+       the trim, so a whitespace-only merchant (e.g. a 2-space cloud-AI
+       reply, mergeAIResult has no trim check either) charged the daily
+       scan and painted "Scan complete" here but NOT on the raced path,
+       for the identical parse result. */
+    const usable = usableParsed(parsed);
     if (usable) {
       if (stillCurrent()) completeScanPill("Scan complete ✓");
     } else {
@@ -3223,7 +3243,7 @@ function parsedToDraft(parsed) {
   else if (!parsed.date) { /* keep now */ }
   else { const now = new Date(); d.setHours(now.getHours(), now.getMinutes(), 0, 0); }
   const brand = brandOf(normMerchant(parsed.merchant || ""));
-  const preferredName = state.merchantNames[brand] || SEED_RULES.names[brand];
+  const preferredName = safeGet(state.merchantNames, brand) || safeGet(SEED_RULES.names, brand);
   return {
     id: null,
     amount: parsed.total || null,
@@ -3283,10 +3303,8 @@ function openConfirmSheet(expense) {
       .map(([n]) => `<option value="${escapeHtml(n)}">`).join("");
   }
   const d = new Date(e.date);
-  /* LOCAL date, not toISOString() (UTC) — an expense logged 00:00-07:59 MYT
-     would otherwise show (and silently resave as) the previous day. */
-  $("confirm-date").value = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-  $("confirm-time").value = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+  $("confirm-date").value = localDateStr(d);
+  $("confirm-time").value = localTimeStr(d);
   $("confirm-note").value = e.note || "";
 
   renderScopeChips();
@@ -3628,6 +3646,18 @@ function filteredExpenses(f) {
   return list.sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
+/* CSV/Excel formula-injection guard (CWE-1236): merchant/note/item text can
+   come from OCR/cloud-AI reads of a receipt photo (an explicitly untrusted
+   source — see the card-slip guard) or a restored backup file. A value
+   starting with =, +, -, or @ is interpreted as a live formula by Excel/
+   Sheets on open, not as a text label — CSV's own quoting only escapes the
+   delimiter, it does nothing to stop formula evaluation. A leading
+   apostrophe forces text and is the standard mitigation. */
+function csvSafe(v) {
+  const s = String(v == null ? "" : v);
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+
 function expenseExportRecords(f) {
   return filteredExpenses(f)
     .map(e => {
@@ -3636,13 +3666,13 @@ function expenseExportRecords(f) {
       return {
         date: d.toLocaleDateString(appLocale()),
         time: d.toTimeString().slice(0, 5),
-        merchant: e.merchant || "",
+        merchant: csvSafe(e.merchant || ""),
         category: e.category || "",
         type: scopeOf(e),
         claim: e.claimStatus === "to-claim" ? "To claim" : e.claimStatus === "claimed" ? "Claimed" : "",
         amount,
-        note: e.note || "",
-        items: (e.items || []).map(i => `${(i && i.name) || ""} ${(Number(i && i.price) || 0).toFixed(2)}`.trim()).join("; ")
+        note: csvSafe(e.note || ""),
+        items: csvSafe((e.items || []).map(i => `${(i && i.name) || ""} ${(Number(i && i.price) || 0).toFixed(2)}`.trim()).join("; "))
       };
     });
 }
@@ -4617,8 +4647,10 @@ async function init() {
       toast("Could not reach GitHub — check your connection");
     }
   });
-  /* (The legacy custom-relay fields were removed from Advanced; a stored
-     aiUrl override is still honoured by cloudEndpoint() for old installs.) */
+  /* (The legacy custom-relay/aiUrl override fields were removed from Advanced
+     — cloudEndpoint() is hard-pinned, see its own comment. state.aiUrl/
+     aiSecret are only kept around as dead state so a very old install's
+     stored values don't error out on load; nothing reads them.) */
   on("cloud-toggle", async () => {
     state.cloudConsent = state.cloudConsent === "yes" ? "no" : "yes";
     await DB.setSetting("cloudConsent", state.cloudConsent);
@@ -4652,7 +4684,16 @@ async function init() {
   });
   $("erase-data").addEventListener("click", async () => {
     if (!confirm("Erase all expenses and settings? This cannot be undone.")) return;
-    await DB.eraseAll();
+    try {
+      await DB.eraseAll();
+    } catch (e) {
+      /* IndexedDB rolls the transaction back on error (same guarantee
+         importBackup's equivalent full-store rewrite relies on) — tell the
+         user explicitly instead of leaving them on Settings with no
+         feedback after confirming a destructive action. */
+      toast("Erase failed — your data is unchanged");
+      return;
+    }
     /* Reload for a truly clean slate — resetting state field-by-field here
        kept drifting out of date as new state was added. */
     location.reload();

@@ -59,7 +59,7 @@ then the app just uses on-device reading and nothing changes.
 
 ## Step 6 — Hand the URL back
 1. Copy your Worker URL — it looks like
-   **`https://resit-relay.<your-subdomain>.workers.dev`**.
+   **`https://resit.<your-subdomain>.workers.dev`** (matches `name = "resit"` in `wrangler.toml`).
 2. Either:
    - **Tell Claude the URL** and it will bake it into the app (`CLOUD_OCR_URL`)
      so it's on for everyone, **or**

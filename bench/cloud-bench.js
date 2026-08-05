@@ -62,8 +62,15 @@
         try {
           const blob = await fetchBlob(BASE + id + ".jpg");
           const truth = await fetchJson(BASE + id + ".json");
+          /* Restore immediately after the call, not just once at job end —
+             state.deviceId used to sit at this synthetic value for the
+             ENTIRE ~5.5s inter-request sleep too, not just the cloudRead()
+             call itself, so a real scan performed in the same tab while a
+             multi-minute bench job was still running could get its own
+             quota/license check misattributed to this fake id. */
+          let ai;
           state.deviceId = "gemini-refrow-" + id;
-          const ai = await cloudRead(blob);
+          try { ai = await cloudRead(blob); } finally { state.deviceId = savedDeviceId; }
           const latencyMs = Date.now() - t0;
 
           const truthYmd = window.OcrBench.parseTruthDate(truth.date);

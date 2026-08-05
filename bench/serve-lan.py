@@ -23,7 +23,13 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8906
 
 class CorsHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # Only https://localhost (the debug APK's WebView origin, per the
+        # docstring above) actually needs to read these responses. A bare
+        # "*" let ANY origin's JS fetch() and read this server's files while
+        # it's running (it binds 0.0.0.0, i.e. LAN-wide, not just loopback)
+        # -- receipt test photos + truth data, not otherwise public (Phase
+        # 13 review, 2026-08-05).
+        self.send_header("Access-Control-Allow-Origin", "https://localhost")
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
 

@@ -91,10 +91,17 @@ async function readWithGemini(env, image, mediaType) {
   const model = env.GEMINI_MODEL || "gemini-3.5-flash-lite";
   try {
     const r = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + env.GEMINI_API_KEY,
+      "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        /* Key via header, not the ?key= query string — a query-string secret
+           is one Cloudflare Logpush/Trace/observability toggle (a config
+           change, not a code change) away from landing in access logs;
+           Google's API supports this header as a documented alternative
+           (Phase 13 review, 2026-08-05). No logging is enabled today (the
+           file's only console.* calls never emit the URL), so this is
+           defense-in-depth, not a fix for an active leak. */
+        headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
           contents: [{
@@ -314,6 +321,29 @@ function safeEqual(a, b) {
   return diff === 0;
 }
 
+/* The PRO_UNLOCK-gated endpoints (rulesExport, diagModels, diagProbe,
+   /mint, /revoke, /unlock) compared the caller's code against the secret
+   with safeEqual (good, constant-time) but nothing ever counted or
+   throttled repeated failed attempts — unlike the receipt-reader path, a
+   wrong guess cost nothing, so the secret could be brute-forced at
+   whatever rate the caller wanted (found in Phase 13's full review,
+   2026-08-05). Reuses the reader path's own rate-limit table, keyed
+   per-IP and per-bucket-label so one endpoint's traffic can't starve
+   another's budget. Fails OPEN on a DB error (same policy as the reader's
+   rate limit) so a database hiccup can't lock the owner out of their own
+   admin tools. */
+async function adminRateLimited(request, env, label, cap) {
+  if (!env.DB) return false;
+  try {
+    await ensureRateTable(env.DB);
+    const ip = request.headers.get("CF-Connecting-IP") || "noip";
+    const key = "admin:" + label + ":" + ip.slice(0, 64);
+    if (await rateLimited(env.DB, key, cap)) return true;
+    await bumpRate(env.DB, key);
+    return false;
+  } catch (e) { return false; }
+}
+
 /* ---- Shared learning pool (no personal data) ----
    Devices that opted into cloud reading AND sharing upload, at most weekly, the
    AI-derived rules their on-device reader learned from a cloud read: an OCR
@@ -346,6 +376,7 @@ function isoYearWeek(date) {
    Gated exactly like /unlock (wrong/absent code -> the same "Invalid code"
    403). Returns the last N weeks (default 2), ordered by seen DESC. */
 async function rulesExport(request, env, cors) {
+  if (await adminRateLimited(request, env, "owner", 5)) return json({ error: "Too many attempts — try again in a minute" }, 429, cors);
   const url = new URL(request.url);
   const code = (url.searchParams.get("code") || "").trim();
   if (!env.PRO_UNLOCK || !safeEqual(code, env.PRO_UNLOCK)) return json({ error: "Invalid code" }, 403, cors);
@@ -370,12 +401,13 @@ async function rulesExport(request, env, cors) {
    guessed from docs). Same gate as /rules/export; never returns the key
    itself. Diagnostic tool born from the 2026-07-24 502 incident. */
 async function diagModels(request, env, cors) {
+  if (await adminRateLimited(request, env, "owner", 5)) return json({ error: "Too many attempts — try again in a minute" }, 429, cors);
   const url = new URL(request.url);
   const code = (url.searchParams.get("code") || "").trim();
   if (!env.PRO_UNLOCK || !safeEqual(code, env.PRO_UNLOCK)) return json({ error: "Invalid code" }, 403, cors);
   if (!env.GEMINI_API_KEY) return json({ error: "No Gemini key configured" }, 500, cors);
   try {
-    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + env.GEMINI_API_KEY);
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models", { headers: { "x-goog-api-key": env.GEMINI_API_KEY } });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
       return json({ ok: false, keyValid: false, status: r.status, detail: data && data.error ? data.error.message : "" }, 200, cors);
@@ -403,6 +435,7 @@ const PROBE_IMAGE = "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQ
    but 404'd on generateContent). This fires one real, capped call per
    candidate and reports the true per-model status. */
 async function diagProbe(request, env, cors) {
+  if (await adminRateLimited(request, env, "owner", 5)) return json({ error: "Too many attempts — try again in a minute" }, 429, cors);
   const url = new URL(request.url);
   const code = (url.searchParams.get("code") || "").trim();
   if (!env.PRO_UNLOCK || !safeEqual(code, env.PRO_UNLOCK)) return json({ error: "Invalid code" }, 403, cors);
@@ -415,10 +448,10 @@ async function diagProbe(request, env, cors) {
   for (const m of candidates) {
     try {
       const r = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/" + m + ":generateContent?key=" + env.GEMINI_API_KEY,
+        "https://generativelanguage.googleapis.com/v1beta/models/" + m + ":generateContent",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
           body: JSON.stringify({
             contents: [{ parts: [{ inline_data: { mime_type: "image/jpeg", data: PROBE_IMAGE } }, { text: "What color is this image? One word." }] }],
             generationConfig: { maxOutputTokens: 20 }
@@ -451,7 +484,7 @@ export default {
       if (gpath.endsWith("/rules/export")) return rulesExport(request, env, cors);
       if (gpath.endsWith("/diag/models")) return diagModels(request, env, cors);
       if (gpath.endsWith("/diag/probe")) return diagProbe(request, env, cors);
-      return json({ ok: true, service: "resit-relay" }, 200, cors);
+      return json({ ok: true, service: "resit" }, 200, cors);
     }
     if (request.method !== "POST") return json({ error: "POST only" }, 405, cors);
 
@@ -465,6 +498,7 @@ export default {
        allowed" before ever reaching the real auth check (found live,
        2026-07-24, minting a key via the documented PowerShell snippet). */
     if (path.endsWith("/mint") || path.endsWith("/revoke")) {
+      if (await adminRateLimited(request, env, "owner", 5)) return json({ error: "Too many attempts — try again in a minute" }, 429, cors);
       let u;
       try { u = await request.json(); } catch (e) { return json({ error: "Bad request" }, 400, cors); }
       if (!env.PRO_UNLOCK || !u || !safeEqual(u.secret, env.PRO_UNLOCK)) return json({ error: "Not allowed" }, 403, cors);
@@ -488,6 +522,14 @@ export default {
        manual migration is ever needed. The PRO_UNLOCK secret itself also still
        works as the owner's master code. */
     if (path.endsWith("/unlock")) {
+      /* /unlock also serves real license-key redemption/re-verification
+         (see comment above), not just the owner's master code, so it gets
+         the reader path's own more generous per-minute cap rather than the
+         strict owner-only one used by /mint, /revoke, and the diag/export
+         endpoints — enough to stop brute-forcing PRO_UNLOCK without
+         throttling a real customer re-checking their key. */
+      if (await adminRateLimited(request, env, "unlock", parseInt(env.RATE_LIMIT_PER_MIN || "10", 10)))
+        return json({ error: "Too many attempts — try again in a minute" }, 429, cors);
       let u;
       try { u = await request.json(); } catch (e) { return json({ error: "Bad request" }, 400, cors); }
       const code = u && typeof u.code === "string" ? u.code.trim() : "";
@@ -570,15 +612,22 @@ export default {
       if (!ok) return json({ error: "Couldn't verify you're human — reload and try again" }, 403, cors);
     }
 
-    /* Quota key: prefer the caller's deviceId, but ALWAYS fall back to the
-       Cloudflare edge IP (which the client cannot forge) so omitting or
-       rotating deviceId can't mint unlimited reads and run up the bill
-       (security review, 1.9.0). */
+    /* Quota keys: ALWAYS check/bump the Cloudflare edge IP (which the client
+       cannot forge) as a hard backstop, in ADDITION to the caller's deviceId
+       when present — not instead of it. This comment used to claim IP was
+       "ALWAYS" the fallback, but the code only used it when deviceId was
+       ABSENT, not when it was rotated: a script could send a freshly-random
+       deviceId on every request and land in a brand-new zero-count bucket
+       every time, evading both the rate limit and the daily cap entirely
+       from one IP (found in Phase 13's full review, 2026-08-05 — the
+       previous behavior contradicted this comment's own stated intent).
+       A request is now blocked if EITHER key is over its cap; a successful
+       read bumps both. */
     let quota = null; /* set only when a successful read should be counted */
     if (env.DB) {
       const ip = request.headers.get("CF-Connecting-IP") || "noip";
-      const key = (deviceId && typeof deviceId === "string" && deviceId.trim())
-        ? "d:" + deviceId.slice(0, 64) : "ip:" + ip.slice(0, 64);
+      const keys = ["ip:" + ip.slice(0, 64)];
+      if (deviceId && typeof deviceId === "string" && deviceId.trim()) keys.push("d:" + deviceId.slice(0, 64));
       /* Rate limit first (cheap burst guard, checked before the cost-tracking
          daily cap): a device tripping this recovers within a minute, so it
          gets its own `code` — the app stays silent on this one rather than
@@ -586,16 +635,18 @@ export default {
       const rateCap = parseInt(env.RATE_LIMIT_PER_MIN || "10", 10);
       try {
         await ensureRateTable(env.DB);
-        if (await rateLimited(env.DB, key, rateCap))
-          return json({ error: "Reading too fast — reading on-device for a moment", code: "rate_limited" }, 429, cors);
-        await bumpRate(env.DB, key);
+        let blocked = false;
+        for (const k of keys) { if (await rateLimited(env.DB, k, rateCap)) { blocked = true; break; } }
+        if (blocked) return json({ error: "Reading too fast — reading on-device for a moment", code: "rate_limited" }, 429, cors);
+        for (const k of keys) await bumpRate(env.DB, k);
       } catch (e) { /* rate table missing/erroring must not block reading */ }
 
       const cap = parseInt(env.DAILY_CAP || "30", 10);
       try {
-        if (await quotaExceeded(env.DB, key, cap))
-          return json({ error: "Daily limit reached — read on-device or enter it manually", code: "daily_cap" }, 429, cors);
-        quota = { db: env.DB, id: key };
+        let overCap = false;
+        for (const k of keys) { if (await quotaExceeded(env.DB, k, cap)) { overCap = true; break; } }
+        if (overCap) return json({ error: "Daily limit reached — read on-device or enter it manually", code: "daily_cap" }, 429, cors);
+        quota = { db: env.DB, ids: keys };
       } catch (e) { /* quota table missing/erroring must not block reading */ }
     }
 
@@ -606,14 +657,14 @@ export default {
     if (env.GEMINI_API_KEY) {
       primary = await readWithGemini(env, image, mt);
       if (primary.ok) {
-        if (quota) try { await bumpQuota(quota.db, quota.id); } catch (e) {}
+        if (quota) try { for (const k of quota.ids) await bumpQuota(quota.db, k); } catch (e) {}
         return json(primary.result, 200, cors);
       }
     }
     if (fallbackConfigured(env)) {
       const fb = await readWithFallback(env, image, mt);
       if (fb.ok) {
-        if (quota) try { await bumpQuota(quota.db, quota.id); } catch (e) {}
+        if (quota) try { for (const k of quota.ids) await bumpQuota(quota.db, k); } catch (e) {}
         return json(fb.result, 200, cors);
       }
     }
