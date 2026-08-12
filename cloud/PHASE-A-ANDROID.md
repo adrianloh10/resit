@@ -11,8 +11,20 @@ built in the cloud (no Mac, no Node on your PC). iOS is Phase B, later.
 - A cloud-AI disclosure on the cloud-read consent screen (store requirement; the privacy notice names the provider).
 - Worker now allows the native app's origin (`https://localhost`, `capacitor://localhost`).
 
+- `assets/` — the launcher-icon and splash SOURCES the cloud build feeds to
+  `@capacitor/assets` (regenerate with `python tools/make-native-assets.py`).
+
 > Note: the native Android project (`android/`) and `node_modules/` are **not** in the
 > repo on purpose — the cloud build generates them fresh each time.
+
+> **Why `assets/` matters (learned the hard way, Aug 2026).** Those five files were
+> missing, and the build step that turns them into launcher icons ended in
+> `|| echo "skipped icon generation"` — so it failed silently on every build and the
+> app shipped Capacitor's **default blue icon**. Google Play rejected the app for it
+> ("Misleading Claims → app store listing mismatch": the installed icon didn't match
+> the store listing). The step now fails the build instead of shipping the wrong icon.
+> If you ever change the app icon, change `icons/icon-512.png` (which is also the Play
+> listing icon), re-run the script above, and commit `assets/`.
 
 ## Your steps (the account / money parts only you can do)
 
