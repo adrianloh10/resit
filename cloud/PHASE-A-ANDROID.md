@@ -11,20 +11,30 @@ built in the cloud (no Mac, no Node on your PC). iOS is Phase B, later.
 - A cloud-AI disclosure on the cloud-read consent screen (store requirement; the privacy notice names the provider).
 - Worker now allows the native app's origin (`https://localhost`, `capacitor://localhost`).
 
-- `assets/` — the launcher-icon and splash SOURCES the cloud build feeds to
-  `@capacitor/assets` (regenerate with `python tools/make-native-assets.py`).
+- `android-res/` — the finished launcher icons and splash screens, pre-rendered and
+  committed (regenerate with `python tools/make-native-assets.py`). The build copies
+  them into the generated project.
 
 > Note: the native Android project (`android/`) and `node_modules/` are **not** in the
 > repo on purpose — the cloud build generates them fresh each time.
 
-> **Why `assets/` matters (learned the hard way, Aug 2026).** Those five files were
-> missing, and the build step that turns them into launcher icons ended in
-> `|| echo "skipped icon generation"` — so it failed silently on every build and the
-> app shipped Capacitor's **default blue icon**. Google Play rejected the app for it
-> ("Misleading Claims → app store listing mismatch": the installed icon didn't match
-> the store listing). The step now fails the build instead of shipping the wrong icon.
-> If you ever change the app icon, change `icons/icon-512.png` (which is also the Play
-> listing icon), re-run the script above, and commit `assets/`.
+> **Why `android-res/` exists (learned the hard way, Aug 2026).** The build used to
+> generate the icons during the build, with `npx @capacitor/assets generate --android
+> || echo "skipped icon generation"`. Two separate disasters came out of that. First,
+> its source images were never committed, so it failed on every build and the `||`
+> hid the failure — the app shipped Capacitor's **default blue icon** and Google Play
+> rejected it ("Misleading Claims → app store listing mismatch": the installed icon
+> didn't match the store listing). Second, that tool drags in an image library
+> (`sharp`) that compiles native code during `npm install`; on 13 Aug 2026 it failed
+> to build on the cloud Mac and killed the whole build before it reached any icons.
+> So the icons are now rendered on Adrian's PC, committed as ordinary files, and the
+> build just copies them — nothing to download, nothing to compile, and the exact
+> bytes can be checked before they ship. The build also compares the copied files
+> byte-for-byte and fails if any is missing.
+>
+> **If you ever change the app icon:** replace `icons/icon-512.png` and
+> `icons/icon-maskable-512.png` (the first is also the Play listing icon), re-run
+> `python tools/make-native-assets.py`, and commit `android-res/`.
 
 ## Your steps (the account / money parts only you can do)
 

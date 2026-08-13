@@ -3,10 +3,11 @@
 # produces an installable APK. The web app is copied into www/ and wrapped by
 # Capacitor; the native android/ project is generated fresh each build.
 #
-# The launcher icon and splash come from the committed `assets/` sources
-# (icon-only / icon-foreground / icon-background / splash / splash-dark),
-# regenerate them with `python tools/make-native-assets.py`. They are NOT the
-# same files as `icons/` — those are the web PWA's icons.
+# The launcher icon and splash are PRE-RENDERED and committed in `android-res/`
+# (regenerate with `python tools/make-native-assets.py`, then commit). The build
+# copies that folder over the generated project's res/ — no image library is
+# installed in CI. `icons/` is separate: those are the web PWA's icons, and they
+# are what android-res/ is derived from.
 #
 # Two workflows:
 #  - "Resit Android (debug)"          -> sideloadable APK for testing
@@ -62,22 +63,41 @@ workflows:
           # sticks around as hand-edited source; android-release never runs
           # this sed.
           sed -i '' 's/android:supportsRtl="true"/android:supportsRtl="true" android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
-      - name: Generate app icons + splash (must succeed)
+      - name: Apply the Recap launcher icon + splash
         script: |
-          # This step used to end in `|| echo "skipped icon generation"` with no
-          # assets/ sources in the repo, so it silently no-oped on every build
-          # and the app shipped Capacitor's DEFAULT blue launcher icon. Google
-          # Play rejected it (Misleading Claims -> "App store listing mismatch":
-          # installed icon differs from the store listing). A failure here must
-          # now break the build instead of shipping the wrong icon.
-          test -f assets/icon-only.png || { echo "assets/ sources are missing - run tools/make-native-assets.py and commit them"; exit 1; }
-          # Delete the template's placeholder launcher icons FIRST: if the
-          # generator ever writes nothing again, Gradle fails loudly on the
-          # missing resource instead of quietly reusing the default icon.
-          rm -f android/app/src/main/res/mipmap-*/ic_launcher*.png
-          npx @capacitor/assets generate --android
-          test -f android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || { echo "icon generation produced no launcher icons"; exit 1; }
-          ls -l android/app/src/main/res/mipmap-xxxhdpi/
+          # The launcher icons and splash are pre-rendered and committed in
+          # android-res/ (see tools/make-native-assets.py). They used to be
+          # generated here by `npx @capacitor/assets generate --android ||
+          # echo "skipped icon generation"`, which went wrong twice over:
+          #  (a) its source images were never committed, so it failed on every
+          #      build and the `||` hid it — the app shipped Capacitor's DEFAULT
+          #      blue icon and Google Play REJECTED it ("Misleading Claims ->
+          #      app store listing mismatch");
+          #  (b) @capacitor/assets pulls in `sharp`, whose native build broke
+          #      `npm install` outright on the macOS builder (13 Aug 2026).
+          # Copying committed files needs no image library, no download and no
+          # compiler, and the bytes can be reviewed before they ship.
+          RES=android/app/src/main/res
+          test -d android-res || { echo "android-res/ is missing - run tools/make-native-assets.py and commit it"; exit 1; }
+          # File-by-file, not `cp -R android-res/. $RES/` — BSD cp nests a
+          # source directory INSIDE an existing destination directory of the
+          # same name instead of merging into it.
+          find android-res -type f | while read -r src; do
+            rel="${src#android-res/}"
+            mkdir -p "$RES/$(dirname "$rel")"
+            cp "$src" "$RES/$rel"
+          done
+          # Prove it landed. A silent no-op at this exact step is what got the
+          # app rejected, so compare bytes rather than trusting the copy.
+          for f in mipmap-mdpi/ic_launcher.png mipmap-hdpi/ic_launcher.png \
+                   mipmap-xhdpi/ic_launcher.png mipmap-xxhdpi/ic_launcher.png \
+                   mipmap-xxxhdpi/ic_launcher.png mipmap-xxxhdpi/ic_launcher_round.png \
+                   mipmap-xxxhdpi/ic_launcher_foreground.png \
+                   values/ic_launcher_background.xml drawable/splash.png; do
+            cmp "android-res/$f" "$RES/$f" || { echo "launcher resource was NOT applied: $f"; exit 1; }
+          done
+          grep -q '4A2E1B' "$RES/values/ic_launcher_background.xml" || { echo "adaptive-icon background colour was not applied"; exit 1; }
+          echo "Recap launcher icon + splash applied to all five densities."
       - name: Verify target API level (Play requires 36+)
         script: |
           # Play blocks updates that target below API 36 from 31 Aug 2026. The
@@ -117,22 +137,41 @@ workflows:
           npm install
           npx cap add android
           npx cap sync android
-      - name: Generate app icons + splash (must succeed)
+      - name: Apply the Recap launcher icon + splash
         script: |
-          # This step used to end in `|| echo "skipped icon generation"` with no
-          # assets/ sources in the repo, so it silently no-oped on every build
-          # and the app shipped Capacitor's DEFAULT blue launcher icon. Google
-          # Play rejected it (Misleading Claims -> "App store listing mismatch":
-          # installed icon differs from the store listing). A failure here must
-          # now break the build instead of shipping the wrong icon.
-          test -f assets/icon-only.png || { echo "assets/ sources are missing - run tools/make-native-assets.py and commit them"; exit 1; }
-          # Delete the template's placeholder launcher icons FIRST: if the
-          # generator ever writes nothing again, Gradle fails loudly on the
-          # missing resource instead of quietly reusing the default icon.
-          rm -f android/app/src/main/res/mipmap-*/ic_launcher*.png
-          npx @capacitor/assets generate --android
-          test -f android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || { echo "icon generation produced no launcher icons"; exit 1; }
-          ls -l android/app/src/main/res/mipmap-xxxhdpi/
+          # The launcher icons and splash are pre-rendered and committed in
+          # android-res/ (see tools/make-native-assets.py). They used to be
+          # generated here by `npx @capacitor/assets generate --android ||
+          # echo "skipped icon generation"`, which went wrong twice over:
+          #  (a) its source images were never committed, so it failed on every
+          #      build and the `||` hid it — the app shipped Capacitor's DEFAULT
+          #      blue icon and Google Play REJECTED it ("Misleading Claims ->
+          #      app store listing mismatch");
+          #  (b) @capacitor/assets pulls in `sharp`, whose native build broke
+          #      `npm install` outright on the macOS builder (13 Aug 2026).
+          # Copying committed files needs no image library, no download and no
+          # compiler, and the bytes can be reviewed before they ship.
+          RES=android/app/src/main/res
+          test -d android-res || { echo "android-res/ is missing - run tools/make-native-assets.py and commit it"; exit 1; }
+          # File-by-file, not `cp -R android-res/. $RES/` — BSD cp nests a
+          # source directory INSIDE an existing destination directory of the
+          # same name instead of merging into it.
+          find android-res -type f | while read -r src; do
+            rel="${src#android-res/}"
+            mkdir -p "$RES/$(dirname "$rel")"
+            cp "$src" "$RES/$rel"
+          done
+          # Prove it landed. A silent no-op at this exact step is what got the
+          # app rejected, so compare bytes rather than trusting the copy.
+          for f in mipmap-mdpi/ic_launcher.png mipmap-hdpi/ic_launcher.png \
+                   mipmap-xhdpi/ic_launcher.png mipmap-xxhdpi/ic_launcher.png \
+                   mipmap-xxxhdpi/ic_launcher.png mipmap-xxxhdpi/ic_launcher_round.png \
+                   mipmap-xxxhdpi/ic_launcher_foreground.png \
+                   values/ic_launcher_background.xml drawable/splash.png; do
+            cmp "android-res/$f" "$RES/$f" || { echo "launcher resource was NOT applied: $f"; exit 1; }
+          done
+          grep -q '4A2E1B' "$RES/values/ic_launcher_background.xml" || { echo "adaptive-icon background colour was not applied"; exit 1; }
+          echo "Recap launcher icon + splash applied to all five densities."
       - name: Verify target API level (Play requires 36+)
         script: |
           # Play blocks updates that target below API 36 from 31 Aug 2026. The
