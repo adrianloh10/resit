@@ -285,23 +285,25 @@ const PAY_URL = "";  /* WEB PWA ONLY — the Play build never opens it (Payments
 const PRICE_LABEL = "RM 6.99 / month or RM 79 / year";
 /* Play Billing (Android, via RevenueCat — Phase 18). REVENUECAT_ANDROID_API_KEY
    is the PUBLIC SDK key from the RevenueCat dashboard (Project settings > API
-   keys > Google Play Store) — safe to embed client-side; it can only start a
-   purchase, never grant entitlement by itself (RevenueCat verifies every
-   purchase server-side against Google Play). REVENUECAT_ENTITLEMENT_ID must
-   match the entitlement identifier configured in that same dashboard. Both
-   stay empty/default until Adrian finishes the RevenueCat + Play Console
-   setup — billingConfigured() keeps every native billing call inert
-   until then, same convention as PAY_URL above.
+   keys > Google Play Store; RevenueCat project "Recap", app
+   com.promaxdigita.recap, issued 15 Aug 2026) — safe to embed client-side;
+   it can only start a purchase, never grant entitlement by itself
+   (RevenueCat verifies every purchase server-side against Google Play).
+   REVENUECAT_ENTITLEMENT_ID must match the entitlement identifier configured
+   in that same dashboard. billingConfigured() keeps every native billing
+   call inert while the key is empty, same convention as PAY_URL above.
    PLAY_SUBSCRIPTION_ID is the Play Console subscription product id (ONE
    subscription "pro" with monthly + annual base plans — STORE-LISTING §8);
-   it only feeds the "Manage subscription" deep link. PLAY_BILLING_LIVE is
-   what the WEB copy keys off — never isNative() — so the PWA can't advertise
-   an Android purchase the shipped Play build doesn't have yet. */
-const REVENUECAT_ANDROID_API_KEY = "";
+   it only feeds the "Manage subscription" deep link.
+   PLAY_BILLING_LIVE is a MANUAL switch, deliberately not derived from the
+   key: it drives the WEB copy ("Get Pro in the Android app") and must flip
+   to true only once the Play release that sells Pro is in PRODUCTION —
+   the key is present in internal-testing builds long before that. */
+const REVENUECAT_ANDROID_API_KEY = "goog_KtDxtNEiIsvzipVNzuhQkOcFhEi";
 const REVENUECAT_ENTITLEMENT_ID = "pro";
 const PLAY_SUBSCRIPTION_ID = "pro";
 const ANDROID_PACKAGE_ID = "com.promaxdigita.recap";
-const PLAY_BILLING_LIVE = !!REVENUECAT_ANDROID_API_KEY;
+const PLAY_BILLING_LIVE = false; /* flip to true when the billing build reaches Play production (web-only effect) */
 function billingConfigured() { return isNative() && !!REVENUECAT_ANDROID_API_KEY; }
 /* LOCAL date/time strings — never toISOString() (UTC), which would flip the
    day near midnight MYT (UTC+8). Shared by every place that needs a
