@@ -63,6 +63,24 @@ workflows:
           # sticks around as hand-edited source; android-release never runs
           # this sed.
           sed -i '' 's/android:supportsRtl="true"/android:supportsRtl="true" android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
+      - name: Play Billing prerequisites (RevenueCat, Phase 18)
+        script: |
+          # RevenueCat's Capacitor guide: the Activity's launchMode must be
+          # "standard" or "singleTop" — Capacitor's template uses "singleTask",
+          # and with that, backgrounding the app mid-purchase can CANCEL the
+          # purchase. That is the normal case in Malaysia: the Play sheet hands
+          # off to a banking app for FPX / 3-D Secure approval. android/ is
+          # regenerated every build, so patch the generated manifest here and
+          # prove it landed (a silent no-op is how the icon bug shipped).
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i '' 's/android:launchMode="singleTask"/android:launchMode="singleTop"/' "$M"
+          grep -q 'android:launchMode="singleTop"' "$M" || { echo "launchMode patch did not apply - Capacitor's android template changed; check $M"; exit 1; }
+          # The com.android.vending.BILLING permission arrives by manifest
+          # merger from RevenueCat -> Play Billing Library; Play Console needs
+          # a build carrying it before Subscriptions can be created. Prove the
+          # plugin is actually wired into this Android project.
+          grep -q 'purchases-capacitor' android/capacitor.settings.gradle || { echo "@revenuecat/purchases-capacitor is not in the Android project - was it dropped from package.json?"; exit 1; }
+          echo "launchMode=singleTop applied; RevenueCat plugin present (brings the Play Billing permission)."
       - name: Apply the Recap launcher icon + splash
         script: |
           # The launcher icons and splash are pre-rendered and committed in
@@ -137,6 +155,19 @@ workflows:
           npm install
           npx cap add android
           npx cap sync android
+      - name: Play Billing prerequisites (RevenueCat, Phase 18)
+        script: |
+          # Same as the debug workflow — see the comment there. RevenueCat
+          # requires launchMode standard/singleTop (Capacitor's template uses
+          # singleTask, which can cancel a purchase when the Play sheet hands
+          # off to a banking app for FPX / 3-D Secure), and the Play Billing
+          # permission must be in the merged manifest of this .aab for Play
+          # Console to unlock the Subscriptions page.
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i '' 's/android:launchMode="singleTask"/android:launchMode="singleTop"/' "$M"
+          grep -q 'android:launchMode="singleTop"' "$M" || { echo "launchMode patch did not apply - Capacitor's android template changed; check $M"; exit 1; }
+          grep -q 'purchases-capacitor' android/capacitor.settings.gradle || { echo "@revenuecat/purchases-capacitor is not in the Android project - was it dropped from package.json?"; exit 1; }
+          echo "launchMode=singleTop applied; RevenueCat plugin present (brings the Play Billing permission)."
       - name: Apply the Recap launcher icon + splash
         script: |
           # The launcher icons and splash are pre-rendered and committed in

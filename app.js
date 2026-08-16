@@ -97,6 +97,8 @@ let state = {
   cloudConsent: "",  /* "", "yes", "no" — explicit opt-in for cloud reading */
   pro: false,        /* Pro entitlement (unlimited cloud reads) */
   ghProven: false,   /* ghToken verified against the private inbox repo */
+  playEntitled: false, /* Play Billing entitlement via RevenueCat (Phase 18) — device-local, never exported */
+  playManageUrl: "",   /* Play's manage-subscription URL from RevenueCat customer info — session-only, has a static fallback */
   skipResults: [],   /* deleted-while-pending expenses whose results to discard */
   shareQueue: [],    /* outbox: AI-derived {garbled,clean,hint} rules staged for the weekly pool upload */
   shareRules: "",    /* "" | "yes" = share (default on when cloud consent is on), "no" = never share */
@@ -279,8 +281,30 @@ const SEED_RULES = {
    up a payment account; until then the upgrade button shows "coming soon". */
 const FREE_SCANS_PER_DAY = 1;
 const AD_SCANS_PER_DAY = 4;   /* scans 2-5, one rewarded ad each */
-const PAY_URL = "";
+const PAY_URL = "";  /* WEB PWA ONLY — the Play build never opens it (Payments policy) */
 const PRICE_LABEL = "RM 6.99 / month or RM 79 / year";
+/* Play Billing (Android, via RevenueCat — Phase 18). REVENUECAT_ANDROID_API_KEY
+   is the PUBLIC SDK key from the RevenueCat dashboard (Project settings > API
+   keys > Google Play Store; RevenueCat project "Recap", app
+   com.promaxdigita.recap, issued 15 Aug 2026) — safe to embed client-side;
+   it can only start a purchase, never grant entitlement by itself
+   (RevenueCat verifies every purchase server-side against Google Play).
+   REVENUECAT_ENTITLEMENT_ID must match the entitlement identifier configured
+   in that same dashboard. billingConfigured() keeps every native billing
+   call inert while the key is empty, same convention as PAY_URL above.
+   PLAY_SUBSCRIPTION_ID is the Play Console subscription product id (ONE
+   subscription "pro" with monthly + annual base plans — STORE-LISTING §8);
+   it only feeds the "Manage subscription" deep link.
+   PLAY_BILLING_LIVE is a MANUAL switch, deliberately not derived from the
+   key: it drives the WEB copy ("Get Pro in the Android app") and must flip
+   to true only once the Play release that sells Pro is in PRODUCTION —
+   the key is present in internal-testing builds long before that. */
+const REVENUECAT_ANDROID_API_KEY = "goog_KtDxtNEiIsvzipVNzuhQkOcFhEi";
+const REVENUECAT_ENTITLEMENT_ID = "pro";
+const PLAY_SUBSCRIPTION_ID = "pro";
+const ANDROID_PACKAGE_ID = "com.promaxdigita.recap";
+const PLAY_BILLING_LIVE = false; /* flip to true when the billing build reaches Play production (web-only effect) */
+function billingConfigured() { return isNative() && !!REVENUECAT_ANDROID_API_KEY; }
 /* LOCAL date/time strings — never toISOString() (UTC), which would flip the
    day near midnight MYT (UTC+8). Shared by every place that needs a
    YYYY-MM-DD / HH:MM string built from a Date: the daily quota key, an
@@ -295,7 +319,7 @@ function todayKey() {
    after the token successfully reads the owner's PRIVATE inbox repo (a random
    string gets 401, a stranger's own PAT gets 404), so pasting text into the
    token field cannot unlock Pro. */
-function isPro() { return !!state.pro || !!state.ghProven; }
+function isPro() { return !!state.pro || !!state.ghProven || !!state.playEntitled; }
 function scansToday() { return state.scanDay === todayKey() ? (state.scanCount || 0) : 0; }
 function scanAllowed() { return isPro() || scansToday() < FREE_SCANS_PER_DAY; }
 /* Charge-site check (as opposed to scanAllowed(), which gates whether a NEW
@@ -337,7 +361,37 @@ function showUpgrade(reason) {
   const ov = $("upgrade-overlay");
   if (!ov) return;
   const r = $("upgrade-reason"); if (r) r.textContent = reason || "";
-  const p = $("upgrade-price"); if (p) p.textContent = PRICE_LABEL;
+  const p = $("upgrade-price"); if (p) { p.textContent = PRICE_LABEL; p.hidden = false; }
+  const buy = $("upgrade-buy"), buyYearly = $("upgrade-buy-yearly"), restore = $("upgrade-restore"), terms = $("upgrade-terms");
+  const show = (el, on) => { if (el) el.hidden = !on; };
+  if (billingReady()) {
+    /* Android with Play Billing: primary CTA = monthly (trial if this Google
+       account is eligible), secondary = yearly, plus Restore. Static labels
+       paint first; refreshUpgradeOffer() then swaps in the REAL Play prices
+       and trial length from the offering (localized, eligibility-aware) —
+       Play's subscription policy wants the in-app copy to match the cart. */
+    if (buy) buy.textContent = "Go Pro";
+    if (buyYearly) buyYearly.textContent = "or RM 79 / year";
+    if (terms) terms.textContent = "Subscription auto-renews until cancelled in Google Play → Subscriptions. Cancel any time.";
+    show(buy, true); show(buyYearly, true); show(restore, true); show(terms, true);
+    refreshUpgradeOffer();
+  } else if (isNative()) {
+    /* Play build WITHOUT a working Play purchase (dormant key, plugin missing,
+       configure failed offline). Play Payments policy: never point at an
+       outside checkout, never mention one, and don't show a price we can't
+       sell at — so no CTA, no price line, just a neutral note. Redeem-a-code
+       stays (an entitlement check, not a purchase path). */
+    show(buy, false); show(buyYearly, false); show(restore, false); if (p) p.hidden = true;
+    if (terms) terms.textContent = billingConfigured()
+      ? "Google Play purchases aren't available right now — check your connection and try again later."
+      : "Pro subscriptions are coming to Google Play soon.";
+    show(terms, true);
+  } else {
+    /* Web PWA: web checkout if wired; otherwise point at the Android app only
+       once the shipped Play build really sells Pro; otherwise "coming soon". */
+    if (buy) buy.textContent = PAY_URL ? "Go Pro" : PLAY_BILLING_LIVE ? "Get Pro in the Android app" : "Go Pro";
+    show(buy, true); show(buyYearly, false); show(restore, false); show(terms, false);
+  }
   ov.hidden = false;
 }
 
@@ -369,11 +423,181 @@ async function unlockPro() {
   } catch (e) { toast("Couldn't verify the code"); }
 }
 
+/* Play Billing via RevenueCat (Phase 18, Android only — the web PWA keeps
+   the PAY_URL/license-key paths above; Play policy requires in-app digital
+   goods sold inside an Android app to go through Play Billing). isPro()
+   ORs this in. window.Capacitor.Plugins.Purchases is the RevenueCat
+   Capacitor plugin's real native registration name (verified against its
+   source: @CapacitorPlugin(name = "Purchases")) — same window.Capacitor.
+   Plugins.X pattern as this file's existing Camera/Filesystem/Share calls,
+   not an ES import (this app has no bundler to resolve one). */
+function billingReady() {
+  return billingConfigured() && !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases);
+}
+function rcPlugin() { return window.Capacitor.Plugins.Purchases; }
+/* Error codes the plugin puts on e.code — as STRINGS, because Capacitor's
+   reject(message, code, data) stringifies them; e.data carries RevenueCat's
+   info map ({userCancelled, readableErrorCode, …}). Verified against
+   purchases-capacitor 13.4.0 / purchases-hybrid-common 18.29.0. */
+const RC_ERR = { CANCELLED: "1", ALREADY_IN_PROGRESS: "15", PAYMENT_PENDING: "20" };
+function rcCode(e) { return e && e.code != null ? String(e.code) : ""; }
+function rcCancelled(e) { return rcCode(e) === RC_ERR.CANCELLED || !!(e && e.data && e.data.userCancelled); }
+let _billingConfigured = false, _billingInit = null, _billingBusy = false;
+async function initBilling() {
+  if (!billingReady() || _billingConfigured) return;
+  if (_billingInit) return _billingInit;
+  _billingInit = (async () => {
+    try {
+      /* configure() is a fire-and-forget native method (RETURN_NONE) — the
+         await resolves before native runs — but plugin calls are FIFO on one
+         native thread and configure is synchronous, so isConfigured() right
+         after tells the truth. */
+      await rcPlugin().configure({ apiKey: REVENUECAT_ANDROID_API_KEY });
+      let ok = true;
+      try { const r = await rcPlugin().isConfigured(); ok = !r || r.isConfigured !== false; } catch (e) {}
+      if (!ok) return;
+      _billingConfigured = true;
+      /* Push channel: the SDK calls this with the current info on
+         registration and again after every background refresh, renewal,
+         expiry, refund or pending-payment completion. It is what downgrades a
+         lapsed subscriber while the app stays resident, and what lights Pro
+         up when a pending Play payment clears. Callback-style plugin method
+         (RETURN_CALLBACK): (options, callback); the payload is the
+         CustomerInfo map itself (not wrapped) — applyCustomerInfo accepts
+         either shape. */
+      try { rcPlugin().addCustomerInfoUpdateListener({}, info => { if (info) applyCustomerInfo(info); }); } catch (e) {}
+      await refreshPlayEntitlement();
+    } catch (e) { /* offline or misconfigured — keep the last persisted entitlement; the next call retries */ }
+    finally { _billingInit = null; }
+  })();
+  return _billingInit;
+}
+async function ensureBilling() {
+  if (!billingReady()) return false;
+  if (!_billingConfigured) await initBilling();
+  return _billingConfigured;
+}
+/* Single writer for state.playEntitled — from getCustomerInfo, from a
+   purchase/restore result, or from the update listener. Only entitlements in
+   `.active` count (the SDK computes activity against expiry, so a lapsed
+   subscription drops out even from cache). Also remembers Play's
+   management URL for the Settings link. */
+async function applyCustomerInfo(payload) {
+  const ci = payload && payload.customerInfo ? payload.customerInfo : payload;
+  const ent = ci && ci.entitlements && ci.entitlements.active && ci.entitlements.active[REVENUECAT_ENTITLEMENT_ID];
+  const active = !!ent;
+  if (ci && typeof ci.managementURL === "string") state.playManageUrl = ci.managementURL;
+  if (active !== state.playEntitled) {
+    state.playEntitled = active;
+    await DB.setSetting("playEntitled", active);
+    refreshProUi();
+  } else if (state.view === "settings") renderPlan();
+  return active;
+}
+/* Re-reads the Play entitlement (SDK cache first, background refresh —
+   whose result then arrives through the update listener). Called on launch,
+   on every foreground, after purchase and after restore. */
+async function refreshPlayEntitlement() {
+  if (!(await ensureBilling())) return !!state.playEntitled;
+  try { const { customerInfo } = await rcPlugin().getCustomerInfo(); return await applyCustomerInfo(customerInfo); }
+  catch (e) { return !!state.playEntitled; } /* network hiccup — never downgrade a real subscriber on an error */
+}
+/* Everything that draws Pro-vs-free: the ledger's claim pills/owed line, the
+   Insights radar teaser, Settings' plan card, and the sheet itself. */
+function refreshProUi() {
+  renderPlan();
+  if (state.view === "home") renderHome();
+  else if (state.view === "insights") renderInsights();
+  const ov = $("upgrade-overlay");
+  if (ov && !ov.hidden && isPro()) ov.hidden = true;
+}
+function playManageUrl() {
+  return state.playManageUrl || ("https://play.google.com/store/account/subscriptions?sku=" + PLAY_SUBSCRIPTION_ID + "&package=" + ANDROID_PACKAGE_ID);
+}
+function setUpgradeBusy(on) {
+  for (const id of ["upgrade-buy", "upgrade-buy-yearly", "upgrade-restore", "plan-restore"]) { const el = $(id); if (el) el.disabled = on; }
+}
+/* Pull the real offer into the sheet: Play-localized prices and, only when
+   THIS Google account is eligible (Play omits offers it isn't eligible for),
+   the free-trial length. defaultOption is what purchasePackage buys — the
+   longest eligible free trial, else the base plan. Falls back to the static
+   labels on any hiccup. */
+async function refreshUpgradeOffer() {
+  if (!(await ensureBilling())) return;
+  try {
+    const offerings = await rcPlugin().getOfferings();
+    const cur = offerings && offerings.current;
+    const ov = $("upgrade-overlay");
+    if (!cur || !ov || ov.hidden) return;
+    const m = cur.monthly, a = cur.annual;
+    const price = pkg => (pkg && pkg.product && pkg.product.priceString) || "";
+    const trialDays = pkg => {
+      const ph = pkg && pkg.product && pkg.product.defaultOption && pkg.product.defaultOption.freePhase;
+      const bp = ph && ph.billingPeriod; if (!bp) return 0;
+      const v = Number(bp.value) || 0;
+      return bp.unit === "DAY" ? v : bp.unit === "WEEK" ? v * 7 : bp.unit === "MONTH" ? v * 30 : bp.unit === "YEAR" ? v * 365 : 0;
+    };
+    const buy = $("upgrade-buy"), buyYearly = $("upgrade-buy-yearly"), p = $("upgrade-price"), terms = $("upgrade-terms");
+    const mp = price(m), ap = price(a), mt = trialDays(m), at = trialDays(a);
+    if (buy && mp) buy.textContent = mt ? "Try Pro free for " + mt + " days" : "Go Pro — " + mp + " / month";
+    if (buyYearly) { if (a && ap) { buyYearly.textContent = "or " + ap + " / year" + (at ? " — " + at + " days free" : ""); buyYearly.hidden = false; } else buyYearly.hidden = true; }
+    if (p && mp) p.textContent = mp + " / month" + (ap ? " or " + ap + " / year" : "");
+    if (terms && mp) terms.textContent = (mt ? "Free for " + mt + " days, then " + mp + " / month" : mp + " / month") + (ap ? " (or " + ap + " / year)" : "") +
+      ". Auto-renews until cancelled in Google Play → Subscriptions. Cancel any time.";
+  } catch (e) { /* keep static labels */ }
+}
+/* plan: "monthly" | "annual" — the standard package types RevenueCat exposes
+   on the current offering (offerings.current.monthly / .annual). Trial terms
+   live in Play Console; the app honours whatever Play/RevenueCat report. */
+async function purchasePro(plan) {
+  if (_billingBusy) return;
+  if (!(await ensureBilling())) { toast(isNative() ? "Google Play isn't reachable — try again shortly" : "Play Billing isn't set up yet"); return; }
+  _billingBusy = true; setUpgradeBusy(true);
+  try {
+    const offerings = await rcPlugin().getOfferings();
+    const pkg = offerings && offerings.current && offerings.current[plan];
+    if (!pkg) { toast("That plan isn't available right now"); return; }
+    const res = await rcPlugin().purchasePackage({ aPackage: pkg });
+    /* Judge success by the PLAY entitlement itself, never isPro() — on the
+       owner install (ghProven) or a licence-key device isPro() is already
+       true and would mask a dashboard mismatch (entitlement id, product not
+       attached) that a real customer would then hit. */
+    let active = res && res.customerInfo ? await applyCustomerInfo(res.customerInfo) : false;
+    if (!active) active = await refreshPlayEntitlement();
+    if (active) {
+      const ov = $("upgrade-overlay"); if (ov) ov.hidden = true;
+      toast("Welcome to Pro — everything's unlocked");
+    } else {
+      toast("Paid, but Pro didn't unlock yet — tap Restore purchases in a minute");
+    }
+  } catch (e) {
+    const code = rcCode(e);
+    if (rcCancelled(e) || code === RC_ERR.ALREADY_IN_PROGRESS) return; /* closed the Play sheet / double-tap — silent */
+    if (code === RC_ERR.PAYMENT_PENDING) { /* cash / bank-transfer style payment: Play confirms later, the update listener unlocks Pro then */
+      const ov = $("upgrade-overlay"); if (ov) ov.hidden = true;
+      toast("Payment pending — Pro unlocks once Google confirms it"); return;
+    }
+    toast("Purchase didn't go through — try again");
+  } finally { _billingBusy = false; setUpgradeBusy(false); }
+}
+async function restorePlayPurchases() {
+  if (_billingBusy) return;
+  if (!(await ensureBilling())) { toast("Google Play isn't reachable — try again shortly"); return; }
+  _billingBusy = true; setUpgradeBusy(true);
+  try {
+    const res = await rcPlugin().restorePurchases();
+    const active = res && res.customerInfo ? await applyCustomerInfo(res.customerInfo) : await refreshPlayEntitlement();
+    if (active) { const ov = $("upgrade-overlay"); if (ov) ov.hidden = true; }
+    toast(active ? "Pro restored" : "No Recap Pro subscription on this Google account");
+  } catch (e) { toast("Couldn't check for previous purchases"); }
+  finally { _billingBusy = false; setUpgradeBusy(false); }
+}
+
 function renderPlan() {
   const status = $("plan-status");
   const btn = $("plan-btn");
   if (isPro()) {
-    if (status) status.textContent = "Pro — every limit removed. Thank you for backing Recap.";
+    if (status) status.textContent = (state.playEntitled ? "Pro via Google Play" : "Pro") + " — every limit removed. Thank you for backing Recap.";
     if (btn) btn.hidden = true;
   } else {
     if (status) status.textContent = "Free — " + FREE_SCANS_PER_DAY + " scanned receipt a day (" +
@@ -381,6 +605,14 @@ function renderPlan() {
       "Pro removes every limit.";
     if (btn) { btn.hidden = false; btn.textContent = "Upgrade to Pro"; }
   }
+  /* Play policy: an in-app way to manage/cancel the subscription (Play's
+     Subscription Center deep link). Restore stays reachable from Settings
+     whenever Play Billing exists — even on a device that is already Pro by
+     other means (owner install, licence key), which is also how the owner
+     exercises the wiring without a fresh install. */
+  const manage = $("plan-manage"), restore = $("plan-restore");
+  if (manage) { manage.hidden = !state.playEntitled; manage.href = playManageUrl(); }
+  if (restore) restore.hidden = !billingReady();
 }
 
 function ghHeaders() {
@@ -3738,7 +3970,7 @@ async function exportBackup() {
   const settingsAll = await DB.getAllSettings();
   /* Never export: secrets, the Pro entitlement (a shared backup file must not
      grant Pro), this device's identity, or transient counters. */
-  const SKIP = new Set(["ghToken", "aiSecret", "lastScan", "pro", "deviceId", "lastBackupAt", "backupNudgeSnooze", "licenseKey", "lastKeyCheck", "ghProven", "skipResults"]);
+  const SKIP = new Set(["ghToken", "aiSecret", "lastScan", "pro", "playEntitled", "deviceId", "lastBackupAt", "backupNudgeSnooze", "licenseKey", "lastKeyCheck", "ghProven", "skipResults"]);
   const settings = settingsAll.filter(s => s && s.key && !SKIP.has(s.key));
   const expenses = state.expenses.map(({ photo, ...rest }) => rest);
   const backup = { app: "recap", type: "backup", version: 1, exportedAt: new Date().toISOString(), expenses, settings };
@@ -3855,8 +4087,11 @@ async function importBackup(file) {
          able to plant a photo-exfil endpoint or silently pre-approve cloud
          reading (security review, 1.9.0). Also reject the device-local
          bookkeeping fields SKIP already keeps out of every legitimate
-         export, so a crafted file can't inject fake ones either. */
-      const REJECT = new Set(["pro", "deviceId", "ghToken", "aiSecret", "aiUrl", "cloudConsent", "licenseKey", "lastKeyCheck", "ghProven", "skipResults", "shareQueue", "shareRules", "lastRuleUpload", "lastBackupAt", "backupNudgeSnooze"]);
+         export, so a crafted file can't inject fake ones either — and
+         playEntitled (Phase 18), a shared backup file must not be able to
+         grant Play-billing Pro any more than the license-key/ghProven
+         fields above it. */
+      const REJECT = new Set(["pro", "playEntitled", "deviceId", "ghToken", "aiSecret", "aiUrl", "cloudConsent", "licenseKey", "lastKeyCheck", "ghProven", "skipResults", "shareQueue", "shareRules", "lastRuleUpload", "lastBackupAt", "backupNudgeSnooze"]);
       for (const s of data.settings) { if (s && s.key && !REJECT.has(s.key)) await DB.setSetting(s.key, s.value); }
       /* cloudConsent/shareRules are rejected above so a crafted backup can
          never silently switch them ON — but that also means a user's OWN
@@ -3989,6 +4224,7 @@ async function init() {
       await DB.setSetting("deviceId", state.deviceId);
     }
     state.pro = await DB.getSetting("pro", false);
+    state.playEntitled = await DB.getSetting("playEntitled", false);
     state.scanDay = await DB.getSetting("scanDay", "");
     state.scanCount = await DB.getSetting("scanCount", 0);
     state.quotaNoticeDay = await DB.getSetting("quotaNoticeDay", "");
@@ -4087,6 +4323,18 @@ async function init() {
       if (btn) btn.focus();
     }
   }
+
+  /* Play Billing (Phase 18): configure RevenueCat + re-check the entitlement.
+     Only AFTER the current terms are accepted — the SDK talks to RevenueCat's
+     servers the moment it's configured, and the notice/terms cover that. A
+     first-run user gets it from the eula-accept handler instead. Re-check on
+     every foreground too (a lapsed or refunded subscription downgrades within
+     the session; a pending payment that cleared unlocks). Inert on the web
+     and while the key is unset. */
+  if (!termsStale) initBilling();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && _billingConfigured) refreshPlayEntitlement();
+  });
 
   /* Ask the browser to protect our storage from eviction under storage
      pressure — the single most important line for "your data stays safe". */
@@ -4530,6 +4778,7 @@ async function init() {
     state.eulaAccepted = TERMS_VERSION + "|" + new Date().toISOString(); /* terms version | when */
     try { await DB.setSetting("eulaAccepted", state.eulaAccepted); }
     catch (e) {} /* storage broken → the gate simply returns next launch; never a dead button */
+    initBilling(); /* Play Billing waits for the terms (see init) — inert on web / unset key */
     const ov = $("setup-overlay");
     if (!ov || ov.dataset.mode === "terms") { finishSetup(); return; }
     const sc = $("setup-country"), scur = $("setup-currency");
@@ -4664,7 +4913,16 @@ async function init() {
     toast(state.shareRules === "no" ? "Sharing off — nothing leaves your phone" : "Thanks — sharing anonymous reading tips");
   });
   on("plan-btn", () => showUpgrade(""));
-  on("upgrade-buy", () => { if (PAY_URL) window.open(PAY_URL, "_blank", "noopener"); else toast("Online checkout is coming soon"); });
+  on("plan-restore", restorePlayPurchases);
+  on("upgrade-buy", () => {
+    /* Play build: Play Billing or nothing — Google's Payments policy forbids
+       any in-app pointer to an outside checkout, so PAY_URL is web-only. */
+    if (isNative()) { if (billingReady()) purchasePro("monthly"); return; }
+    if (PAY_URL) { window.open(PAY_URL, "_blank", "noopener"); return; }
+    toast(PLAY_BILLING_LIVE ? "Recap Pro is sold in the Android app on Google Play" : "Online checkout is coming soon");
+  });
+  on("upgrade-buy-yearly", () => purchasePro("annual"));
+  on("upgrade-restore", restorePlayPurchases);
   on("upgrade-code", unlockPro);
   on("upgrade-close", () => { const ov = $("upgrade-overlay"); if (ov) ov.hidden = true; });
   on("upgrade-overlay", ev => { if (ev.target === $("upgrade-overlay")) $("upgrade-overlay").hidden = true; });
