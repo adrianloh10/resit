@@ -446,6 +446,7 @@ html[data-theme="dark"] .acct-tag.t-company { background: rgba(208, 106, 78, .18
 }
 .ghost-btn.danger { color: var(--sienna-red); border-color: var(--sienna-red); }
 .ghost-btn.small { padding: 8px 18px; font-size: 12.5px; margin-top: 16px; }
+a.ghost-btn { display: inline-block; text-decoration: none; text-align: center; box-sizing: border-box; } /* link styled as a ghost button (Settings → Manage subscription) */
 .settings-note { font-size: 12px; color: var(--muted); line-height: 1.6; text-align: center; margin-top: 10px; }
 .settings-link {
   background: none; border: none; color: var(--muted); font-size: 12px;
