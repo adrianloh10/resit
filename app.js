@@ -365,15 +365,17 @@ function showUpgrade(reason) {
   const buy = $("upgrade-buy"), buyYearly = $("upgrade-buy-yearly"), restore = $("upgrade-restore"), terms = $("upgrade-terms");
   const show = (el, on) => { if (el) el.hidden = !on; };
   if (billingReady()) {
-    /* Android with Play Billing: primary CTA = monthly (trial if this Google
-       account is eligible), secondary = yearly, plus Restore. Static labels
-       paint first; refreshUpgradeOffer() then swaps in the REAL Play prices
-       and trial length from the offering (localized, eligibility-aware) —
-       Play's subscription policy wants the in-app copy to match the cart. */
-    if (buy) buy.textContent = "Go Pro";
-    if (buyYearly) buyYearly.textContent = "or RM 79 / year";
+    /* Android with Play Billing: a primary CTA + a secondary plan line +
+       Restore. If an offering was already fetched this session, paint it
+       synchronously (no monthly-first flash on reopen); otherwise static
+       labels first. Either way refreshUpgradeOffer() re-fetches the REAL
+       Play prices/trial (localized, eligibility-aware) and repaints. Each
+       button remembers its plan in data-plan; the click handlers read it. */
+    if (buy) { buy.textContent = "Go Pro"; buy.dataset.plan = "monthly"; }
+    if (buyYearly) { buyYearly.textContent = "or RM 79 / year"; buyYearly.dataset.plan = "annual"; }
     if (terms) terms.textContent = "Subscription auto-renews until cancelled in Google Play → Subscriptions. Cancel any time.";
     show(buy, true); show(buyYearly, true); show(restore, true); show(terms, true);
+    if (_lastOffering) paintUpgradeOffer(_lastOffering);
     refreshUpgradeOffer();
   } else if (isNative()) {
     /* Play build WITHOUT a working Play purchase (dormant key, plugin missing,
@@ -517,34 +519,73 @@ function playManageUrl() {
 function setUpgradeBusy(on) {
   for (const id of ["upgrade-buy", "upgrade-buy-yearly", "upgrade-restore", "plan-restore"]) { const el = $(id); if (el) el.disabled = on; }
 }
-/* Pull the real offer into the sheet: Play-localized prices and, only when
-   THIS Google account is eligible (Play omits offers it isn't eligible for),
-   the free-trial length. defaultOption is what purchasePackage buys — the
-   longest eligible free trial, else the base plan. Falls back to the static
-   labels on any hiccup. */
+/* Paint the sheet from a RevenueCat offering: Play-localized prices and,
+   only when THIS Google account is eligible (Play omits offers it isn't
+   eligible for), the free-trial length. defaultOption is what
+   purchasePackage buys — the longest eligible free trial, else the base
+   plan. Which plan leads: the one carrying the trial when exactly one does
+   (Play Console: trial on annual only, 16 Aug 2026), else monthly; a plan
+   that isn't in the offering can never be the primary. Both plans stay
+   visible with their own price; an annual plan is never shown as a
+   per-month figure; the trial button names its plan and the post-trial
+   price on its face; the terms line names both plans separately (Play
+   subscriptions policy: trial length, price after, period, auto-renew,
+   how to cancel — in the offer, not just small print). */
+let _lastOffering = null;
+function paintUpgradeOffer(cur) {
+  const buy = $("upgrade-buy"), buyYearly = $("upgrade-buy-yearly"), p = $("upgrade-price"), terms = $("upgrade-terms");
+  const price = pkg => (pkg && pkg.product && pkg.product.priceString) || "";
+  const trialDays = pkg => {
+    const ph = pkg && pkg.product && pkg.product.defaultOption && pkg.product.defaultOption.freePhase;
+    const bp = ph && ph.billingPeriod; if (!bp) return 0;
+    const v = Number(bp.value) || 0;
+    return bp.unit === "DAY" ? v : bp.unit === "WEEK" ? v * 7 : bp.unit === "MONTH" ? v * 30 : bp.unit === "YEAR" ? v * 365 : 0;
+  };
+  const mk = (pkg, per, label) => ({ ok: !!(pkg && price(pkg)), price: price(pkg), trial: trialDays(pkg), per, label });
+  const plans = { monthly: mk(cur && cur.monthly, "month", "Monthly"), annual: mk(cur && cur.annual, "year", "Annual") };
+  let primary = "monthly", secondary = "annual";
+  if (!plans.monthly.ok || (plans.annual.ok && plans.annual.trial && !plans.monthly.trial)) { primary = "annual"; secondary = "monthly"; }
+  const P = plans[primary], S = plans[secondary];
+  if (!P.ok) { /* offering has neither package (dashboard not finished) — no dead buttons */
+    if (buy) buy.hidden = true;
+    if (buyYearly) buyYearly.hidden = true;
+    if (p) p.hidden = true;
+    if (terms) { terms.textContent = "Pro plans aren't available right now — please try again later."; terms.hidden = false; }
+    return;
+  }
+  if (buy) {
+    buy.dataset.plan = primary;
+    buy.textContent = P.trial ? "Try Pro free for " + P.trial + " days — then " + P.price + " / " + P.per : "Go Pro — " + P.price + " / " + P.per;
+    buy.hidden = false;
+  }
+  if (buyYearly) {
+    if (S.ok) {
+      buyYearly.dataset.plan = secondary;
+      buyYearly.textContent = "or " + S.price + " / " + S.per + (S.trial ? " — " + S.trial + " days free" : P.trial ? " (no free trial)" : "");
+      buyYearly.hidden = false;
+    } else buyYearly.hidden = true;
+  }
+  if (p) {
+    const parts = [plans.monthly.ok && plans.monthly.price + " / month", plans.annual.ok && plans.annual.price + " / year"].filter(Boolean);
+    p.textContent = parts.join(" or "); p.hidden = false;
+  }
+  if (terms) {
+    const line = x => x.label + ": " + (x.trial ? "free for " + x.trial + " days, then " + x.price + " / " + x.per : x.price + " / " + x.per + (P.trial || S.trial ? ", no free trial" : "")) + ".";
+    terms.textContent = line(P) + (S.ok ? " " + line(S) : "") + " Auto-renews until cancelled in Google Play → Subscriptions. Cancel any time.";
+    terms.hidden = false;
+  }
+}
 async function refreshUpgradeOffer() {
   if (!(await ensureBilling())) return;
   try {
     const offerings = await rcPlugin().getOfferings();
     const cur = offerings && offerings.current;
+    if (!cur) return;
+    _lastOffering = cur; /* next showUpgrade paints this synchronously — no monthly-first flash on reopen */
     const ov = $("upgrade-overlay");
-    if (!cur || !ov || ov.hidden) return;
-    const m = cur.monthly, a = cur.annual;
-    const price = pkg => (pkg && pkg.product && pkg.product.priceString) || "";
-    const trialDays = pkg => {
-      const ph = pkg && pkg.product && pkg.product.defaultOption && pkg.product.defaultOption.freePhase;
-      const bp = ph && ph.billingPeriod; if (!bp) return 0;
-      const v = Number(bp.value) || 0;
-      return bp.unit === "DAY" ? v : bp.unit === "WEEK" ? v * 7 : bp.unit === "MONTH" ? v * 30 : bp.unit === "YEAR" ? v * 365 : 0;
-    };
-    const buy = $("upgrade-buy"), buyYearly = $("upgrade-buy-yearly"), p = $("upgrade-price"), terms = $("upgrade-terms");
-    const mp = price(m), ap = price(a), mt = trialDays(m), at = trialDays(a);
-    if (buy && mp) buy.textContent = mt ? "Try Pro free for " + mt + " days" : "Go Pro — " + mp + " / month";
-    if (buyYearly) { if (a && ap) { buyYearly.textContent = "or " + ap + " / year" + (at ? " — " + at + " days free" : ""); buyYearly.hidden = false; } else buyYearly.hidden = true; }
-    if (p && mp) p.textContent = mp + " / month" + (ap ? " or " + ap + " / year" : "");
-    if (terms && mp) terms.textContent = (mt ? "Free for " + mt + " days, then " + mp + " / month" : mp + " / month") + (ap ? " (or " + ap + " / year)" : "") +
-      ". Auto-renews until cancelled in Google Play → Subscriptions. Cancel any time.";
-  } catch (e) { /* keep static labels */ }
+    if (!ov || ov.hidden) return;
+    paintUpgradeOffer(cur);
+  } catch (e) { /* keep whatever is painted */ }
 }
 /* plan: "monthly" | "annual" — the standard package types RevenueCat exposes
    on the current offering (offerings.current.monthly / .annual). Trial terms
@@ -4917,11 +4958,11 @@ async function init() {
   on("upgrade-buy", () => {
     /* Play build: Play Billing or nothing — Google's Payments policy forbids
        any in-app pointer to an outside checkout, so PAY_URL is web-only. */
-    if (isNative()) { if (billingReady()) purchasePro("monthly"); return; }
+    if (isNative()) { if (billingReady()) purchasePro($("upgrade-buy").dataset.plan || "monthly"); return; }
     if (PAY_URL) { window.open(PAY_URL, "_blank", "noopener"); return; }
     toast(PLAY_BILLING_LIVE ? "Recap Pro is sold in the Android app on Google Play" : "Online checkout is coming soon");
   });
-  on("upgrade-buy-yearly", () => purchasePro("annual"));
+  on("upgrade-buy-yearly", () => purchasePro($("upgrade-buy-yearly").dataset.plan || "annual"));
   on("upgrade-restore", restorePlayPurchases);
   on("upgrade-code", unlockPro);
   on("upgrade-close", () => { const ov = $("upgrade-overlay"); if (ov) ov.hidden = true; });
