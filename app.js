@@ -1,7 +1,7 @@
 /* Recap — snap receipts, track spending. All data stays on-device. */
 
 const APP_VERSION = self.RESIT_VERSION || "v?"; /* set once in version.js; sw.js shares it */
-const TERMS_VERSION = "1.1"; /* bump when eula.html changes materially — the accept gate re-shows */
+const TERMS_VERSION = "1.2"; /* bump when eula.html changes materially — the accept gate re-shows */
 
 const $ = id => document.getElementById(id);
 /* sessionStorage can THROW when the user blocks site data — never let that
