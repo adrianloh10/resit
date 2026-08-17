@@ -282,7 +282,7 @@ const SEED_RULES = {
 const FREE_SCANS_PER_DAY = 1;
 const AD_SCANS_PER_DAY = 4;   /* scans 2-5, one rewarded ad each */
 const PAY_URL = "";  /* WEB PWA ONLY — the Play build never opens it (Payments policy) */
-const PRICE_LABEL = "RM 6.99 / month or RM 79 / year";
+const PRICE_LABEL = "USD 6.99 / month or USD 79 / year"; /* one worldwide price (17 Aug 2026); Play shows the local-currency equivalent live on Android */
 /* Play Billing (Android, via RevenueCat — Phase 18). REVENUECAT_ANDROID_API_KEY
    is the PUBLIC SDK key from the RevenueCat dashboard (Project settings > API
    keys > Google Play Store; RevenueCat project "Recap", app
@@ -372,7 +372,7 @@ function showUpgrade(reason) {
        Play prices/trial (localized, eligibility-aware) and repaints. Each
        button remembers its plan in data-plan; the click handlers read it. */
     if (buy) { buy.textContent = "Go Pro"; buy.dataset.plan = "monthly"; }
-    if (buyYearly) { buyYearly.textContent = "or RM 79 / year"; buyYearly.dataset.plan = "annual"; }
+    if (buyYearly) { buyYearly.textContent = "or USD 79 / year"; buyYearly.dataset.plan = "annual"; }
     if (terms) terms.textContent = "Subscription auto-renews until cancelled in Google Play → Subscriptions. Cancel any time.";
     show(buy, true); show(buyYearly, true); show(restore, true); show(terms, true);
     if (_lastOffering) paintUpgradeOffer(_lastOffering);
