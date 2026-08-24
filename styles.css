@@ -705,45 +705,58 @@ a.ghost-btn { display: inline-block; text-decoration: none; text-align: center; 
 .upgrade-list li::before { content: "✓"; position: absolute; left: 0; color: var(--sage); }
 .scope-pick-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
 
-/* Plan chooser (step 2 of the upgrade sheet). The card is the .chooser-btn
-   idiom — raised parchment, hairline border, 16px radius — split into a
-   tappable face and, once selected, the confirm button that actually starts
-   the Play purchase. The selected ring is an INSET shadow, not a thicker
-   border, so selecting a card never nudges the layout. */
-.plan-picker { margin-top: 14px; text-align: left; }
-.plan-picker-label { font-size: 12px; color: var(--muted); text-align: center; margin-bottom: 8px; }
-.plan-card {
-  background: var(--paper-raised); border: 0.5px solid var(--divider-soft);
-  border-radius: 16px; margin-bottom: 10px;
+/* Plan chooser — design-refresh mockup 05 (approved 24 Aug 2026), in the
+   mockup's own class names so the wider design-language pass extends these
+   rather than replacing them. Two radio-style cards, the selected one ringed
+   in teal; the ring is an inset shadow, not a thicker border, so selecting a
+   card never nudges the layout. */
+.plan-list { text-align: left; margin: 4px 0 2px; }
+.plan {
+  position: relative; display: flex; align-items: center; gap: 10px;
+  width: 100%; margin-bottom: 8px; padding: 12px 14px;
+  background: var(--paper-raised); border: 1.5px solid var(--divider-soft);
+  border-radius: 16px; cursor: pointer;
+  font-family: var(--sans); color: var(--ink); text-align: left;
 }
-.plan-card.selected { box-shadow: inset 0 0 0 1.5px var(--teal); border-color: var(--teal); }
-.plan-face {
-  display: block; width: 100%; padding: 14px 16px;
-  background: none; border: none; border-radius: 16px; cursor: pointer;
-  font-family: var(--sans); text-align: left; color: var(--ink);
+.plan.sel { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(17, 101, 95, .13); }
+html[data-theme="dark"] .plan.sel { box-shadow: 0 0 0 3px rgba(79, 167, 159, .18); }
+.plan .radio {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid var(--divider-soft); flex-shrink: 0;
 }
-.plan-row { display: flex; align-items: center; gap: 8px; }
-.plan-name { font-size: 14.5px; font-weight: 600; color: var(--ink); }
-/* Savings badge: the tinted-pill idiom of .batch-badge, in the same sage the
-   sheet already uses for its ✓ list. Computed live — never a fixed number. */
-.plan-badge {
-  font-size: 10px; font-weight: 800; letter-spacing: .04em; white-space: nowrap;
-  color: var(--sage); background: rgba(46, 107, 88, .12);
-  border-radius: 99px; padding: 3px 8px;
+.plan.sel .radio {
+  border-color: var(--teal);
+  background: radial-gradient(circle at center, var(--teal) 45%, transparent 50%);
 }
-html[data-theme="dark"] .plan-badge { background: rgba(111, 168, 147, .18); }
-.plan-tick { margin-left: auto; font-size: 13px; color: var(--teal); opacity: 0; }
-.plan-card.selected .plan-tick { opacity: 1; }
-.plan-price { display: block; font-family: var(--mono); font-size: 16px; color: var(--ink); margin-top: 5px; }
-.plan-trial { display: block; font-size: 12.5px; color: var(--sienna); margin-top: 5px; }
-.plan-go {
-  display: block; width: calc(100% - 24px); margin: 0 12px 12px;
-  background: var(--teal); color: var(--paper);
-  border: none; border-radius: 999px; padding: 13px;
-  font-size: 14.5px; font-weight: 500; font-family: var(--sans); cursor: pointer;
+.plan .ptx { min-width: 0; }
+.plan .pn { display: block; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.plan .pd { display: block; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.plan .pp {
+  margin-left: auto; text-align: right; flex-shrink: 0;
+  font-family: var(--mono); font-size: 13.5px; font-weight: 600; color: var(--ink);
 }
-.plan-go:active { transform: scale(0.985); }
-.plan-face:disabled, .plan-go:disabled { opacity: .55; }
+.plan .pp small {
+  display: block; font-family: var(--sans); font-size: 10px;
+  font-weight: 600; color: var(--muted);
+}
+.plan:disabled { opacity: .55; }
+/* Badges ride the card's top edge: teal = the free trial this Google account
+   is actually eligible for, gold = the computed annual saving. Both are
+   painted from the live offering, never hard-coded. */
+.bdg { position: absolute; top: -9px; right: 12px; display: flex; gap: 5px; }
+.bdg span {
+  font-size: 9px; font-weight: 800; letter-spacing: .06em; white-space: nowrap;
+  padding: 3px 8px; border-radius: 99px;
+}
+.bdg .trial { background: var(--teal); color: var(--paper); }
+.bdg .save { background: var(--gold); color: var(--paper); }
+/* The sheet's closing links, side by side instead of stacked buttons —
+   shared with the confirm sheet in the same mockup set. */
+.linkrow {
+  display: flex; justify-content: center; flex-wrap: wrap;
+  gap: 8px 18px; margin-top: 12px;
+}
+.linkrow .settings-link { padding: 2px 0; }
 
 /* ---------- Toast action + backup nudge ---------- */
 .toast-action {
@@ -833,3 +846,7 @@ html[data-theme="dark"] .plan-badge { background: rgba(111, 168, 147, .18); }
 .text-left { text-align: left !important; }
 .row--start { justify-content: flex-start !important; }
 .ghost-btn--plain { border: none !important; } /* the "skip/dismiss" ghost variant */
+/* Positive-primary CTA: teal instead of the default ink, per mockup 05.
+   A modifier rather than a change to .save-btn itself, so the confirm
+   sheet's Save button keeps the ink it ships with today. */
+.save-btn--primary { background: var(--teal) !important; }
