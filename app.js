@@ -362,19 +362,22 @@ function showUpgrade(reason) {
   if (!ov) return;
   const r = $("upgrade-reason"); if (r) r.textContent = reason || "";
   const p = $("upgrade-price"); if (p) { p.textContent = PRICE_LABEL; p.hidden = false; }
-  const buy = $("upgrade-buy"), buyYearly = $("upgrade-buy-yearly"), restore = $("upgrade-restore"), terms = $("upgrade-terms");
+  const buy = $("upgrade-buy"), picker = $("upgrade-plans"), restore = $("upgrade-restore"), terms = $("upgrade-terms");
   const show = (el, on) => { if (el) el.hidden = !on; };
+  /* The sheet always opens at step 1 — one CTA, no chooser, nothing
+     pre-chosen by a previous visit. */
+  _planStep = false; _planPick = ""; _planChooser = false;
+  show(picker, false);
   if (billingReady()) {
-    /* Android with Play Billing: a primary CTA + a secondary plan line +
-       Restore. If an offering was already fetched this session, paint it
-       synchronously (no monthly-first flash on reopen); otherwise static
-       labels first. Either way refreshUpgradeOffer() re-fetches the REAL
-       Play prices/trial (localized, eligibility-aware) and repaints. Each
-       button remembers its plan in data-plan; the click handlers read it. */
-    if (buy) { buy.textContent = "Go Pro"; buy.dataset.plan = "monthly"; }
-    if (buyYearly) { buyYearly.textContent = "or RM 79 / year"; buyYearly.dataset.plan = "annual"; }
+    /* Android with Play Billing: ONE "Go Pro" CTA that reveals the plan
+       chooser, plus Restore. If an offering was already fetched this session,
+       paint it synchronously (so the cards open with real prices already on
+       them); otherwise static labels first. Either way refreshUpgradeOffer()
+       re-fetches the REAL Play prices/trial (localized, eligibility-aware)
+       and repaints. */
+    if (buy) { buy.textContent = "Go Pro"; delete buy.dataset.plan; }
     if (terms) terms.textContent = "Subscription auto-renews until cancelled in Google Play → Subscriptions. Cancel any time.";
-    show(buy, true); show(buyYearly, true); show(restore, true); show(terms, true);
+    show(buy, true); show(restore, true); show(terms, true);
     if (_lastOffering) paintUpgradeOffer(_lastOffering);
     refreshUpgradeOffer();
   } else if (isNative()) {
@@ -383,16 +386,17 @@ function showUpgrade(reason) {
        outside checkout, never mention one, and don't show a price we can't
        sell at — so no CTA, no price line, just a neutral note. Redeem-a-code
        stays (an entitlement check, not a purchase path). */
-    show(buy, false); show(buyYearly, false); show(restore, false); if (p) p.hidden = true;
+    show(buy, false); show(restore, false); if (p) p.hidden = true;
     if (terms) terms.textContent = billingConfigured()
       ? "Google Play purchases aren't available right now — check your connection and try again later."
       : "Pro subscriptions are coming to Google Play soon.";
     show(terms, true);
   } else {
     /* Web PWA: web checkout if wired; otherwise point at the Android app only
-       once the shipped Play build really sells Pro; otherwise "coming soon". */
+       once the shipped Play build really sells Pro; otherwise "coming soon".
+       No chooser here — the web has no live prices to choose between. */
     if (buy) buy.textContent = PAY_URL ? "Go Pro" : PLAY_BILLING_LIVE ? "Get Pro in the Android app" : "Go Pro";
-    show(buy, true); show(buyYearly, false); show(restore, false); show(terms, false);
+    show(buy, true); show(restore, false); show(terms, false);
   }
   ov.hidden = false;
 }
@@ -517,61 +521,185 @@ function playManageUrl() {
   return state.playManageUrl || ("https://play.google.com/store/account/subscriptions?sku=" + PLAY_SUBSCRIPTION_ID + "&package=" + ANDROID_PACKAGE_ID);
 }
 function setUpgradeBusy(on) {
-  for (const id of ["upgrade-buy", "upgrade-buy-yearly", "upgrade-restore", "plan-restore"]) { const el = $(id); if (el) el.disabled = on; }
+  for (const id of ["upgrade-buy", "upgrade-pick-monthly", "upgrade-pick-annual",
+                    "upgrade-go-monthly", "upgrade-go-annual", "upgrade-restore", "plan-restore"]) {
+    const el = $(id); if (el) el.disabled = on;
+  }
 }
-/* Paint the sheet from a RevenueCat offering: Play-localized prices and,
-   only when THIS Google account is eligible (Play omits offers it isn't
-   eligible for), the free-trial length. defaultOption is what
-   purchasePackage buys — the longest eligible free trial, else the base
-   plan. Which plan leads: the one carrying the trial when exactly one does
-   (Play Console: trial on annual only, 16 Aug 2026), else monthly; a plan
-   that isn't in the offering can never be the primary. Both plans stay
-   visible with their own price; an annual plan is never shown as a
-   per-month figure; the trial button names its plan and the post-trial
-   price on its face; the terms line names both plans separately (Play
-   subscriptions policy: trial length, price after, period, auto-renew,
-   how to cancel — in the offer, not just small print). */
-let _lastOffering = null;
-function paintUpgradeOffer(cur) {
-  const buy = $("upgrade-buy"), buyYearly = $("upgrade-buy-yearly"), p = $("upgrade-price"), terms = $("upgrade-terms");
-  const price = pkg => (pkg && pkg.product && pkg.product.priceString) || "";
+
+/* ---------- Plan chooser (upgrade sheet, step 2) ----------
+   _planChooser: the live offering really has two plans, so "Go Pro" opens a
+   chooser instead of buying something.  _planStep: the chooser is showing.
+   _planPick: which card is selected — sticky across the repaint that a late
+   getOfferings() triggers, so a choice never jumps under the user's thumb. */
+let _lastOffering = null, _planChooser = false, _planStep = false, _planPick = "";
+
+/* Price as a NUMBER in major units (6.99, 79) — used only to work out the
+   annual saving, never to display anything. priceString is localized display
+   text ("RM 79.00", "1.234,50 kr", "¥780") and parsing it is fragile, so read
+   the figure the store itself handed us first: a Play pricing phase carries
+   price.amountMicros (1e6 micros = one major unit) and StoreProduct.price is
+   already a plain number. Digging digits out of the string is the last
+   resort, and a wrong guess there costs only the badge — never a price anyone
+   is shown or charged. 0 = unknown, which suppresses the badge entirely. */
+function pkgPriceObj(pkg) {
+  const pr = pkg && pkg.product; if (!pr) return null;
+  const opt = pr.defaultOption;
+  return (opt && opt.fullPricePhase && opt.fullPricePhase.price) ||
+         (pr.price && typeof pr.price === "object" ? pr.price : null) ||
+         (pr.oneTimePurchasePrice || null);
+}
+function pkgAmount(pkg) {
+  const po = pkgPriceObj(pkg);
+  const micros = po && Number(po.amountMicros);
+  if (micros > 0) return micros / 1e6;
+  const flat = pkg && pkg.product && pkg.product.price;
+  if (typeof flat === "number" && flat > 0) return flat;
+  return parsePriceAmount((pkg && pkg.product && pkg.product.priceString) || "");
+}
+function pkgCurrency(pkg) {
+  const po = pkgPriceObj(pkg);
+  return (po && po.currencyCode) || (pkg && pkg.product && pkg.product.currencyCode) || "";
+}
+/* Last-resort localized-string parse. The final "." or "," is a DECIMAL point
+   only when 1-2 digits follow it — that is what separates "1.234,50" (kr) and
+   "1,234.50" (US) from "45.000" (rupiah) and "1,234" (thousands). */
+function parsePriceAmount(s) {
+  const t = String(s).replace(/[^\d.,]/g, "");
+  if (!t) return 0;
+  const sep = Math.max(t.lastIndexOf("."), t.lastIndexOf(","));
+  let whole = t, frac = "";
+  if (sep > -1 && /^\d{1,2}$/.test(t.slice(sep + 1))) { whole = t.slice(0, sep); frac = t.slice(sep + 1); }
+  const n = Number(whole.replace(/[.,]/g, "") + (frac ? "." + frac : ""));
+  return isFinite(n) && n > 0 ? n : 0;
+}
+
+/* Read a RevenueCat offering into the two plans the sheet knows about.
+   defaultOption is what purchasePackage() actually buys — the longest
+   eligible free trial, else the base plan — and Play omits offers this
+   Google account is NOT eligible for, so a freePhase here means the trial is
+   genuinely on the table for this user. */
+function upgradePlans(cur) {
+  const priceStr = pkg => (pkg && pkg.product && pkg.product.priceString) || "";
   const trialDays = pkg => {
     const ph = pkg && pkg.product && pkg.product.defaultOption && pkg.product.defaultOption.freePhase;
     const bp = ph && ph.billingPeriod; if (!bp) return 0;
     const v = Number(bp.value) || 0;
     return bp.unit === "DAY" ? v : bp.unit === "WEEK" ? v * 7 : bp.unit === "MONTH" ? v * 30 : bp.unit === "YEAR" ? v * 365 : 0;
   };
-  const mk = (pkg, per, label) => ({ ok: !!(pkg && price(pkg)), price: price(pkg), trial: trialDays(pkg), per, label });
-  const plans = { monthly: mk(cur && cur.monthly, "month", "Monthly"), annual: mk(cur && cur.annual, "year", "Annual") };
-  let primary = "monthly", secondary = "annual";
-  if (!plans.monthly.ok || (plans.annual.ok && plans.annual.trial && !plans.monthly.trial)) { primary = "annual"; secondary = "monthly"; }
-  const P = plans[primary], S = plans[secondary];
-  if (!P.ok) { /* offering has neither package (dashboard not finished) — no dead buttons */
+  const mk = (pkg, per, label) => ({
+    ok: !!(pkg && priceStr(pkg)), price: priceStr(pkg), trial: trialDays(pkg),
+    amount: pkgAmount(pkg), currency: pkgCurrency(pkg), per, label
+  });
+  return { monthly: mk(cur && cur.monthly, "month", "Monthly"), annual: mk(cur && cur.annual, "year", "Annual") };
+}
+/* "Save N%" from the LIVE prices only: (monthly*12 - annual) / (monthly*12).
+   Suppressed unless both amounts are known, both are quoted in the SAME
+   currency (Play localizes each package on its own, so a mismatch makes the
+   comparison meaningless) and the result is actually positive. */
+function annualSavingPct(plans) {
+  const m = plans.monthly, a = plans.annual;
+  if (!(m.ok && a.ok && m.amount > 0 && a.amount > 0)) return 0;
+  if (m.currency && a.currency && m.currency !== a.currency) return 0;
+  const full = m.amount * 12;
+  const pct = Math.round((full - a.amount) / full * 100);
+  return pct > 0 ? pct : 0;
+}
+/* Which plan leads — first card and pre-selected: the one carrying the free
+   trial when exactly one does (Play Console has the trial on annual only,
+   16 Aug 2026), else the one that actually saves money, else monthly. */
+function leadPlan(plans, saving) {
+  if (plans.annual.ok && plans.annual.trial && !plans.monthly.trial) return "annual";
+  if (plans.monthly.ok && plans.monthly.trial && !plans.annual.trial) return "monthly";
+  if (saving > 0 && plans.annual.ok) return "annual";
+  return plans.monthly.ok ? "monthly" : "annual";
+}
+/* Step 1 = one "Go Pro" CTA. Step 2 = the cards in its place. */
+function applyUpgradeStep() {
+  const open = _planChooser && _planStep;
+  const picker = $("upgrade-plans"), buy = $("upgrade-buy");
+  if (picker) picker.hidden = !open;
+  if (buy) buy.hidden = open;
+}
+function selectPlan(key) {
+  _planPick = key;
+  for (const k of ["monthly", "annual"]) {
+    const card = $("upgrade-plan-" + k), face = $("upgrade-pick-" + k), go = $("upgrade-go-" + k);
+    const on = k === key && !!(card && !card.hidden);
+    if (card) card.classList.toggle("selected", on);
+    if (face) face.setAttribute("aria-pressed", on ? "true" : "false");
+    if (go) go.hidden = !on;
+  }
+}
+/* One card. An annual plan is NEVER restated as a per-month figure, and the
+   confirm button on its face says what the tap will do and at what price. */
+function paintPlanCard(key, plan, saving) {
+  const card = $("upgrade-plan-" + key);
+  if (!card) return;
+  card.hidden = !plan.ok;
+  if (!plan.ok) return;
+  const pr = $("upgrade-price-" + key); if (pr) pr.textContent = plan.price + " / " + plan.per;
+  const badge = $("upgrade-badge-" + key);
+  if (badge) {
+    const on = key === "annual" && saving > 0;
+    badge.textContent = on ? "Save " + saving + "%" : "";
+    badge.hidden = !on;
+  }
+  const tr = $("upgrade-trial-" + key);
+  if (tr) {
+    tr.textContent = plan.trial ? plan.trial + " days free, then " + plan.price + " / " + plan.per : "";
+    tr.hidden = !plan.trial;
+  }
+  const go = $("upgrade-go-" + key);
+  if (go) go.textContent = plan.trial ? "Start my " + plan.trial + "-day free trial"
+                                      : "Subscribe — " + plan.price + " / " + plan.per;
+}
+/* Paint the sheet from a RevenueCat offering: Play-localized prices and,
+   only when THIS Google account is eligible, the free-trial length. With two
+   plans the CTA becomes a chooser opener and each card carries its own
+   confirm button; with one it stays a direct buy, because a chooser holding a
+   single card is just an extra tap. The terms line stays visible at BOTH
+   steps and names every plan separately (Play subscriptions policy: trial
+   length, price after the trial, billing period, auto-renew and how to
+   cancel — in the offer, not merely in small print somewhere). */
+function paintUpgradeOffer(cur) {
+  const buy = $("upgrade-buy"), picker = $("upgrade-plans"), p = $("upgrade-price"), terms = $("upgrade-terms");
+  const plans = upgradePlans(cur);
+  const saving = annualSavingPct(plans);
+  const avail = ["monthly", "annual"].filter(k => plans[k].ok);
+  if (!avail.length) { /* offering has neither package (dashboard not finished) — no dead buttons */
+    _planChooser = false; _planStep = false;
     if (buy) buy.hidden = true;
-    if (buyYearly) buyYearly.hidden = true;
+    if (picker) picker.hidden = true;
     if (p) p.hidden = true;
     if (terms) { terms.textContent = "Pro plans aren't available right now — please try again later."; terms.hidden = false; }
     return;
   }
-  if (buy) {
-    buy.dataset.plan = primary;
-    buy.textContent = P.trial ? "Try Pro free for " + P.trial + " days — then " + P.price + " / " + P.per : "Go Pro — " + P.price + " / " + P.per;
-    buy.hidden = false;
+  for (const k of ["monthly", "annual"]) paintPlanCard(k, plans[k], saving);
+  _planChooser = avail.length > 1;
+  if (_planChooser) {
+    const lead = leadPlan(plans, saving), other = lead === "annual" ? "monthly" : "annual";
+    /* appendChild MOVES an existing node, so this just reorders the two cards
+       under the label — the leading plan always sits first. */
+    if (picker) { picker.appendChild($("upgrade-plan-" + lead)); picker.appendChild($("upgrade-plan-" + other)); }
+    selectPlan(plans[_planPick] && plans[_planPick].ok ? _planPick : lead);
+    if (buy) { buy.textContent = "Go Pro"; delete buy.dataset.plan; }
+  } else {
+    const only = avail[0], O = plans[only];
+    if (buy) {
+      buy.dataset.plan = only;
+      buy.textContent = O.trial ? "Try Pro free for " + O.trial + " days — then " + O.price + " / " + O.per
+                                : "Go Pro — " + O.price + " / " + O.per;
+    }
   }
-  if (buyYearly) {
-    if (S.ok) {
-      buyYearly.dataset.plan = secondary;
-      buyYearly.textContent = "or " + S.price + " / " + S.per + (S.trial ? " — " + S.trial + " days free" : P.trial ? " (no free trial)" : "");
-      buyYearly.hidden = false;
-    } else buyYearly.hidden = true;
-  }
-  if (p) {
-    const parts = [plans.monthly.ok && plans.monthly.price + " / month", plans.annual.ok && plans.annual.price + " / year"].filter(Boolean);
-    p.textContent = parts.join(" or "); p.hidden = false;
-  }
+  applyUpgradeStep();
+  if (p) { p.textContent = avail.map(k => plans[k].price + " / " + plans[k].per).join(" or "); p.hidden = false; }
   if (terms) {
-    const line = x => x.label + ": " + (x.trial ? "free for " + x.trial + " days, then " + x.price + " / " + x.per : x.price + " / " + x.per + (P.trial || S.trial ? ", no free trial" : "")) + ".";
-    terms.textContent = line(P) + (S.ok ? " " + line(S) : "") + " Auto-renews until cancelled in Google Play → Subscriptions. Cancel any time.";
+    const anyTrial = avail.some(k => plans[k].trial);
+    const line = x => x.label + ": " + (x.trial ? "free for " + x.trial + " days, then " + x.price + " / " + x.per
+                                                : x.price + " / " + x.per + (anyTrial ? ", no free trial" : "")) + ".";
+    terms.textContent = avail.map(k => line(plans[k])).join(" ") +
+      " Auto-renews until cancelled in Google Play → Subscriptions. Cancel any time.";
     terms.hidden = false;
   }
 }
@@ -591,10 +719,13 @@ async function refreshUpgradeOffer() {
    on the current offering (offerings.current.monthly / .annual). Trial terms
    live in Play Console; the app honours whatever Play/RevenueCat report. */
 async function purchasePro(plan) {
+  /* The in-flight guard claims the slot BEFORE the first await, so two taps
+     dispatched in the same task can't both get past it — ensureBilling() is
+     async, and anything checked before it yields is checked twice. */
   if (_billingBusy) return;
-  if (!(await ensureBilling())) { toast(isNative() ? "Google Play isn't reachable — try again shortly" : "Play Billing isn't set up yet"); return; }
   _billingBusy = true; setUpgradeBusy(true);
   try {
+    if (!(await ensureBilling())) { toast(isNative() ? "Google Play isn't reachable — try again shortly" : "Play Billing isn't set up yet"); return; }
     const offerings = await rcPlugin().getOfferings();
     const pkg = offerings && offerings.current && offerings.current[plan];
     if (!pkg) { toast("That plan isn't available right now"); return; }
@@ -622,10 +753,10 @@ async function purchasePro(plan) {
   } finally { _billingBusy = false; setUpgradeBusy(false); }
 }
 async function restorePlayPurchases() {
-  if (_billingBusy) return;
-  if (!(await ensureBilling())) { toast("Google Play isn't reachable — try again shortly"); return; }
+  if (_billingBusy) return;  /* same pre-await claim as purchasePro() */
   _billingBusy = true; setUpgradeBusy(true);
   try {
+    if (!(await ensureBilling())) { toast("Google Play isn't reachable — try again shortly"); return; }
     const res = await rcPlugin().restorePurchases();
     const active = res && res.customerInfo ? await applyCustomerInfo(res.customerInfo) : await refreshPlayEntitlement();
     if (active) { const ov = $("upgrade-overlay"); if (ov) ov.hidden = true; }
@@ -4958,11 +5089,25 @@ async function init() {
   on("upgrade-buy", () => {
     /* Play build: Play Billing or nothing — Google's Payments policy forbids
        any in-app pointer to an outside checkout, so PAY_URL is web-only. */
-    if (isNative()) { if (billingReady()) purchasePro($("upgrade-buy").dataset.plan || "monthly"); return; }
+    if (isNative()) {
+      if (!billingReady()) return;
+      /* data-plan is set only when the offering holds ONE plan; then this IS
+         the buy button, exactly as before. Otherwise it opens the chooser. */
+      const only = $("upgrade-buy").dataset.plan;
+      if (only) { purchasePro(only); return; }
+      _planStep = true; applyUpgradeStep();
+      return;
+    }
     if (PAY_URL) { window.open(PAY_URL, "_blank", "noopener"); return; }
     toast(PLAY_BILLING_LIVE ? "Recap Pro is sold in the Android app on Google Play" : "Online checkout is coming soon");
   });
-  on("upgrade-buy-yearly", () => purchasePro($("upgrade-buy-yearly").dataset.plan || "annual"));
+  for (const k of ["monthly", "annual"]) {
+    on("upgrade-pick-" + k, () => selectPlan(k));
+    /* The confirm tap: straight into the same purchasePro() as before —
+       in-flight guard, silent user-cancel, pending payments, entitlement-led
+       success — with the plan read off the card that was tapped. */
+    on("upgrade-go-" + k, () => purchasePro(($("upgrade-go-" + k).dataset.plan) || k));
+  }
   on("upgrade-restore", restorePlayPurchases);
   on("upgrade-code", unlockPro);
   on("upgrade-close", () => { const ov = $("upgrade-overlay"); if (ov) ov.hidden = true; });

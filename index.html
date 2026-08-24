@@ -474,7 +474,39 @@ try {
       <li>And still no accounts, no analytics, no profiling</li>
     </ul>
     <button class="save-btn" id="upgrade-buy">Go Pro</button>
-    <button class="ghost-btn small mt-sm" id="upgrade-buy-yearly" hidden>or RM 79 / year</button>
+    <!-- Step 2 of the same sheet: "Go Pro" hides itself and reveals this in
+         its place. Both cards are in the markup; paintUpgradeOffer() fills
+         them from the LIVE RevenueCat offering (never a hard-coded price),
+         hides one if the offering lacks it, and moves the leading plan to the
+         front. A card's own button is the confirm tap that starts the
+         purchase — data-plan tells the handler which. -->
+    <div class="plan-picker" id="upgrade-plans" hidden role="group" aria-label="Choose your Pro plan">
+      <p class="plan-picker-label">Choose your plan</p>
+      <div class="plan-card" id="upgrade-plan-monthly">
+        <button class="plan-face" id="upgrade-pick-monthly" data-plan="monthly" aria-pressed="false">
+          <span class="plan-row">
+            <span class="plan-name">Monthly</span>
+            <span class="plan-badge" id="upgrade-badge-monthly" hidden></span>
+            <span class="plan-tick" aria-hidden="true">✓</span>
+          </span>
+          <span class="plan-price" id="upgrade-price-monthly">RM 6.99 / month</span>
+          <span class="plan-trial" id="upgrade-trial-monthly" hidden></span>
+        </button>
+        <button class="plan-go" id="upgrade-go-monthly" data-plan="monthly" hidden>Subscribe</button>
+      </div>
+      <div class="plan-card" id="upgrade-plan-annual">
+        <button class="plan-face" id="upgrade-pick-annual" data-plan="annual" aria-pressed="false">
+          <span class="plan-row">
+            <span class="plan-name">Annual</span>
+            <span class="plan-badge" id="upgrade-badge-annual" hidden></span>
+            <span class="plan-tick" aria-hidden="true">✓</span>
+          </span>
+          <span class="plan-price" id="upgrade-price-annual">RM 79 / year</span>
+          <span class="plan-trial" id="upgrade-trial-annual" hidden></span>
+        </button>
+        <button class="plan-go" id="upgrade-go-annual" data-plan="annual" hidden>Subscribe</button>
+      </div>
+    </div>
     <p class="settings-note" id="upgrade-terms" hidden></p>
     <button class="ghost-btn mt-md" id="upgrade-restore" hidden>Restore purchases</button>
     <button class="ghost-btn mt-md" id="upgrade-code">Redeem a code</button>
