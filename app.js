@@ -718,15 +718,27 @@ function paintUpgradeOffer(cur) {
 }
 async function refreshUpgradeOffer() {
   if (!(await ensureBilling())) return;
+  /* No offering came back — the RevenueCat dashboard has no CURRENT offering
+     yet, or the fetch failed (offline on a first open). The sheet is sitting
+     on the static "Go Pro" that showUpgrade() painted, and that button has no
+     plan to buy: tapping it would do nothing at all. So fall back to the same
+     neutral "not available" state an empty offering already gets, which hides
+     the CTA rather than leaving a dead one.
+     Only when nothing real was EVER painted: a transient miss must not wipe
+     live prices the user is already looking at. */
+  const blank = () => {
+    const ov = $("upgrade-overlay");
+    if (!_lastOffering && ov && !ov.hidden) paintUpgradeOffer(null);
+  };
   try {
     const offerings = await rcPlugin().getOfferings();
     const cur = offerings && offerings.current;
-    if (!cur) return;
+    if (!cur) { blank(); return; }
     _lastOffering = cur; /* next showUpgrade paints this synchronously — no static-price flash on reopen */
     const ov = $("upgrade-overlay");
     if (!ov || ov.hidden) return;
     paintUpgradeOffer(cur);
-  } catch (e) { /* keep whatever is painted */ }
+  } catch (e) { blank(); }
 }
 /* plan: "monthly" | "annual" — the standard package types RevenueCat exposes
    on the current offering (offerings.current.monthly / .annual). Trial terms
@@ -5109,7 +5121,11 @@ async function init() {
          purchasePro() as before: in-flight guard, silent user-cancel,
          pending payments, entitlement-led success. */
       const plan = $("upgrade-buy").dataset.plan || (_planChooser ? _planPick : "");
+      /* Backstop: with no offering the CTA is hidden, so this should be
+         unreachable — but a paywall button that silently does nothing is the
+         worst way to be wrong, so say something either way. */
       if (plan) purchasePro(plan);
+      else toast("Pro plans aren't available right now — try again shortly");
       return;
     }
     if (PAY_URL) { window.open(PAY_URL, "_blank", "noopener"); return; }
