@@ -379,7 +379,7 @@ function showUpgrade(reason) {
     if (terms) terms.textContent = "Subscription auto-renews until cancelled in Google Play → Subscriptions. Cancel any time.";
     show(buy, true); show(restore, true); show(terms, true);
     if (_lastOffering) paintUpgradeOffer(_lastOffering);
-    refreshUpgradeOffer();
+    _offerPending = refreshUpgradeOffer();
   } else if (isNative()) {
     /* Play build WITHOUT a working Play purchase (dormant key, plugin missing,
        configure failed offline). Play Payments policy: never point at an
@@ -535,6 +535,10 @@ function setUpgradeBusy(on) {
    _planPick: which card is selected — sticky across the repaint that a late
    getOfferings() triggers, so a choice never jumps under the user's thumb. */
 let _lastOffering = null, _planChooser = false, _planPick = "", _planData = null;
+/* The in-flight getOfferings() for the sheet that is open. A tap that lands
+   before it resolves waits for it instead of being told "not available" —
+   see the CTA handler. */
+let _offerPending = null;
 
 /* Price as a NUMBER in major units (6.99, 79) — used only to work out the
    annual saving, never to display anything. priceString is localized display
@@ -717,7 +721,6 @@ function paintUpgradeOffer(cur) {
   }
 }
 async function refreshUpgradeOffer() {
-  if (!(await ensureBilling())) return;
   /* No offering came back — the RevenueCat dashboard has no CURRENT offering
      yet, or the fetch failed (offline on a first open). The sheet is sitting
      on the static "Go Pro" that showUpgrade() painted, and that button has no
@@ -730,6 +733,10 @@ async function refreshUpgradeOffer() {
     const ov = $("upgrade-overlay");
     if (!_lastOffering && ov && !ov.hidden) paintUpgradeOffer(null);
   };
+  /* Billing never came up (configure()/isConfigured() failed). That used to
+     return here and leave the static "Go Pro" standing with no plan behind
+     it — the same dead button 1.30.1 removed for the no-offering case. */
+  if (!(await ensureBilling())) { blank(); return; }
   try {
     const offerings = await rcPlugin().getOfferings();
     const cur = offerings && offerings.current;
@@ -5111,7 +5118,7 @@ async function init() {
   });
   on("plan-btn", () => showUpgrade(""));
   on("plan-restore", restorePlayPurchases);
-  on("upgrade-buy", () => {
+  on("upgrade-buy", async () => {
     /* Play build: Play Billing or nothing — Google's Payments policy forbids
        any in-app pointer to an outside checkout, so PAY_URL is web-only. */
     if (isNative()) {
@@ -5120,7 +5127,23 @@ async function init() {
          when the offering holds a SINGLE plan and there is no chooser. Same
          purchasePro() as before: in-flight guard, silent user-cancel,
          pending payments, entitlement-led success. */
-      const plan = $("upgrade-buy").dataset.plan || (_planChooser ? _planPick : "");
+      const pick = () => $("upgrade-buy").dataset.plan || (_planChooser ? _planPick : "");
+      let plan = pick();
+      if (!plan && _offerPending) {
+        /* The sheet opened moments ago and the offering is still in flight, so
+           no plan is chosen yet. The pre-chooser sheet swallowed this window
+           because its button always carried a plan and purchasePro() awaited
+           the offering itself; the chooser must not answer a real buying
+           intent with "not available". Wait for the paint, then buy what it
+           picked. Claiming _billingBusy keeps a second tap out, and the
+           handover to purchasePro() is synchronous after the await, so the
+           slot is never open to another tap. */
+        if (_billingBusy) return;
+        _billingBusy = true; setUpgradeBusy(true);
+        try { await _offerPending; }
+        finally { _billingBusy = false; setUpgradeBusy(false); }
+        plan = pick();
+      }
       /* Backstop: with no offering the CTA is hidden, so this should be
          unreachable — but a paywall button that silently does nothing is the
          worst way to be wrong, so say something either way. */
